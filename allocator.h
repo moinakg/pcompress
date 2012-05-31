@@ -29,6 +29,7 @@ void slab_cleanup(int quiet);
 void *slab_alloc(void *p, size_t size);
 void *slab_calloc(void *p, size_t items, size_t size);
 void slab_free(void *p, void *address);
+int slab_cache_add(size_t size);
 
 #endif
 

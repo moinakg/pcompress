@@ -45,6 +45,14 @@ static int ttt = 0;
 #define kNumBitPriceShiftBits 4
 #define kBitPrice (1 << kNumBitPriceShiftBits)
 
+#ifdef _LZMA_PROB32
+#define CLzmaProb UInt32
+#else
+#define CLzmaProb UInt16
+#endif
+
+#define LITPROB_SZ(lclp) ((0x300 << lclp) * sizeof(CLzmaProb))
+
 #ifdef __USE_SSE_INTRIN__
 #define MOV_DBL_QUAD(mem, val) __asm (\
           "movntiq %[val], (%[ptr1]);"\
@@ -114,6 +122,8 @@ void LzmaEncProps_Init(CLzmaEncProps *p)
 void LzmaEncProps_Normalize(CLzmaEncProps *p)
 {
   int level = p->level;
+  unsigned lclp;
+  
   if (!p->normalized) {
     if (level < 0) level = 5;
     p->level = level;
@@ -126,6 +136,8 @@ void LzmaEncProps_Normalize(CLzmaEncProps *p)
     if (p->btMode < 0) p->btMode = (p->algo == 0 ? 0 : 1);
     if (p->numHashBytes < 0) p->numHashBytes = 4;
     if (p->mc == 0)  p->mc = (16 + (p->fb >> 1)) >> (p->btMode ? 0 : 1);
+    lclp = p->lc + p->lp;
+    p->litprob_sz = LITPROB_SZ(lclp);
     if (p->numThreads < 0)
       p->numThreads =
         #ifndef _7ZIP_ST
@@ -237,12 +249,6 @@ typedef struct
 #define kNumPosModels (kEndPosModelIndex - kStartPosModelIndex)
 
 #define kNumFullDistances (1 << (kEndPosModelIndex >> 1))
-
-#ifdef _LZMA_PROB32
-#define CLzmaProb UInt32
-#else
-#define CLzmaProb UInt16
-#endif
 
 #define LZMA_PB_MAX 4
 #define LZMA_LC_MAX 8
@@ -423,7 +429,7 @@ void LzmaEnc_SaveState(CLzmaEncHandle pp)
   memcpy(dest->posEncoders, p->posEncoders, sizeof(p->posEncoders));
   memcpy(dest->posAlignEncoder, p->posAlignEncoder, sizeof(p->posAlignEncoder));
   memcpy(dest->reps, p->reps, sizeof(p->reps));
-  memcpy(dest->litProbs, p->litProbs, (0x300 << p->lclp) * sizeof(CLzmaProb));
+  memcpy(dest->litProbs, p->litProbs, LITPROB_SZ(p->lclp));
 }
 
 void LzmaEnc_RestoreState(CLzmaEncHandle pp)
@@ -449,7 +455,7 @@ void LzmaEnc_RestoreState(CLzmaEncHandle pp)
   memcpy(dest->posEncoders, p->posEncoders, sizeof(p->posEncoders));
   memcpy(dest->posAlignEncoder, p->posAlignEncoder, sizeof(p->posAlignEncoder));
   memcpy(dest->reps, p->reps, sizeof(p->reps));
-  memcpy(dest->litProbs, p->litProbs, (0x300 << dest->lclp) * sizeof(CLzmaProb));
+  memcpy(dest->litProbs, p->litProbs, LITPROB_SZ(dest->lclp));
 }
 
 SRes LzmaEnc_SetProps(CLzmaEncHandle pp, const CLzmaEncProps *props2)
@@ -2063,8 +2069,8 @@ static SRes LzmaEnc_Alloc(CLzmaEnc *p, UInt32 keepWindowSize, ISzAlloc *alloc, I
     if (p->litProbs == 0 || p->saveState.litProbs == 0 || p->lclp != lclp)
     {
       LzmaEnc_FreeLits(p, alloc);
-      p->litProbs = (CLzmaProb *)alloc->Alloc(alloc, (0x300 << lclp) * sizeof(CLzmaProb));
-      p->saveState.litProbs = (CLzmaProb *)alloc->Alloc(alloc, (0x300 << lclp) * sizeof(CLzmaProb));
+      p->litProbs = (CLzmaProb *)alloc->Alloc(alloc, LITPROB_SZ(lclp));
+      p->saveState.litProbs = (CLzmaProb *)alloc->Alloc(alloc, LITPROB_SZ(lclp));
       if (p->litProbs == 0 || p->saveState.litProbs == 0)
       {
         LzmaEnc_FreeLits(p, alloc);

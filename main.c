@@ -659,6 +659,10 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		nprocs = nthreads;
 
 	fprintf(stderr, "Scaling to %d threads\n", nprocs);
+	slab_cache_add(chunksize);
+	slab_cache_add(compressed_chunksize + CHDR_SZ);
+	slab_cache_add(sizeof (struct cmp_data));
+
 	dary = (struct cmp_data **)slab_alloc(NULL, sizeof (struct cmp_data *) * nprocs);
 	cread_buf = (uchar_t *)slab_alloc(NULL, chunksize);
 	if (!cread_buf) {

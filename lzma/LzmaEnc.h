@@ -30,6 +30,7 @@ typedef struct _CLzmaEncProps
   unsigned writeEndMark;  /* 0 - do not write EOPM, 1 - write EOPM, default = 0 */
   int numThreads;  /* 1 or 2, default = 2 */
   int normalized;
+  size_t litprob_sz;
 } CLzmaEncProps;
 
 extern void LzmaEncProps_Init(CLzmaEncProps *p);

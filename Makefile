@@ -40,13 +40,19 @@ BAKFILES = *~ lzma/*~
 
 RM = rm -f
 CPPFLAGS = -I. -I./lzma -D_7ZIP_ST -DNODEFAULT_PROPS -DFILE_OFFSET_BITS=64 \
-	-D_REENTRANT -D__USE_SSE_INTRIN__ -DNDEBUG -D_LZMA_PROB32
+	-D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32
 VEC_FLAGS = -ftree-vectorize
 LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm
 
+ifdef DEBUG
+LINK = gcc -m64 -pthread -msse3
+COMPILE = gcc -m64 -g -msse3 -c
+else
 LINK = gcc -m64 -pthread -msse3
 COMPILE = gcc -m64 -O3 -msse3 -c
+CPPFLAGS += -DNDEBUG
+endif
 
 all: $(PROG)
 

@@ -51,16 +51,21 @@
 /*
  * Number of slabs:
  * 256 bytes to 1M in power of 2 steps: 13
- * 1M to 256M in linear steps of 1M: 256
+ * 1M to 128M in linear steps of 1M: 128
+ * 200 dynamic slab slots: 200
  *
  * By doing this we try to get reasonable memory usage while not
  * sacrificing performance.
  */
-#define	NUM_SLABS	269
 #define	NUM_POW2	13
-#define	SLAB_START	256
+#define NUM_LINEAR	128
+#define NUM_SLAB_HASH	200 /* Dynamic slabs hashtable size. */
+#define	NUM_SLABS	(NUM_POW2 + NUM_LINEAR + NUM_SLAB_HASH)
+#define SLAB_POS_HASH	(NUM_POW2 + NUM_LINEAR)
+#define	SLAB_START_SZ	256 /* Starting slab size in Bytes. */
 #define	SLAB_START_POW2	8 /* 2 ^ SLAB_START_POW2 = SLAB_START. */
-#define	HTABLE_SZ	16384
+
+#define	HTABLE_SZ	8192
 #define	TWOM		(2UL * 1024UL * 1024UL)
 #define	ONEM		(1UL * 1024UL * 1024UL)
 
@@ -72,22 +77,24 @@ static const unsigned int bv[] = {
 	0xFFFF0000
 };
 
-struct bufentry {
-	void *ptr;
-	int slab_index;
-	struct bufentry *next;
-};
 struct slabentry {
 	struct bufentry *avail;
-	struct bufentry *used;
+	struct slabentry *next;
 	size_t sz;
 	uint64_t allocs, hits;
 	pthread_mutex_t slab_lock;
 };
+struct bufentry {
+	void *ptr;
+	struct slabentry *slab;
+	struct bufentry *next;
+};
+
 static struct slabentry slabheads[NUM_SLABS];
 static struct bufentry **htable;
 static pthread_mutex_t *hbucket_locks;
 static pthread_mutex_t htable_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t slab_table_lock = PTHREAD_MUTEX_INITIALIZER;
 static int inited = 0;
 
 static uint64_t total_allocs, oversize_allocs, hash_collisions, hash_entries;
@@ -117,10 +124,9 @@ slab_init()
 	int nprocs;
 
 	/* Initialize first NUM_POW2 power of 2 slots. */
-	slab_sz = SLAB_START;
+	slab_sz = SLAB_START_SZ;
 	for (i = 0; i < NUM_POW2; i++) {
 		slabheads[i].avail = NULL;
-		slabheads[i].used = NULL;
 		slabheads[i].sz = slab_sz;
 		slabheads[i].allocs = 0;
 		slabheads[i].hits = 0;
@@ -129,10 +135,10 @@ slab_init()
 		slab_sz *= 2;
 	}
 
-	/* At this point slab_sz is 2M. So linear slots start at 2M. */
-	for (i = NUM_POW2; i < NUM_SLABS; i++) {
+	/* At this point slab_sz is 1M. So linear slots start at 1M. */
+	for (i = NUM_POW2; i < SLAB_POS_HASH; i++) {
 		slabheads[i].avail = NULL;
-		slabheads[i].used = NULL;
+		slabheads[i].next = NULL;
 		slabheads[i].sz = slab_sz;
 		slabheads[i].allocs = 0;
 		slabheads[i].hits = 0;
@@ -141,6 +147,14 @@ slab_init()
 		slab_sz += ONEM;
 	}
 
+	for (i = SLAB_POS_HASH; i < NUM_SLABS; i++) {
+		slabheads[i].avail = NULL;
+		slabheads[i].next = NULL;
+		slabheads[i].sz = 0;
+		slabheads[i].allocs = 0;
+		slabheads[i].hits = 0;
+		/* Do not init locks here. They will be inited on demand. */
+	}
 	htable = (struct bufentry **)calloc(HTABLE_SZ, sizeof (struct bufentry *));
 	hbucket_locks = (pthread_mutex_t *)malloc(HTABLE_SZ * sizeof (pthread_mutex_t));
 
@@ -172,19 +186,25 @@ slab_cleanup(int quiet)
 
 	for (i=0; i<NUM_SLABS; i++)
 	{
-		if (slabheads[i].avail) {
-			if (!quiet) {
-				fprintf(stderr, "%21llu %21llu %21llu\n",slabheads[i].sz,
-				    slabheads[i].allocs, slabheads[i].hits);
+		struct slabentry *slab;
+
+		slab = &slabheads[i];
+		while (slab) {
+			if (slab->avail) {
+				if (!quiet) {
+					fprintf(stderr, "%21llu %21llu %21llu\n",slab->sz,
+					slab->allocs, slab->hits);
+				}
+				slab->allocs = 0;
+				buf = slab->avail;
+				do {
+					buf1 = buf->next;
+					free(buf->ptr);
+					free(buf);
+					buf = buf1;
+				} while (buf);
 			}
-			slabheads[i].allocs = 0;
-			buf = slabheads[i].avail;
-			do {
-				buf1 = buf->next;
-				free(buf->ptr);
-				free(buf);
-				buf = buf1;
-			} while (buf);
+			slab = slab->next;
 		}
 	}
 
@@ -202,10 +222,10 @@ slab_cleanup(int quiet)
 			buf = htable[i];
 
 			while (buf) {
-				if (buf->slab_index == -1) {
+				if (buf->slab == NULL) {
 					nonfreed_oversize++;
 				} else {
-					slabheads[buf->slab_index].allocs++;
+					buf->slab->allocs++;
 				}
 				buf1 = buf->next;
 				free(buf->ptr);
@@ -222,10 +242,31 @@ slab_cleanup(int quiet)
 			fprintf(stderr, "==================================================================\n");
 			for (i=0; i<NUM_SLABS; i++)
 			{
-				if (slabheads[i].allocs == 0) continue;
-				fprintf(stderr, "%21llu %21llu\n",slabheads[i].sz, slabheads[i].allocs);
+				struct slabentry *slab;
+
+				slab = &slabheads[i];
+				do {
+					if (slab->allocs > 0)
+						fprintf(stderr, "%21llu %21llu\n", \
+						    slab->sz, slab->allocs);
+					slab = slab->next;
+				} while (slab);
 			}
 		}
+	}
+	for (i=0; i<NUM_SLABS; i++)
+	{
+		struct slabentry *slab, *pslab;
+		int j;
+
+		slab = &slabheads[i];
+		j = 0;
+		do {
+			pslab = slab;
+			slab = slab->next;
+			if (j > 0) free(pslab);
+			j++;
+		} while (slab);
 	}
 	if (!quiet) fprintf(stderr, "\n\n");
 }
@@ -271,30 +312,91 @@ find_slot(unsigned int v)
 	return (r);
 }
 
+static void *
+try_dynamic_slab(size_t size)
+{
+	uint32_t sindx;
+	struct slabentry *slab;
+
+	/* Locate the hash slot for the size. */
+	sindx = hash6432shift((unsigned long)size) & (NUM_SLAB_HASH - 1);
+	sindx += SLAB_POS_HASH;
+	if (slabheads[sindx].sz == 0) return (NULL);
+
+	/* Linear search in the chained buckets. */
+	slab = &slabheads[sindx];
+	while (slab && slab->sz != size) {
+		slab = slab->next;
+	}
+
+	return (slab);
+}
+
+int
+slab_cache_add(size_t size)
+{
+	uint32_t sindx;
+	struct slabentry *slab;
+	if (try_dynamic_slab(size)) return (0); /* Already added. */
+
+	/* Locate the hash slot for the size. */
+	sindx = hash6432shift((unsigned long)size) & (NUM_SLAB_HASH - 1);
+	sindx += SLAB_POS_HASH;
+
+	if (slabheads[sindx].sz == 0) {
+		pthread_mutex_init(&(slabheads[sindx].slab_lock), NULL);
+		pthread_mutex_lock(&(slabheads[sindx].slab_lock));
+		slabheads[sindx].sz = size;
+		pthread_mutex_unlock(&(slabheads[sindx].slab_lock));
+	} else {
+		slab = (struct slabentry *)malloc(sizeof (struct slabentry));
+		if (!slab) return (0);
+		slab->avail = NULL;
+		slab->sz = size;
+		slab->allocs = 0;
+		slab->hits = 0;
+		pthread_mutex_init(&(slab->slab_lock), NULL);
+
+		pthread_mutex_lock(&(slabheads[sindx].slab_lock));
+		slabheads[sindx].next = slab;
+		slab->next = slabheads[sindx].next;
+		pthread_mutex_unlock(&(slabheads[sindx].slab_lock));
+	}
+	return (1);
+}
+
 void *
 slab_alloc(void *p, size_t size)
 {
-	size_t slab_sz = SLAB_START;
-	int i, found;
+	size_t slab_sz = SLAB_START_SZ;
+	int i;
 	size_t div;
+	void *ptr;
+	struct slabentry *slab;
 
 	ATOMIC_ADD(total_allocs, 1);
-	found = -1;
-	if (size <= ONEM) {
-		/* First eleven slots are power of 2 sizes upto 1M. */
-		found = find_slot(size);
-	} else {
-		/* Next slots are in intervals of 1M. */
-		div = size / ONEM;
-		if (size % ONEM) div++;
-		if (div < NUM_SLABS) found = div + NUM_POW2;
+	slab = NULL;
+
+	/* First check if we can use a dynamic slab of this size. */
+	slab = try_dynamic_slab(size);
+
+	if (!slab) {
+		if (size <= ONEM) {
+			/* First eleven slots are power of 2 sizes upto 1M. */
+			slab = &slabheads[find_slot(size)];
+		} else {
+			/* Next slots are in intervals of 1M. */
+			div = size / ONEM;
+			if (size % ONEM) div++;
+			if (div < NUM_LINEAR) slab = &slabheads[div + NUM_POW2];
+		}
 	}
-	if (found == -1) {
+	if (!slab) {
 		struct bufentry *buf = (struct bufentry *)malloc(sizeof (struct bufentry));
 		uint32_t hindx;
 
 		buf->ptr = malloc(size);
-		buf->slab_index = -1;
+		buf->slab = NULL;
 		hindx = hash6432shift((unsigned long)(buf->ptr)) & (HTABLE_SZ - 1);
 
 		pthread_mutex_lock(&hbucket_locks[hindx]);
@@ -302,40 +404,33 @@ slab_alloc(void *p, size_t size)
 		htable[hindx] = buf;
 		pthread_mutex_unlock(&hbucket_locks[hindx]);
 		ATOMIC_ADD(oversize_allocs, 1);
+		ATOMIC_ADD(hash_entries, 1);
 		return (buf->ptr);
 	} else {
 		struct bufentry *buf;
 		uint32_t hindx;
 
-		pthread_mutex_lock(&(slabheads[found].slab_lock));
-		if (slabheads[found].avail == NULL) {
-			slabheads[found].allocs++;
-			pthread_mutex_unlock(&(slabheads[found].slab_lock));
+		pthread_mutex_lock(&(slab->slab_lock));
+		if (slab->avail == NULL) {
+			slab->allocs++;
+			pthread_mutex_unlock(&(slab->slab_lock));
 			buf = (struct bufentry *)malloc(sizeof (struct bufentry));
-			buf->ptr = malloc(slabheads[found].sz);
-			buf->slab_index = found;
-			hindx = hash6432shift((unsigned long)(buf->ptr)) & (HTABLE_SZ - 1);
-
-			if (htable[hindx]) ATOMIC_ADD(hash_collisions, 1);
-			pthread_mutex_lock(&hbucket_locks[hindx]);
-			buf->next = htable[hindx];
-			htable[hindx] = buf;
-			pthread_mutex_unlock(&hbucket_locks[hindx]);
-			ATOMIC_ADD(hash_entries, 1);
+			buf->ptr = malloc(slab->sz);
+			buf->slab = slab;
 		} else {
-			buf = slabheads[found].avail;
-			slabheads[found].avail = buf->next;
-			slabheads[found].hits++;
-			pthread_mutex_unlock(&(slabheads[found].slab_lock));
-			hindx = hash6432shift((unsigned long)(buf->ptr)) & (HTABLE_SZ - 1);
-
-			if (htable[hindx]) ATOMIC_ADD(hash_collisions, 1);
-			pthread_mutex_lock(&hbucket_locks[hindx]);
-			buf->next = htable[hindx];
-			htable[hindx] = buf;
-			pthread_mutex_unlock(&hbucket_locks[hindx]);
-			ATOMIC_ADD(hash_entries, 1);
+			buf = slab->avail;
+			slab->avail = buf->next;
+			slab->hits++;
+			pthread_mutex_unlock(&(slab->slab_lock));
 		}
+
+		hindx = hash6432shift((unsigned long)(buf->ptr)) & (HTABLE_SZ - 1);
+		if (htable[hindx]) ATOMIC_ADD(hash_collisions, 1);
+		pthread_mutex_lock(&hbucket_locks[hindx]);
+		buf->next = htable[hindx];
+		htable[hindx] = buf;
+		pthread_mutex_unlock(&hbucket_locks[hindx]);
+		ATOMIC_ADD(hash_entries, 1);
 		return (buf->ptr);
 	}
 }
@@ -355,30 +450,27 @@ slab_free(void *p, void *address)
 	pbuf = NULL;
 	while (buf) {
 		if (buf->ptr == address) {
-			if (buf->slab_index == -1) {
-				if (pbuf)
-					pbuf->next = buf->next;
-				else
-					htable[hindx] = buf->next;
-				pthread_mutex_unlock(&hbucket_locks[hindx]);
-				ATOMIC_SUB(hash_entries, 1);
+			if (hash_entries <=0) {
+				fprintf(stderr, "Inconsistent allocation hash\n");
+				abort();
+			}
+			if (pbuf)
+				pbuf->next = buf->next;
+			else
+				htable[hindx] = buf->next;
+			pthread_mutex_unlock(&hbucket_locks[hindx]);
+			ATOMIC_SUB(hash_entries, 1);
 
+			if (buf->slab == NULL) {
 				free(buf->ptr);
 				free(buf);
 				found = 1;
 				break;
 			} else {
-				if (pbuf)
-					pbuf->next = buf->next;
-				else
-					htable[hindx] = buf->next;
-				pthread_mutex_unlock(&hbucket_locks[hindx]);
-				ATOMIC_SUB(hash_entries, 1);
-
-				pthread_mutex_lock(&(slabheads[buf->slab_index].slab_lock));
-				buf->next = slabheads[buf->slab_index].avail;
-				slabheads[buf->slab_index].avail = buf;
-				pthread_mutex_unlock(&(slabheads[buf->slab_index].slab_lock));
+				pthread_mutex_lock(&(buf->slab->slab_lock));
+				buf->next = buf->slab->avail;
+				buf->slab->avail = buf;
+				pthread_mutex_unlock(&(buf->slab->slab_lock));
 				found = 1;
 				break;
 			}
