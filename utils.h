@@ -31,11 +31,14 @@
 extern "C" {
 #endif
 
+#if !defined(sun) && !defined(__sun)
 #define ulong_t u_long
 #define uchar_t u_char
 #define uint8_t u_char
 #define uint64_t u_int64_t
 #define uint32_t u_int32_t
+#endif
+
 #if ULONG_MAX == 4294967295UL
 #       ifndef UINT64_C
 #               define UINT64_C(n) n ## ULL
@@ -57,11 +60,13 @@ typedef unsigned long uintptr_t;
 #		define ntohll(x) (x)
 #	endif
 #else
+#	if !defined(sun) && !defined (__sun)
 #	ifndef htonll
 #		define htonll(x) __bswap_64(x)
 #	endif
 #	ifndef ntohll
 #		define ntohll(x) __bswap_64(x)
+#	endif
 #	endif
 #endif
 
