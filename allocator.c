@@ -358,8 +358,8 @@ slab_cache_add(size_t size)
 		pthread_mutex_init(&(slab->slab_lock), NULL);
 
 		pthread_mutex_lock(&(slabheads[sindx].slab_lock));
-		slabheads[sindx].next = slab;
 		slab->next = slabheads[sindx].next;
+		slabheads[sindx].next = slab;
 		pthread_mutex_unlock(&(slabheads[sindx].slab_lock));
 	}
 	return (1);
