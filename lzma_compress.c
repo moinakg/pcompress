@@ -43,6 +43,11 @@ static ISzAlloc g_Alloc = {
 	NULL
 };
 
+void
+lzma_stats(int show)
+{
+}
+
 /*
  * The two functions below are not thread-safe, by design.
  */

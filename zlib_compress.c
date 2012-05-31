@@ -45,6 +45,11 @@ zlib_init(void **data, int *level, ssize_t chunksize)
 	return (0);
 }
 
+void
+zlib_stats(int show)
+{
+}
+
 static
 void zerr(int ret)
 {

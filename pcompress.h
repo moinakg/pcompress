@@ -51,9 +51,10 @@ extern "C" {
 typedef int (*compress_func_ptr)(void *src, size_t srclen, void *dst,
 	size_t *destlen, int level, void *data);
 
-/* Pointer type for algo specific init/deinit functions. */
+/* Pointer type for algo specific init/deinit/stats functions. */
 typedef int (*init_func_ptr)(void **data, int *level, ssize_t chunksize);
 typedef int (*deinit_func_ptr)(void **data);
+typedef void (*stats_func_ptr)(int show);
 
 extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
 extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, size_t size,
@@ -87,9 +88,16 @@ extern int lzma_init(void **data, int *level, ssize_t chunksize);
 extern int ppmd_init(void **data, int *level, ssize_t chunksize);
 extern int bzip2_init(void **data, int *level, ssize_t chunksize);
 extern int zlib_init(void **data, int *level, ssize_t chunksize);
+
 extern int adapt_deinit(void **data);
 extern int lzma_deinit(void **data);
 extern int ppmd_deinit(void **data);
+
+extern void adapt_stats(int show);
+extern void ppmd_stats(int show);
+extern void lzma_stats(int show);
+extern void bzip2_stats(int show);
+extern void zlib_stats(int show);
 
 /*
  * Per-thread data structure for compression and decompression threads.

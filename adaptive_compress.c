@@ -35,6 +35,10 @@
 #include <pcompress.h>
 #include <allocator.h>
 
+static unsigned int lzma_count = 0;
+static unsigned int bzip2_count = 0;
+static unsigned int ppmd_count = 0;
+
 extern int lzma_compress(void *src, size_t srclen, void *dst,
 	size_t *destlen, int level, void *data);
 extern int bzip2_compress(void *src, size_t srclen, void *dst,
@@ -60,6 +64,20 @@ struct adapt_data {
 	int adapt_mode;
 };
 
+void
+adapt_stats(int show)
+{
+	if (show) {
+		fprintf(stderr, "Adaptive mode stats:\n");
+		fprintf(stderr, "	BZIP2 chunk count: %u\n", bzip2_count);
+		fprintf(stderr, "	PPMd chunk count: %u\n", ppmd_count);
+		fprintf(stderr, "	LZMA chunk count: %u\n\n", lzma_count);
+	}
+	lzma_count = 0;
+	bzip2_count = 0;
+	ppmd_count = 0;
+}
+
 int
 adapt_init(void **data, int *level, ssize_t chunksize)
 {
@@ -74,6 +92,9 @@ adapt_init(void **data, int *level, ssize_t chunksize)
 		*data = adat;
 		if (*level > 9) *level = 9;
 	}
+	lzma_count = 0;
+	bzip2_count = 0;
+	ppmd_count = 0;
 	return (rv);
 }
 
@@ -120,6 +141,7 @@ adapt_compress(void *src, size_t srclen, void *dst,
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	int rv, rv1, rv2;
+	unsigned int *inc;
 	size_t dst2len, dst3len, smaller_dstlen;
 	uchar_t *dst2, *smaller_dst, *larger_dst;
 	void *tmp;
@@ -131,6 +153,7 @@ adapt_compress(void *src, size_t srclen, void *dst,
 	}
 
 	rv = COMPRESS_LZMA;
+	inc = &lzma_count;
 	dst2len = *dstlen;
 	dst3len = *dstlen;
 	rv1 = bzip2_compress(src, srclen, dst2, &dst2len, level, data);
@@ -143,6 +166,7 @@ adapt_compress(void *src, size_t srclen, void *dst,
 		larger_dst = dst;
 		smaller_dstlen = dst2len;
 		smaller_dst = dst2;
+		inc = &bzip2_count;
 	} else {
 		larger_dst = dst2;
 		smaller_dstlen = *dstlen;
@@ -157,9 +181,11 @@ adapt_compress(void *src, size_t srclen, void *dst,
 			rv = COMPRESS_PPMD;
 			smaller_dstlen = dst2len;
 			smaller_dst = larger_dst;
+			inc = &ppmd_count;
 		}
 	}
 
+	*inc += 1;
 	if (smaller_dst != dst) {
 		memcpy(dst, smaller_dst, smaller_dstlen);
 		*dstlen = smaller_dstlen;

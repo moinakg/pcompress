@@ -139,6 +139,36 @@ parse_numeric(ssize_t *val, const char *str)
 }
 
 /*
+ * Convert number of bytes into human readable format
+ */
+char *
+bytes_to_size(uint64_t bytes)
+{
+	static char num[20];
+	uint64_t kilobyte = 1024;
+	uint64_t megabyte = kilobyte * 1024;
+	uint64_t gigabyte = megabyte * 1024;
+	uint64_t terabyte = gigabyte * 1024;
+
+	if (bytes < kilobyte) {
+		sprintf(num, "%llu B", bytes);
+
+	} else if (bytes < megabyte) {
+		sprintf(num, "%llu KB", bytes / kilobyte);
+
+	} else if (bytes < gigabyte) {
+		sprintf(num, "%llu MB", bytes / megabyte);
+
+	} else if (bytes < terabyte) {
+		sprintf(num, "%llu GB", bytes / gigabyte);
+
+	} else {
+		sprintf(num, "%llu B", bytes);
+	}
+	return (num);
+}
+
+/*
  * Read/Write helpers to ensure a full chunk is read or written
  * unless there is an error.
  */

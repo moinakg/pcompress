@@ -38,6 +38,11 @@ slab_alloc_i(void *p, int items, int size) {
 	return (ptr);
 }
 
+void
+bzip2_stats(int show)
+{
+}
+
 int
 bzip2_init(void **data, int *level, ssize_t chunksize)
 {

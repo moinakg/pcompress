@@ -56,6 +56,11 @@ static ISzAlloc g_Alloc = {
 	NULL
 };
 
+void
+ppmd_stats(int show)
+{
+}
+
 int
 ppmd_init(void **data, int *level, ssize_t chunksize)
 {

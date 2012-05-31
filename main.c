@@ -67,14 +67,20 @@ static compress_func_ptr _compress_func;
 static compress_func_ptr _decompress_func;
 static init_func_ptr _init_func;
 static deinit_func_ptr _deinit_func;
+static stats_func_ptr _stats_func;
+
 static int main_cancel;
 static int adapt_mode = 0;
 static int pipe_mode = 0;
 static int nthreads = 0;
-static int hide_stats = 1;
+static int hide_mem_stats = 1;
+static int hide_cmp_stats = 1;
 static unsigned int chunk_num;
+static uint64_t largest_chunk, smallest_chunk, avg_chunk;
 static const char *exec_name;
 static const char *algo = NULL;
+static int do_compress = 0;
+static int do_uncompress = 0;
 
 static void
 usage(void)
@@ -106,8 +112,25 @@ usage(void)
 	    "3) To operate as a pipe, read from stdin and write to stdout:\n"
 	    "   %s <-c ...|-d ...> -p\n"
 	    "4) Number of threads can optionally be specified: -t <1 - 256 count>\n"
-	    "5) Pass '-M' to display memory allocator statistics\n\n",
+	    "5) Pass '-M' to display memory allocator statistics\n"
+	    "6) Pass '-C' to display compression statistics\n\n",
 	    exec_name, exec_name, exec_name);
+}
+
+void
+show_compression_stats(uint64_t chunksize)
+{
+	chunk_num++;
+	fprintf(stderr, "\nCompression Statistics\n");
+	fprintf(stderr, "======================\n");
+	fprintf(stderr, "Total chunks           : %u\n", chunk_num);
+	fprintf(stderr, "Best compressed chunk  : %s(%.2f%%)\n",
+	    bytes_to_size(smallest_chunk), (double)smallest_chunk/(double)chunksize*100);
+	fprintf(stderr, "Worst compressed chunk : %s(%.2f%%)\n",
+	    bytes_to_size(largest_chunk), (double)largest_chunk/(double)chunksize*100);
+	avg_chunk /= chunk_num;
+	fprintf(stderr, "Avg compressed chunk   : %s(%.2f%%)\n\n",
+	    bytes_to_size(avg_chunk), (double)avg_chunk/(double)chunksize*100);
 }
 
 /*
@@ -298,6 +321,10 @@ start_decompress(const char *filename, const char *to_filename)
 		nprocs = nthreads;
 
 	fprintf(stderr, "Scaling to %d threads\n", nprocs);
+	slab_cache_add(compressed_chunksize + CHDR_SZ);
+	slab_cache_add(chunksize);
+	slab_cache_add(sizeof (struct cmp_data));
+
 	dary = (struct cmp_data **)slab_alloc(NULL, sizeof (struct cmp_data *) * nprocs);
 	for (i = 0; i < nprocs; i++) {
 		dary[i] = (struct cmp_data *)slab_alloc(NULL, sizeof (struct cmp_data));
@@ -384,6 +411,12 @@ start_decompress(const char *filename, const char *to_filename)
 				break;
 			}
 
+			if (tdat->len_cmp > largest_chunk)
+				largest_chunk = tdat->len_cmp;
+			if (tdat->len_cmp < smallest_chunk)
+				smallest_chunk = tdat->len_cmp;
+			avg_chunk += tdat->len_cmp;
+
 			/*
 			 * Now read compressed chunk including the crc64 checksum.
 			 */
@@ -449,7 +482,8 @@ uncomp_done:
 		if (uncompfd != -1) close(uncompfd);
 	}
 
-	slab_cleanup(hide_stats);
+	if (!hide_cmp_stats) show_compression_stats(chunksize);
+	slab_cleanup(hide_mem_stats);
 }
 
 static void *
@@ -541,6 +575,13 @@ repeat:
 			goto do_cancel;
 		}
 
+		if (do_compress) {
+			if (tdat->len_cmp > largest_chunk)
+				largest_chunk = tdat->len_cmp;
+			if (tdat->len_cmp < smallest_chunk)
+				smallest_chunk = tdat->len_cmp;
+			avg_chunk += tdat->len_cmp;
+		}
 		wbytes = Write(w->wfd, tdat->cmp_seg, tdat->len_cmp);
 		if (unlikely(wbytes != tdat->len_cmp)) {
 			int i;
@@ -747,6 +788,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	chunk_num = 0;
 	np = 0;
 	bail = 0;
+	largest_chunk = 0;
+	smallest_chunk = chunksize;
+	avg_chunk = 0;
 
 	/*
 	 * Read the first chunk into a spare buffer (a simple double-buffering).
@@ -870,7 +914,9 @@ comp_done:
 		if (uncompfd != -1) close(uncompfd);
 	}
 
-	slab_cleanup(hide_stats);
+	if (!hide_cmp_stats) show_compression_stats(chunksize);
+	_stats_func(!hide_cmp_stats);
+	slab_cleanup(hide_mem_stats);
 }
 
 /*
@@ -889,6 +935,7 @@ init_algo(const char *algo, int bail)
 		_decompress_func = zlib_decompress;
 		_init_func = zlib_init;
 		_deinit_func = NULL;
+		_stats_func = zlib_stats;
 		rv = 0;
 
 	} else if (memcmp(algorithm, "lzma", 4) == 0) {
@@ -896,6 +943,7 @@ init_algo(const char *algo, int bail)
 		_decompress_func = lzma_decompress;
 		_init_func = lzma_init;
 		_deinit_func = lzma_deinit;
+		_stats_func = lzma_stats;
 		rv = 0;
 
 	} else if (memcmp(algorithm, "bzip2", 5) == 0) {
@@ -903,6 +951,7 @@ init_algo(const char *algo, int bail)
 		_decompress_func = bzip2_decompress;
 		_init_func = bzip2_init;
 		_deinit_func = NULL;
+		_stats_func = bzip2_stats;
 		rv = 0;
 
 	} else if (memcmp(algorithm, "ppmd", 4) == 0) {
@@ -910,6 +959,7 @@ init_algo(const char *algo, int bail)
 		_decompress_func = ppmd_decompress;
 		_init_func = ppmd_init;
 		_deinit_func = ppmd_deinit;
+		_stats_func = ppmd_stats;
 		rv = 0;
 
 	/* adapt2 and adapt ordering of the checks matters here. */
@@ -918,6 +968,7 @@ init_algo(const char *algo, int bail)
 		_decompress_func = adapt_decompress;
 		_init_func = adapt2_init;
 		_deinit_func = adapt_deinit;
+		_stats_func = adapt_stats;
 		adapt_mode = 1;
 		rv = 0;
 
@@ -926,6 +977,7 @@ init_algo(const char *algo, int bail)
 		_decompress_func = adapt_decompress;
 		_init_func = adapt_init;
 		_deinit_func = adapt_deinit;
+		_stats_func = adapt_stats;
 		adapt_mode = 1;
 		rv = 0;
 	}
@@ -940,14 +992,12 @@ main(int argc, char *argv[])
 	char *to_filename = NULL;
 	ssize_t chunksize = DEFAULT_CHUNKSIZE;
 	int opt, level, num_rem;
-	int do_compress = 0;
-	int do_uncompress = 0;
 
 	exec_name = get_execname(argv[0]);
 	level = 6;
 	slab_init();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:M")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MC")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -992,7 +1042,11 @@ main(int argc, char *argv[])
 			break;
 
 		    case 'M':
-			hide_stats = 0;
+			hide_mem_stats = 0;
+			break;
+
+		    case 'C':
+			hide_cmp_stats = 0;
 			break;
 
 		    case '?':
