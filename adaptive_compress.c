@@ -143,7 +143,7 @@ adapt_compress(void *src, size_t srclen, void *dst,
 	int rv, rv1, rv2;
 	unsigned int *inc;
 	size_t dst2len, dst3len, smaller_dstlen;
-	uchar_t *dst2, *smaller_dst, *larger_dst;
+	uchar_t *dst2, *smaller_dst;
 	void *tmp;
 
 	dst2 = slab_alloc(NULL, *dstlen);
@@ -152,37 +152,35 @@ adapt_compress(void *src, size_t srclen, void *dst,
 		return (-1);
 	}
 
-	rv = COMPRESS_LZMA;
-	inc = &lzma_count;
+	rv = COMPRESS_PPMD;
+	inc = &ppmd_count;
 	dst2len = *dstlen;
 	dst3len = *dstlen;
-	rv1 = bzip2_compress(src, srclen, dst2, &dst2len, level, data);
-	if (rv1 < 0) dst2len = dst3len;
-	rv2 = lzma_compress(src, srclen, dst, dstlen, level, adat->lzma_data);
-	if (rv2 < 0) *dstlen = dst3len;
-
-	if (dst2len < *dstlen) {
-		rv = COMPRESS_BZIP2;
-		larger_dst = dst;
-		smaller_dstlen = dst2len;
-		smaller_dst = dst2;
-		inc = &bzip2_count;
-	} else {
-		larger_dst = dst2;
-		smaller_dstlen = *dstlen;
-		smaller_dst = dst;
-	}
+	rv1 = ppmd_compress(src, srclen, dst, dstlen, level, adat->ppmd_data);
+	if (rv1 < 0) *dstlen = dst3len;
 
 	if (adat->adapt_mode == 2) {
-		rv2 = ppmd_compress(src, srclen, larger_dst, &dst2len,
-		    level, adat->ppmd_data);
+		rv2 = lzma_compress(src, srclen, dst2, &dst2len, level, adat->lzma_data);
 		if (rv2 < 0) dst2len = dst3len;
-		if (dst2len < smaller_dstlen) {
-			rv = COMPRESS_PPMD;
-			smaller_dstlen = dst2len;
-			smaller_dst = larger_dst;
-			inc = &ppmd_count;
+		if (dst2len < *dstlen) {
+			inc = &lzma_count;
+			rv = COMPRESS_LZMA;
 		}
+	} else {
+		rv2 = bzip2_compress(src, srclen, dst2, &dst2len, level, NULL);
+		if (rv2 < 0) dst2len = dst3len;
+		if (dst2len < *dstlen) {
+			inc = &bzip2_count;
+			rv = COMPRESS_BZIP2;
+		}
+	}
+
+	if (dst2len < *dstlen) {
+		smaller_dstlen = dst2len;
+		smaller_dst = dst2;
+	} else {
+		smaller_dstlen = *dstlen;
+		smaller_dst = dst;
 	}
 
 	*inc += 1;
