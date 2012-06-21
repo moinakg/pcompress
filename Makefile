@@ -44,7 +44,7 @@ CRCSRCS = lzma/crc64_fast.c lzma/crc64_table.c
 CRCHDRS = lzma/crc64_table_le.h lzma/crc64_table_be.h lzma/crc_macros.h
 CRCOBJS = $(CRCSRCS:.c=.o)
 
-BAKFILES = *~ lzma/*~
+BAKFILES = *~ lzma/*~ rabin/*~
 
 RM = rm -f
 CPPFLAGS = -I. -I./lzma -I./rabin -D_7ZIP_ST -DNODEFAULT_PROPS -DFILE_OFFSET_BITS=64 \

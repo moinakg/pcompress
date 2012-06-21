@@ -35,6 +35,27 @@
  *
  */
 
+/*
+ * This file is a part of Pcompress, a chunked parallel multi-
+ * algorithm lossless compression and decompression program.
+ *
+ * Copyright (C) 2012 Moinak Ghosh. All rights reserved.
+ * Use is subject to license terms.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * moinakg@belenix.org, http://moinakg.wordpress.com/
+ * 
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -121,7 +142,7 @@ scan_rabin_chunks(rabin_context_t *ctx, void *buf, ssize_t size, ssize_t offset)
 		if (ctx->window_pos == RAB_POLYNOMIAL_WIN_SIZE) // Loop back around
 			ctx->window_pos=0;
         
-		// If we hit our special value or reached the max block size create a new block
+		// If we hit our special value or reached the max block size update block offset
 		if ((ctx->cur_roll_checksum & RAB_POLYNOMIAL_AVG_BLOCK_MASK) == RAB_POLYNOMIAL_CONST ||
 		    length >= rabin_polynomial_max_block_size) {
 			last_offset = i+1;
