@@ -22,11 +22,18 @@
 #
 
 PROG= pcompress
-MAINSRCS= main.c utils.c allocator.c zlib_compress.c bzip2_compress.c \
+MAINSRCS = main.c utils.c allocator.c zlib_compress.c bzip2_compress.c \
 	lzma_compress.c ppmd_compress.c adaptive_compress.c
+MAINHDRS = allocator.h  pcompress.h  utils.h
 MAINOBJS = $(MAINSRCS:.c=.o)
 
+RABINSRCS = rabin/rabin_polynomial.c
+RABINHDRS = rabin/rabin_polynomial.h utils.h
+RABINOBJS = $(RABINSRCS:.c=.o)
+
 LZMASRCS = lzma/LzmaEnc.c lzma/LzFind.c lzma/LzmaDec.c
+LZMAHDRS = lzma/CpuArch.h lzma/LzFind.h lzma/LzmaEnc.h lzma/Types.h \
+	lzma/LzHash.h lzma/LzmaDec.h utils.h
 LZMAOBJS = $(LZMASRCS:.c=.o)
 
 PPMDSRCS = lzma/Ppmd8.c lzma/Ppmd8Enc.c lzma/Ppmd8Dec.c
@@ -34,43 +41,49 @@ PPMDHDRS = lzma/Ppmd.h lzma/Ppmd8.h
 PPMDOBJS = $(PPMDSRCS:.c=.o)
 
 CRCSRCS = lzma/crc64_fast.c lzma/crc64_table.c
+CRCHDRS = lzma/crc64_table_le.h lzma/crc64_table_be.h lzma/crc_macros.h
 CRCOBJS = $(CRCSRCS:.c=.o)
 
 BAKFILES = *~ lzma/*~
 
 RM = rm -f
-CPPFLAGS = -I. -I./lzma -D_7ZIP_ST -DNODEFAULT_PROPS -DFILE_OFFSET_BITS=64 \
+CPPFLAGS = -I. -I./lzma -I./rabin -D_7ZIP_ST -DNODEFAULT_PROPS -DFILE_OFFSET_BITS=64 \
 	-D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32
 VEC_FLAGS = -ftree-vectorize
 LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm
 
 ifdef DEBUG
-LINK = gcc -m64 -pthread -msse3
+LINK = g++ -m64 -pthread -msse3
 COMPILE = gcc -m64 -g -msse3 -c
+COMPILE_cpp = g++ -m64 -g -msse3 -c
 else
-LINK = gcc -m64 -pthread -msse3
+LINK = g++ -m64 -pthread -msse3
 COMPILE = gcc -m64 -O3 -msse3 -c
+COMPILE_cpp = g++ -m64 -O3 -msse3 -c
 CPPFLAGS += -DNDEBUG
 endif
 
 all: $(PROG)
 
-$(LZMAOBJS): $(LZMASRCS)
+$(LZMAOBJS): $(LZMASRCS) $(LZMAHDRS)
 	$(COMPILE) $(CPPFLAGS) $(@:.o=.c) -o $@
 
-$(CRCOBJS): $(CRCSRCS)
+$(CRCOBJS): $(CRCSRCS) $(CRCHDRS)
 	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(PPMDOBJS): $(PPMDSRCS) $(PPMDHDRS)
 	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
-$(MAINOBJS): $(MAINSRCS)
+$(RABINOBJS): $(RABINSRCS) $(RABINHDRS)
+	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
+$(MAINOBJS): $(MAINSRCS) $(MAINHDRS)
 	$(COMPILE) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
-$(PROG): $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS)
-	$(LINK) -o $@ $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(LDLIBS)
+$(PROG): $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(RABINOBJS)
+	$(LINK) -o $@ $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(RABINOBJS) $(LDLIBS)
 
 clean:
-	$(RM) $(PROG) $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(BAKFILES)
+	$(RM) $(PROG) $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(RABINOBJS) $(BAKFILES)
 

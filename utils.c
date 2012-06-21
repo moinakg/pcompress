@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <link.h>
+#include <rabin_polynomial.h>
 
 #include "utils.h"
 
@@ -171,12 +172,15 @@ bytes_to_size(uint64_t bytes)
 /*
  * Read/Write helpers to ensure a full chunk is read or written
  * unless there is an error.
+ * Additionally can be given an offset in the buf where the data
+ * should be inserted.
  */
 ssize_t
 Read(int fd, void *buf, size_t count)
 {
 	ssize_t rcount, rem;
 	uchar_t *cbuf;
+	va_list args;
 
 	rem = count;
 	cbuf = (uchar_t *)buf;
@@ -188,6 +192,30 @@ Read(int fd, void *buf, size_t count)
 		cbuf += rcount;
 	} while (rem);
 	return (count - rem);
+}
+
+ssize_t
+Read2(int fd, void *buf, size_t count, ssize_t *rabin_count, void *ctx)
+{
+	char *buf2;
+	ssize_t rcount;
+	rabin_context_t *rctx = (rabin_context_t *)ctx;
+
+	if (!ctx)  return (Read(fd, buf, count));
+	buf2 = buf;
+	if (*rabin_count) {
+		buf2 = (char *)buf + *rabin_count;
+		count -= *rabin_count;
+	}
+	rcount = Read(fd, buf2, count);
+	if (rcount > 0) {
+		rcount += *rabin_count;
+		*rabin_count = scan_rabin_chunks(rctx, buf, rcount, *rabin_count);
+	} else {
+		if (rcount == 0) rcount = *rabin_count;
+		*rabin_count = 0;
+	}
+	return (rcount);
 }
 
 ssize_t

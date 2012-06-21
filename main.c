@@ -44,6 +44,7 @@
 #include <utils.h>
 #include <pcompress.h>
 #include <allocator.h>
+#include <rabin_polynomial.h>
 
 /* Needed for CLzmaEncprops. */
 #include <LzmaEnc.h>
@@ -75,12 +76,14 @@ static int pipe_mode = 0;
 static int nthreads = 0;
 static int hide_mem_stats = 1;
 static int hide_cmp_stats = 1;
+static int enable_rabin_scan = 0;
 static unsigned int chunk_num;
 static uint64_t largest_chunk, smallest_chunk, avg_chunk;
 static const char *exec_name;
 static const char *algo = NULL;
 static int do_compress = 0;
 static int do_uncompress = 0;
+static rabin_context_t *rctx;
 
 static void
 usage(void)
@@ -109,17 +112,22 @@ usage(void)
 	    "2) To decompress a file compressed using above command:\n"
 	    "   %s -d <compressed file> <target file>\n"
 	    "3) To operate as a pipe, read from stdin and write to stdout:\n"
-	    "   %s <-c ...|-d ...> -p\n"
-	    "4) Number of threads can optionally be specified: -t <1 - 256 count>\n"
-	    "5) Pass '-M' to display memory allocator statistics\n"
-	    "6) Pass '-C' to display compression statistics\n\n",
-	    exec_name, exec_name, exec_name);
+	    "   %s -p ...\n"
+	    "4) To use Rabin Fingerprinting to adjust chunk boundaries:\n"
+	    "   %s -r -c ...\n"
+	    "   In this case <chunk_size> will specify the max chunk size and chunks\n"
+	    "   will be variable-length delimited at the rabin boundary closest to\n"
+	    "   <chunk_size> bytes. This should improve chunked compression.\n"
+	    "   This option is obviously valid only when compressing.\n"
+	    "5) Number of threads can optionally be specified: -t <1 - 256 count>\n"
+	    "6) Pass '-M' to display memory allocator statistics\n"
+	    "7) Pass '-C' to display compression statistics\n\n",
+	    exec_name, exec_name, exec_name, exec_name);
 }
 
 void
 show_compression_stats(uint64_t chunksize)
 {
-	chunk_num++;
 	fprintf(stderr, "\nCompression Statistics\n");
 	fprintf(stderr, "======================\n");
 	fprintf(stderr, "Total chunks           : %u\n", chunk_num);
@@ -614,7 +622,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	char tmpfile[MAXPATHLEN];
 	char to_filename[MAXPATHLEN];
 	ssize_t compressed_chunksize;
-	ssize_t n_chunksize, rbytes;
+	ssize_t n_chunksize, rbytes, rabin_count;
 	int version;
 	struct stat sbuf;
 	int compfd = -1, uncompfd = -1, err;
@@ -639,6 +647,12 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	compressed_chunksize = chunksize + (chunksize >> 6) +
 	    sizeof (chunksize) + sizeof (uint64_t) + sizeof (chunksize);
 	err = 0;
+
+	if (enable_rabin_scan) {
+		rctx = create_rabin_context();
+		if (rctx == NULL)
+			err_exit(0, "Initializing Rabin Polynomial failed\n");
+	}
 
 	/* A host of sanity checks. */
 	if (!pipe_mode) {
@@ -794,7 +808,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	/*
 	 * Read the first chunk into a spare buffer (a simple double-buffering).
 	 */
-	rbytes = Read(uncompfd, cread_buf, chunksize);
+	rabin_count = 0;
+	rbytes = Read2(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 	while (!bail) {
 		uchar_t *tmp;
 
@@ -816,27 +831,33 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			tdat->uncompressed_chunk = cread_buf;
 			cread_buf = tmp;
 			tdat->rbytes = rbytes;
+			if (rabin_count) {
+				memcpy(cread_buf,
+				    tdat->uncompressed_chunk + rabin_count,
+				    rbytes - rabin_count);
+				tdat->rbytes = rabin_count;
+				rabin_count = rbytes - rabin_count;
+			}
 			if (rbytes < chunksize) {
-				bail = 1;
 				if (rbytes < 0) {
+					bail = 1;
 					perror("Read: ");
 					COMP_BAIL;
 
 				} else if (tdat->rbytes == 0) { /* EOF */
+					bail = 1;
 					break;
 				}
-				np = nprocs + 1;
-				sem_post(&tdat->start_sem);
-				break;
 			}
 			/* Signal the compression thread to start */
 			sem_post(&tdat->start_sem);
+			chunk_num++;
+
 			/*
 			 * Read the next buffer we want to process while previous
 			 * buffer is in progress.
 			 */
-			rbytes = Read(uncompfd, cread_buf, chunksize);
-			chunk_num++;
+			rbytes = Read2(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 		}
 	}
 
@@ -996,7 +1017,7 @@ main(int argc, char *argv[])
 	level = 6;
 	slab_init();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MC")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCr")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -1048,6 +1069,10 @@ main(int argc, char *argv[])
 			hide_cmp_stats = 0;
 			break;
 
+		    case 'r':
+			enable_rabin_scan = 1;
+			break;
+
 		    case '?':
 		    default:
 			usage();
@@ -1067,6 +1092,12 @@ main(int argc, char *argv[])
 	num_rem = argc - optind;
 	if (pipe_mode && num_rem > 0 ) {
 		fprintf(stderr, "Filename(s) unexpected for pipe mode\n");
+		usage();
+		exit(1);
+	}
+
+	if (enable_rabin_scan && !do_compress) {
+		fprintf(stderr, "Rabin Fingerprinting is only used during compression.\n");
 		usage();
 		exit(1);
 	}
