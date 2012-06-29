@@ -114,7 +114,8 @@ usage(void)
 	    "   %s -d <compressed file> <target file>\n"
 	    "3) To operate as a pipe, read from stdin and write to stdout:\n"
 	    "   %s -p ...\n"
-	    "4) Rabin Deduplication: Work in progress.\n"
+	    "4) Attempt Rabin fingerprinting based deduplication on chunks:\n"
+	    "   %s -D ...\n"
 	    "5) Number of threads can optionally be specified: -t <1 - 256 count>\n"
 	    "6) Pass '-M' to display memory allocator statistics\n"
 	    "7) Pass '-C' to display compression statistics\n\n",
@@ -1103,7 +1104,7 @@ main(int argc, char *argv[])
 	level = 6;
 	slab_init();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCr")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCD")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -1155,9 +1156,9 @@ main(int argc, char *argv[])
 			hide_cmp_stats = 0;
 			break;
 
-		    //case 'r':
-			//enable_rabin_scan = 1;
-			//break;
+		    case 'D':
+			enable_rabin_scan = 1;
+			break;
 
 		    case '?':
 		    default:

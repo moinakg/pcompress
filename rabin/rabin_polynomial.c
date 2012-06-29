@@ -204,6 +204,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 			ctx->blocks[blknum].index = blknum; // Need to store for sorting
 			ctx->blocks[blknum].checksum = ctx->cur_checksum;
 			ctx->blocks[blknum].length = length;
+			ctx->blocks[blknum].refcount = 0;
 
 			blknum++;
 			ctx->cur_checksum = 0;
@@ -219,7 +220,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		ssize_t pos, matches;
 		int valid = 1;
 		char *tmp, *prev_offset;
-		unsigned int *blkarr, prev_blk;
+		unsigned int *blkarr, prev_index, prev_blk;
 
 		// Insert the last left-over trailing bytes, if any, into a block.
 		if (last_offset < *size) {
@@ -255,6 +256,8 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		 * to be considered identical.
 		 * The block index in the chunk is initialized with pointers into the
 		 * sorted block array.
+		 * A reference count is maintained for blocks that are similar with other
+		 * blocks. This helps in non-duplicate block merging later.
 		 */
 		for (blk = 0; blk < blknum; blk++) {
 			blkarr[ctx->blocks[blk].index] = blk;
@@ -263,7 +266,8 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 			    ctx->blocks[blk].length == prev_length &&
 			    memcmp(prev_offset, buf1 + ctx->blocks[blk].offset, prev_length) == 0) {
 				ctx->blocks[blk].length = 0;
-				ctx->blocks[blk].index = prev_blk;
+				ctx->blocks[blk].index = prev_index;
+				(ctx->blocks[prev_blk].refcount)++;
 				matches += prev_length;
 				continue;
 			}
@@ -271,7 +275,8 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 			prev_offset = buf1 + ctx->blocks[blk].offset;
 			prev_cksum = ctx->blocks[blk].checksum;
 			prev_length = ctx->blocks[blk].length;
-			prev_blk = ctx->blocks[blk].index;
+			prev_index = ctx->blocks[blk].index;
+			prev_blk = blk;
 		}
 
 		if (matches < overhead) {
@@ -285,6 +290,8 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		 * This way we can differentiate between a unique block length entry and a
 		 * pointer to another block without needing a separate flag.
 		 */
+		prev_index = 0;
+		prev_length = 0;
 		for (blk = 0; blk < blknum; blk++) {
 			rabin_blockentry_t *be;
 
@@ -301,8 +308,37 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 				prev_offset = buf1 + be->offset;
 				memcpy(ctx->cbuf + pos, prev_offset, be->length);
 				pos += be->length;
-				blkarr[blk] = htonl(be->length);
+				/*
+				 * Update Index entry with the length. Also try to merge runs
+				 * of unique (non-duplicate) blocks into a single block entry
+				 * as long as the total length does not exceed max block size.
+				 */
+				if (prev_index == 0) {
+					if (be->refcount == 0) {
+						prev_index = blk;
+						prev_length = be->length;
+					}
+					blkarr[blk] = htonl(be->length);
+				} else {
+					if (be->refcount > 0) {
+						prev_index = 0;
+						prev_length = 0;
+						blkarr[blk] = htonl(be->length);
+					} else {
+						if (prev_length + be->length <= RAB_POLYNOMIAL_MAX_BLOCK_SIZE) {
+							prev_length += be->length;
+							blkarr[prev_index] = htonl(prev_length);
+							blkarr[blk] = 0;
+						} else {
+							prev_index = 0;
+							prev_length = 0;
+							blkarr[blk] = htonl(be->length);
+						}
+					}
+				}
 			} else {
+				prev_index = 0;
+				prev_length = 0;
 				blkarr[blk] = htonl(RAB_POLYNOMIAL_MAX_BLOCK_SIZE + be->index + 1);
 			}
 		}
@@ -337,7 +373,11 @@ rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
 
 	for (blk = 0; blk < blknum; blk++) {
 		len = ntohl(blkarr[blk]);
-		if (len <= RAB_POLYNOMIAL_MAX_BLOCK_SIZE) {
+		if (len == 0) {
+			ctx->blocks[blk].length = 0;
+			ctx->blocks[blk].index = 0;
+
+		} else if (len <= RAB_POLYNOMIAL_MAX_BLOCK_SIZE) {
 			ctx->blocks[blk].length = len;
 			ctx->blocks[blk].offset = pos1;
 			pos1 += len;
@@ -347,6 +387,7 @@ rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
 		}
 	}
 	for (blk = 0; blk < blknum; blk++) {
+		if (ctx->blocks[blk].length == 0 && ctx->blocks[blk].index == 0) continue;
 		if (ctx->blocks[blk].length > 0) {
 			len = ctx->blocks[blk].length;
 			pos1 = ctx->blocks[blk].offset;

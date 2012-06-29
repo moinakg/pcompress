@@ -68,14 +68,12 @@
 // 1 << RAB_POLYNOMIAL_AVG_BLOCK_SHIFT = Average Rabin Chunk Size
 // So we are always looking at power of 2 chunk sizes to avoid doing a modulus
 //
-// A value of 12 below gives avg block size of 4096 bytes
-//
 #define	RAB_POLYNOMIAL_AVG_BLOCK_SHIFT 12
 #define	RAB_POLYNOMIAL_AVG_BLOCK_SIZE (1 << RAB_POLYNOMIAL_AVG_BLOCK_SHIFT)
 #define	RAB_POLYNOMIAL_AVG_BLOCK_MASK (RAB_POLYNOMIAL_AVG_BLOCK_SIZE - 1)
 #define	RAB_POLYNOMIAL_MIN_BLOCK_SIZE (4096)
 #define	RAB_POLYNOMIAL_MAX_BLOCK_SIZE (128 * 1024)
-#define	RAB_POLYNOMIAL_WIN_SIZE 32
+#define	RAB_POLYNOMIAL_WIN_SIZE 31
 #define	RAB_POLYNOMIAL_MIN_WIN_SIZE 17
 #define	RAB_POLYNOMIAL_MAX_WIN_SIZE 63
 
@@ -84,6 +82,7 @@ typedef struct {
 	uint64_t checksum;
 	unsigned int index;
 	unsigned int length;
+	unsigned short refcount;
 } rabin_blockentry_t;
 
 // An entry in the Rabin block array in the chunk.
