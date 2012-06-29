@@ -32,10 +32,13 @@
 extern "C" {
 #endif
 
+#include <rabin_polynomial.h>
+
 #define	CHDR_SZ		1
 #define	ALGO_SZ		8
 #define	MIN_CHUNK	2048
-#define	VERSION		1
+#define	VERSION		2
+#define	FLAG_DEDUP	1
 
 #define	COMPRESSED	1
 #define	UNCOMPRESSED	0
@@ -45,6 +48,7 @@ extern "C" {
 #define	COMPRESS_LZMA	1
 #define	COMPRESS_BZIP2	2
 #define	COMPRESS_PPMD	3
+#define	CHUNK_FLAG_DEDUP	2
 #define	COMP_EXTN	".pz"
 
 /* Pointer type for compress and decompress functions. */
@@ -106,6 +110,7 @@ struct cmp_data {
 	uchar_t *cmp_seg;
 	uchar_t *compressed_chunk;
 	uchar_t *uncompressed_chunk;
+	rabin_context_t *rctx;
 	ssize_t rbytes;
 	ssize_t chunksize;
 	ssize_t len_cmp;

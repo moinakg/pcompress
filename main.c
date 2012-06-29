@@ -58,6 +58,7 @@ struct wdata {
 	struct cmp_data **dary;
 	int wfd;
 	int nprocs;
+	ssize_t chunksize;
 };
 
 
@@ -113,12 +114,7 @@ usage(void)
 	    "   %s -d <compressed file> <target file>\n"
 	    "3) To operate as a pipe, read from stdin and write to stdout:\n"
 	    "   %s -p ...\n"
-	    "4) To use Rabin Fingerprinting to adjust chunk boundaries:\n"
-	    "   %s -r -c ...\n"
-	    "   In this case <chunk_size> will specify the max chunk size and chunks\n"
-	    "   will be variable-length delimited at the rabin boundary closest to\n"
-	    "   <chunk_size> bytes. This should improve chunked compression.\n"
-	    "   This option is obviously valid only when compressing.\n"
+	    "4) Rabin Deduplication: Work in progress.\n"
 	    "5) Number of threads can optionally be specified: -t <1 - 256 count>\n"
 	    "6) Pass '-M' to display memory allocator statistics\n"
 	    "7) Pass '-C' to display compression statistics\n\n",
@@ -185,6 +181,7 @@ redo:
 		rseg = tdat->compressed_chunk + tdat->rbytes;
 		_chunksize = ntohll(*((ssize_t *)rseg));
 	}
+
 	if (HDR & COMPRESSED) {
 		rv = tdat->decompress(cseg, tdat->len_cmp, tdat->uncompressed_chunk,
 		    &_chunksize, tdat->level, tdat->data);
@@ -192,6 +189,28 @@ redo:
 		memcpy(cseg + CHDR_SZ, tdat->uncompressed_chunk, _chunksize);
 	}
 	tdat->len_cmp = _chunksize;
+
+	/* Rebuild chunk from dedup blocks. */
+	if (enable_rabin_scan && (HDR & FLAG_DEDUP)) {
+		rabin_context_t *rctx;
+		uchar_t *tmp;
+
+		rctx = tdat->rctx;
+		reset_rabin_context(tdat->rctx);
+		rctx->cbuf = tdat->compressed_chunk;
+		rabin_inverse_dedup(rctx, tdat->uncompressed_chunk, &(tdat->len_cmp));
+		if (!rctx->valid) {
+			fprintf(stderr, "ERROR: Chunk %d, dedup recovery failed.\n", tdat->id);
+			rv = -1;
+			tdat->len_cmp = 0;
+			goto cont;
+		}
+		_chunksize = tdat->len_cmp;
+		tmp = tdat->uncompressed_chunk;
+		tdat->uncompressed_chunk = tdat->compressed_chunk;
+		tdat->compressed_chunk = tmp;
+		tdat->cmp_seg = tdat->uncompressed_chunk;
+	}
 
 	if (rv == -1) {
 		tdat->len_cmp = 0;
@@ -221,9 +240,10 @@ cont:
  * ----------------------
  * File Header:
  * Algorithm string:  8 bytes.
- * Version number:    4 bytes.
+ * Version number:    2 bytes.
+ * Global Flags:      2 bytes.
  * Chunk size:        8 bytes.
- * Compression Level: 4 bytes;
+ * Compression Level: 4 bytes.
  *
  * Chunk Header:
  * Compressed length: 8 bytes.
@@ -232,12 +252,15 @@ cont:
  * 
  * Chunk Flags, 8 bits:
  * I  I  I  I  I  I  I  I
- * |     |  |           |
- * |     |  |           `- 0 - Uncompressed
- * |     |  |              1 - Compressed
- * |     |  |
- * |     |  `------------- 1 - Bzip2 (Adaptive Mode)
- * |     `---------------- 1 - Lzma (Adaptive Mode)
+ * |  |     |        |  |
+ * |  '-----'        |  `- 0 - Uncompressed
+ * |     |           |     1 - Compressed
+ * |     |           |   
+ * |     |           `---- 1 - Chunk was Deduped
+ * |     |
+ * |     |                 1 - Bzip2 (Adaptive Mode)
+ * |     `---------------- 2 - Lzma (Adaptive Mode)
+ * |                       3 - PPMD (Adaptive Mode)
  * |
  * `---------------------- 1 - Last Chunk flag
  *
@@ -255,12 +278,16 @@ start_decompress(const char *filename, const char *to_filename)
 	struct wdata w;
 	int compfd = -1, i, p;
 	int uncompfd = -1, err, np, bail;
-	int version, nprocs, thread = 0, level;
+	int nprocs, thread = 0, level;
+	short version, flags;
 	ssize_t chunksize, compressed_chunksize;
 	struct cmp_data **dary, *tdat;
 	pthread_t writer_thr;
 
 	err = 0;
+	flags = 0;
+	thread = 0;
+
 	/*
 	 * Open files and do sanity checks.
 	 */
@@ -303,17 +330,19 @@ start_decompress(const char *filename, const char *to_filename)
 	}
 
 	if (Read(compfd, &version, sizeof (version)) < sizeof (version) ||
+	    Read(compfd, &flags, sizeof (flags)) < sizeof (flags) ||
 	    Read(compfd, &chunksize, sizeof (chunksize)) < sizeof (chunksize) ||
 	    Read(compfd, &level, sizeof (level)) < sizeof (level)) {
 		perror("Read: ");
 		UNCOMP_BAIL;
 	}
 
-	version = ntohl(version);
+	version = ntohs(version);
+	flags = ntohs(flags);
 	chunksize = ntohll(chunksize);
 	level = ntohl(level);
 
-	if (version != 1) {
+	if (version != VERSION) {
 		fprintf(stderr, "Unsupported version: %d\n", version);
 		err = 1;
 		goto uncomp_done;
@@ -321,6 +350,10 @@ start_decompress(const char *filename, const char *to_filename)
 
 	compressed_chunksize = chunksize + (chunksize >> 6) + sizeof (uint64_t)
 	    + sizeof (chunksize);
+
+	if (flags & FLAG_DEDUP) {
+		enable_rabin_scan = 1;
+	}
 
 	if (nthreads == 0)
 		nprocs = sysconf(_SC_NPROCESSORS_ONLN);
@@ -346,7 +379,11 @@ start_decompress(const char *filename, const char *to_filename)
 			fprintf(stderr, "Out of memory\n");
 			UNCOMP_BAIL;
 		}
-		tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL, chunksize);
+		if (enable_rabin_scan)
+			tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
+			    compressed_chunksize + CHDR_SZ);
+		else
+			tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL, chunksize);
 		if (!tdat->uncompressed_chunk) {
 			fprintf(stderr, "Out of memory\n");
 			UNCOMP_BAIL;
@@ -362,6 +399,10 @@ start_decompress(const char *filename, const char *to_filename)
 		sem_init(&(tdat->write_done_sem), 0, 1);
 		if (_init_func)
 			_init_func(&(tdat->data), &(tdat->level), chunksize);
+		if (enable_rabin_scan)
+			tdat->rctx = create_rabin_context(chunksize);
+		else
+			tdat->rctx = NULL;
 		if (pthread_create(&(tdat->thr), NULL, perform_decompress,
 		    (void *)tdat) != 0) {
 			perror("Error in thread creation: ");
@@ -373,6 +414,7 @@ start_decompress(const char *filename, const char *to_filename)
 	w.dary = dary;
 	w.wfd = uncompfd;
 	w.nprocs = nprocs;
+	w.chunksize = chunksize;
 	if (pthread_create(&writer_thr, NULL, writer_thread, (void *)(&w)) != 0) {
 		perror("Error in thread creation: ");
 		UNCOMP_BAIL;
@@ -480,6 +522,9 @@ uncomp_done:
 			slab_free(NULL, dary[i]->compressed_chunk);
 			if (_deinit_func)
 				_deinit_func(&(tdat->data));
+			if (enable_rabin_scan) {
+				destroy_rabin_context(dary[i]->rctx);
+			}
 			slab_free(NULL, dary[i]);
 		}
 		slab_free(NULL, dary);
@@ -507,11 +552,31 @@ redo:
 		return (0);
 	}
 
-	/*
-	 * Compute checksum of original uncompressed chunk.
-	 */
-	tdat->crc64 = lzma_crc64(tdat->uncompressed_chunk, tdat->rbytes, 0);
+	/* Perform Dedup if enabled. */
+	if (enable_rabin_scan) {
+		rabin_context_t *rctx;
+		ssize_t rbytes;
 
+		/*
+		 * Compute checksum of original uncompressed chunk.
+		 */
+		tdat->crc64 = lzma_crc64(tdat->cmp_seg, tdat->rbytes, 0);
+
+		rctx = tdat->rctx;
+		rbytes = tdat->rbytes;
+		reset_rabin_context(tdat->rctx);
+		rctx->cbuf = tdat->uncompressed_chunk;
+		rabin_dedup(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0);
+		if (!rctx->valid) {
+			memcpy(tdat->uncompressed_chunk, tdat->cmp_seg, rbytes);
+			tdat->rbytes = rbytes;
+		}
+	} else {
+		/*
+		 * Compute checksum of original uncompressed chunk.
+		 */
+		tdat->crc64 = lzma_crc64(tdat->uncompressed_chunk, tdat->rbytes, 0);
+	}
 	_chunksize = tdat->rbytes;
 	rv = tdat->compress(tdat->uncompressed_chunk, tdat->rbytes,
 	    tdat->compressed_chunk + CHDR_SZ, &_chunksize, tdat->level,
@@ -533,6 +598,9 @@ redo:
 		type = COMPRESSED;
 	}
 
+	if (enable_rabin_scan && tdat->rctx->valid) {
+		type |= CHUNK_FLAG_DEDUP;
+	}
 	/*
 	 * Insert compressed chunk length and CRC64 checksum into
 	 * chunk header.
@@ -548,7 +616,7 @@ redo:
 		type |= (rv << 4);
 
 	/*
-	 * If last chunk is less than chunksize, store this length as well.
+	 * If chunk is less than max chunksize, store this length as well.
 	 */
 	if (tdat->rbytes < tdat->chunksize) {
 		type |= CHSIZE_MASK;
@@ -615,15 +683,15 @@ do_cancel:
  */
 #define COMP_BAIL err = 1; goto comp_done
 
-static void
+void
 start_compress(const char *filename, uint64_t chunksize, int level)
 {
 	struct wdata w;
-	char tmpfile[MAXPATHLEN];
+	char tmpfile1[MAXPATHLEN];
 	char to_filename[MAXPATHLEN];
 	ssize_t compressed_chunksize;
-	ssize_t n_chunksize, rbytes, rabin_count;
-	int version;
+	ssize_t n_chunksize, rbytes;
+	short version, flags;
 	struct stat sbuf;
 	int compfd = -1, uncompfd = -1, err;
 	int i, thread = 0, bail;
@@ -647,11 +715,14 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	compressed_chunksize = chunksize + (chunksize >> 6) +
 	    sizeof (chunksize) + sizeof (uint64_t) + sizeof (chunksize);
 	err = 0;
+	flags = 0;
+	thread = 0;
+	slab_cache_add(chunksize);
+	slab_cache_add(compressed_chunksize + CHDR_SZ);
+	slab_cache_add(sizeof (struct cmp_data));
 
 	if (enable_rabin_scan) {
-		rctx = create_rabin_context();
-		if (rctx == NULL)
-			err_exit(0, "Initializing Rabin Polynomial failed\n");
+		flags |= FLAG_DEDUP;
 	}
 
 	/* A host of sanity checks. */
@@ -687,11 +758,11 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		 * the end. The target file name is same as original file with the '.pz'
 		 * extension appended.
 		 */
-		strcpy(tmpfile, filename);
-		strcpy(tmpfile, dirname(tmpfile));
-		strcat(tmpfile, "/.pcompXXXXXX");
+		strcpy(tmpfile1, filename);
+		strcpy(tmpfile1, dirname(tmpfile1));
+		strcat(tmpfile1, "/.pcompXXXXXX");
 		snprintf(to_filename, sizeof (to_filename), "%s" COMP_EXTN, filename);
-		if ((compfd = mkstemp(tmpfile)) == -1) {
+		if ((compfd = mkstemp(tmpfile1)) == -1) {
 			perror("mkstemp ");
 			COMP_BAIL;
 		}
@@ -717,12 +788,12 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		nprocs = nthreads;
 
 	fprintf(stderr, "Scaling to %d threads\n", nprocs);
-	slab_cache_add(chunksize);
-	slab_cache_add(compressed_chunksize + CHDR_SZ);
-	slab_cache_add(sizeof (struct cmp_data));
 
 	dary = (struct cmp_data **)slab_alloc(NULL, sizeof (struct cmp_data *) * nprocs);
-	cread_buf = (uchar_t *)slab_alloc(NULL, chunksize);
+	if (enable_rabin_scan)
+		cread_buf = (uchar_t *)slab_alloc(NULL, compressed_chunksize + CHDR_SZ);
+	else
+		cread_buf = (uchar_t *)slab_alloc(NULL, chunksize);
 	if (!cread_buf) {
 		fprintf(stderr, "Out of memory\n");
 		COMP_BAIL;
@@ -756,6 +827,10 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		sem_init(&(tdat->write_done_sem), 0, 1);
 		if (_init_func)
 			_init_func(&(tdat->data), &(tdat->level), chunksize);
+		if (enable_rabin_scan)
+			tdat->rctx = create_rabin_context(chunksize);
+		else
+			tdat->rctx = NULL;
 
 		if (pthread_create(&(tdat->thr), NULL, perform_compress,
 		    (void *)tdat) != 0) {
@@ -779,12 +854,15 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 */
 	memset(cread_buf, 0, ALGO_SZ);
 	strncpy(cread_buf, algo, ALGO_SZ);
-	version = htonl(VERSION);
+	version = htons(VERSION);
+	flags = htons(flags);
 	n_chunksize = htonll(chunksize);
 	level = htonl(level);
 	pos = cread_buf + ALGO_SZ;
 	memcpy(pos, &version, sizeof (version));
 	pos += sizeof (version);
+	memcpy(pos, &flags, sizeof (flags));
+	pos += sizeof (flags);
 	memcpy(pos, &n_chunksize, sizeof (n_chunksize));
 	pos += sizeof (n_chunksize);
 	memcpy(pos, &level, sizeof (level));
@@ -808,8 +886,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	/*
 	 * Read the first chunk into a spare buffer (a simple double-buffering).
 	 */
-	rabin_count = 0;
-	rbytes = Read2(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
+	rbytes = Read(uncompfd, cread_buf, chunksize);
+
 	while (!bail) {
 		uchar_t *tmp;
 
@@ -825,18 +903,23 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			/*
 			 * Once previous chunk is done swap already read buffer and
 			 * it's size into the thread data.
+			 * Normally it goes into uncompressed_chunk, because that's what it is.
+			 * With dedup enabled however, we do some jugglery to save additional
+			 * memory usage and avoid a memcpy, so it goes into the compressed_chunk
+			 * area:
+			 * cmp_seg -> dedup -> uncompressed_chunk -> compression -> cmp_seg
 			 */
 			tdat->id = chunk_num;
-			tmp = tdat->uncompressed_chunk;
-			tdat->uncompressed_chunk = cread_buf;
-			cread_buf = tmp;
 			tdat->rbytes = rbytes;
-			if (rabin_count) {
-				memcpy(cread_buf,
-				    tdat->uncompressed_chunk + rabin_count,
-				    rbytes - rabin_count);
-				tdat->rbytes = rabin_count;
-				rabin_count = rbytes - rabin_count;
+			if (enable_rabin_scan) {
+				tmp = tdat->cmp_seg;
+				tdat->cmp_seg = cread_buf;
+				cread_buf = tmp;
+				tdat->compressed_chunk = tdat->cmp_seg + sizeof (chunksize) + sizeof (uint64_t);
+			} else {
+				tmp = tdat->uncompressed_chunk;
+				tdat->uncompressed_chunk = cread_buf;
+				cread_buf = tmp;
 			}
 			if (rbytes < chunksize) {
 				if (rbytes < 0) {
@@ -857,7 +940,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			 * Read the next buffer we want to process while previous
 			 * buffer is in progress.
 			 */
-			rbytes = Read2(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
+			rbytes = Read(uncompfd, cread_buf, chunksize);
 		}
 	}
 
@@ -887,7 +970,7 @@ comp_done:
 
 	if (err) {
 		if (compfd != -1 && !pipe_mode)
-			unlink(tmpfile);
+			unlink(tmpfile1);
 		fprintf(stderr, "Error compressing file: %s\n", filename);
 	} else {
 		/*
@@ -912,9 +995,9 @@ comp_done:
 			if (fchown(compfd, sbuf.st_uid, sbuf.st_gid) == -1)
 				perror("chown ");
 
-			if (rename(tmpfile, to_filename) == -1) {
+			if (rename(tmpfile1, to_filename) == -1) {
 				perror("Cannot rename temporary file ");
-				unlink(tmpfile);
+				unlink(tmpfile1);
 			}
 		}
 	}
@@ -922,6 +1005,9 @@ comp_done:
 		for (i = 0; i < nprocs; i++) {
 			slab_free(NULL, dary[i]->uncompressed_chunk);
 			slab_free(NULL, dary[i]->cmp_seg);
+			if (enable_rabin_scan) {
+				destroy_rabin_context(dary[i]->rctx);
+			}
 			if (_deinit_func)
 				_deinit_func(&(dary[i]->data));
 			slab_free(NULL, dary[i]);
@@ -982,7 +1068,7 @@ init_algo(const char *algo, int bail)
 		_stats_func = ppmd_stats;
 		rv = 0;
 
-	/* adapt2 and adapt ordering of the checks matters here. */
+	/* adapt2 and adapt ordering of the checks matter here. */
 	} else if (memcmp(algorithm, "adapt2", 6) == 0) {
 		_compress_func = adapt_compress;
 		_decompress_func = adapt_decompress;
@@ -1069,9 +1155,9 @@ main(int argc, char *argv[])
 			hide_cmp_stats = 0;
 			break;
 
-		    case 'r':
-			enable_rabin_scan = 1;
-			break;
+		    //case 'r':
+			//enable_rabin_scan = 1;
+			//break;
 
 		    case '?':
 		    default:
@@ -1097,7 +1183,7 @@ main(int argc, char *argv[])
 	}
 
 	if (enable_rabin_scan && !do_compress) {
-		fprintf(stderr, "Rabin Fingerprinting is only used during compression.\n");
+		fprintf(stderr, "Rabin Deduplication is only used during compression.\n");
 		usage();
 		exit(1);
 	}
@@ -1138,7 +1224,8 @@ main(int argc, char *argv[])
 			usage();
 			exit(1);
 		}
-	} else {
+	} else if (num_rem > 2) {
+		fprintf(stderr, "Too many filenames.\n");
 		usage();
 		exit(1);
 	}

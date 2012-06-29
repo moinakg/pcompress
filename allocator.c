@@ -48,6 +48,7 @@
 #include "utils.h"
 #include "allocator.h"
 
+#ifndef DEBUG_NO_SLAB
 /*
  * Number of slabs:
  * 256 bytes to 1M in power of 2 steps: 13
@@ -482,7 +483,37 @@ slab_free(void *p, void *address)
 		pthread_mutex_unlock(&hbucket_locks[hindx]);
 		free(address);
 		fprintf(stderr, "Freed buf(%p) not in slab allocations!\n", address);
+		abort();
 		fflush(stderr);
 	}
 }
 
+#else
+void
+slab_init() {}
+
+void
+slab_cleanup(int quiet) {}
+
+void
+*slab_alloc(void *p, size_t size)
+{
+	return (malloc(size));
+}
+
+void
+*slab_calloc(void *p, size_t items, size_t size)
+{
+	return (calloc(items, size));
+}
+
+void
+slab_free(void *p, void *address)
+{
+	free(address);
+}
+
+int
+slab_cache_add(size_t size) {}
+
+#endif

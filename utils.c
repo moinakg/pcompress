@@ -195,30 +195,6 @@ Read(int fd, void *buf, size_t count)
 }
 
 ssize_t
-Read2(int fd, void *buf, size_t count, ssize_t *rabin_count, void *ctx)
-{
-	char *buf2;
-	ssize_t rcount;
-	rabin_context_t *rctx = (rabin_context_t *)ctx;
-
-	if (!ctx)  return (Read(fd, buf, count));
-	buf2 = buf;
-	if (*rabin_count) {
-		buf2 = (char *)buf + *rabin_count;
-		count -= *rabin_count;
-	}
-	rcount = Read(fd, buf2, count);
-	if (rcount > 0) {
-		rcount += *rabin_count;
-		*rabin_count = scan_rabin_chunks(rctx, buf, rcount, *rabin_count);
-	} else {
-		if (rcount == 0) rcount = *rabin_count;
-		*rabin_count = 0;
-	}
-	return (rcount);
-}
-
-ssize_t
 Write(int fd, const void *buf, size_t count)
 {
 	ssize_t wcount, rem;

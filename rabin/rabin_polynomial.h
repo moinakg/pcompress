@@ -56,30 +56,68 @@
  * 
  */
 
+#ifndef _RABIN_POLY_H_
+#define _RABIN_POLY_H_
+
+#include "utils.h"
+
 //List of constants, mostly constraints and defaults for various parameters
 //to the Rabin Fingerprinting algorithm
 
-#define RAB_POLYNOMIAL_CONST 2
+#define	RAB_POLYNOMIAL_CONST 2
 // 1 << RAB_POLYNOMIAL_AVG_BLOCK_SHIFT = Average Rabin Chunk Size
 // So we are always looking at power of 2 chunk sizes to avoid doing a modulus
 //
-// A value of 11 below gives block size of 2048 bytes
+// A value of 12 below gives avg block size of 4096 bytes
 //
-#define RAB_POLYNOMIAL_AVG_BLOCK_SHIFT 11
-#define RAB_POLYNOMIAL_AVG_BLOCK_SIZE (1 << RAB_POLYNOMIAL_AVG_BLOCK_SHIFT)
-#define RAB_POLYNOMIAL_AVG_BLOCK_MASK (RAB_POLYNOMIAL_AVG_BLOCK_SIZE - 1)
-#define RAB_POLYNOMIAL_WIN_SIZE 32
-#define RAB_POLYNOMIAL_MIN_WIN_SIZE 17
-#define RAB_POLYNOMIAL_MAX_WIN_SIZE 63
+#define	RAB_POLYNOMIAL_AVG_BLOCK_SHIFT 12
+#define	RAB_POLYNOMIAL_AVG_BLOCK_SIZE (1 << RAB_POLYNOMIAL_AVG_BLOCK_SHIFT)
+#define	RAB_POLYNOMIAL_AVG_BLOCK_MASK (RAB_POLYNOMIAL_AVG_BLOCK_SIZE - 1)
+#define	RAB_POLYNOMIAL_MIN_BLOCK_SIZE (4096)
+#define	RAB_POLYNOMIAL_MAX_BLOCK_SIZE (128 * 1024)
+#define	RAB_POLYNOMIAL_WIN_SIZE 32
+#define	RAB_POLYNOMIAL_MIN_WIN_SIZE 17
+#define	RAB_POLYNOMIAL_MAX_WIN_SIZE 63
+
+typedef struct {
+	ssize_t offset;
+	uint64_t checksum;
+	unsigned int index;
+	unsigned int length;
+} rabin_blockentry_t;
+
+// An entry in the Rabin block array in the chunk.
+// It is either a length value <= RAB_POLYNOMIAL_MAX_BLOCK_SIZE or
+// if value > RAB_POLYNOMIAL_MAX_BLOCK_SIZE then
+// value - RAB_POLYNOMIAL_MAX_BLOCK_SIZE is index of block with which
+// this block is a duplicate.
+// Offset can be dynamically calculated.
+//
+#define	RABIN_ENTRY_SIZE (sizeof (unsigned int))
+
+// Header for a chunk deduped using Rabin
+// Number of rabin blocks, size of original chunk
+//
+#define	RABIN_HDR_SIZE (sizeof (unsigned int) + sizeof (ssize_t))
 
 typedef struct {
 	unsigned char *current_window_data;
+	rabin_blockentry_t *blocks;
+	unsigned char *cbuf;
+	unsigned char *buf;
 	int window_pos;
 	uint64_t cur_roll_checksum;
+	uint64_t cur_checksum;
+	uint64_t block_checksum;
+	int dedup;
+	int valid;
 } rabin_context_t;
 
-extern rabin_context_t *create_rabin_context();
+extern rabin_context_t *create_rabin_context(uint64_t chunksize);
 extern void destroy_rabin_context(rabin_context_t *ctx);
-extern ssize_t scan_rabin_chunks(rabin_context_t *ctx, void *buf, 
-	ssize_t size, ssize_t offset);
+extern void rabin_dedup(rabin_context_t *ctx, unsigned char *buf, 
+	ssize_t *size, ssize_t offset);
+extern void rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size);
+extern void reset_rabin_context(rabin_context_t *ctx);
 
+#endif /* _RABIN_POLY_H_ */

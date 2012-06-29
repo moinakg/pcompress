@@ -55,8 +55,11 @@ LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm
 
 ifdef DEBUG
 LINK = g++ -m64 -pthread -msse3
-COMPILE = gcc -m64 -g -msse3 -c
-COMPILE_cpp = g++ -m64 -g -msse3 -c
+COMPILE = gcc -m64 -O -g -msse3 -c
+COMPILE_cpp = g++ -m64 -O -g -msse3 -c
+ifdef DEBUG_NO_SLAB
+CPPFLAGS += -DDEBUG_NO_SLAB
+endif
 else
 LINK = g++ -m64 -pthread -msse3
 COMPILE = gcc -m64 -O3 -msse3 -c
