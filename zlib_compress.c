@@ -75,7 +75,8 @@ void zerr(int ret)
 }
 
 int
-zlib_compress(void *src, size_t srclen, void *dst, size_t *dstlen, int level, void *data)
+zlib_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
+	      int level, uchar_t chdr, void *data)
 {
 	z_stream zs;
 	int ret;
@@ -114,13 +115,14 @@ zlib_compress(void *src, size_t srclen, void *dst, size_t *dstlen, int level, vo
 }
 
 int
-zlib_decompress(void *src, size_t srclen, void *dst, size_t *dstlen, int level, void *data)
+zlib_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
+		int level, uchar_t chdr, void *data)
 {
 	z_stream zs;
 	int err;
 
 	bzero(&zs, sizeof (zs));
-	zs.next_in = (unsigned char *)src + CHDR_SZ;
+	zs.next_in = (unsigned char *)src;
 	zs.avail_in = srclen;
 	zs.next_out = dst;
 	zs.avail_out = *dstlen;

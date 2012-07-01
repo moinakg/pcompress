@@ -100,7 +100,7 @@ ppmd_deinit(void **data)
 
 int
 ppmd_compress(void *src, size_t srclen, void *dst,
- 	      size_t *dstlen, int level, void *data)
+ 	      size_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	CPpmd8 *_ppmd = (CPpmd8 *)data;
 	uchar_t *_src = (uchar_t *)src;
@@ -122,10 +122,10 @@ ppmd_compress(void *src, size_t srclen, void *dst,
 
 int
 ppmd_decompress(void *src, size_t srclen, void *dst,
-		size_t *dstlen, int level, void *data)
+		size_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	CPpmd8 *_ppmd = (CPpmd8 *)data;
-	Byte *_src = (Byte *)src + CHDR_SZ;
+	Byte *_src = (Byte *)src;
 	Byte *_dst = (Byte *)dst;
 	size_t i;
 	int res;

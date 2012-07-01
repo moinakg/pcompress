@@ -79,11 +79,11 @@ lzma_init(void **data, int *level, ssize_t chunksize)
 			p->fb = 64;
 		else
 			p->fb = 128;
-		if (*level > 9) *level = 9;
 		p->level = *level;
 		LzmaEncProps_Normalize(p);
 		slab_cache_add(p->litprob_sz);
 	}
+	if (*level > 9) *level = 9;
 	*data = p;
 	return (0);
 }
@@ -114,6 +114,9 @@ lzerr(int err)
 		break;
 	    case SZ_ERROR_PROGRESS:
 		fprintf(stderr, "LZMA: Progress callback errored\n");
+		break;
+	    case SZ_ERROR_INPUT_EOF:
+		fprintf(stderr, "LZMA: More compressed input bytes expected\n");
 		break;
 	    case SZ_ERROR_OUTPUT_EOF:
 		fprintf(stderr, "LZMA: Output buffer overflow\n");
@@ -146,7 +149,7 @@ lzerr(int err)
  */
 int
 lzma_compress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data)
+	size_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	size_t props_len = LZMA_PROPS_SIZE;
 	SRes res;
@@ -175,7 +178,7 @@ lzma_compress(void *src, size_t srclen, void *dst,
 
 int
 lzma_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data)
+	size_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	size_t _srclen;
 	const uchar_t *_src;
@@ -183,10 +186,10 @@ lzma_decompress(void *src, size_t srclen, void *dst,
 	ELzmaStatus status;
 
 	_srclen = srclen - LZMA_PROPS_SIZE;
-	_src = (uchar_t *)src + LZMA_PROPS_SIZE + CHDR_SZ;
+	_src = (uchar_t *)src + LZMA_PROPS_SIZE;
 
 	if ((res = LzmaDecode((uchar_t *)dst, dstlen, _src, &_srclen,
-	    src + CHDR_SZ, LZMA_PROPS_SIZE, LZMA_FINISH_ANY,
+	    src, LZMA_PROPS_SIZE, LZMA_FINISH_ANY,
 	    &status, &g_Alloc)) != SZ_OK) {
 		lzerr(res);
 		return (-1);

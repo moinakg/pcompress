@@ -65,6 +65,9 @@ LINK = g++ -m64 -pthread -msse3
 COMPILE = gcc -m64 -O3 -msse3 -c
 COMPILE_cpp = g++ -m64 -O3 -msse3 -c
 CPPFLAGS += -DNDEBUG
+ifdef DEBUG_NO_SLAB
+CPPFLAGS += -DDEBUG_NO_SLAB
+endif
 endif
 
 all: $(PROG)

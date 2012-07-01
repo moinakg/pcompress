@@ -76,6 +76,13 @@ extern const uint64_t lzma_crc64_table[4][256];
 
 #include "rabin_polynomial.h"
 
+extern int lzma_init(void **data, int *level, ssize_t chunksize);
+extern int lzma_compress(void *src, size_t srclen, void *dst,
+	size_t *destlen, int level, uchar_t chdr, void *data);
+extern int lzma_decompress(void *src, size_t srclen, void *dst,
+	size_t *dstlen, int level, uchar_t chdr, void *data);
+extern int lzma_deinit(void **data);
+
 unsigned int rabin_polynomial_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
 unsigned int rabin_polynomial_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE;
 unsigned int rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK;
@@ -87,7 +94,8 @@ rabin_context_t *
 create_rabin_context(uint64_t chunksize) {
 	rabin_context_t *ctx;
 	unsigned char *current_window_data;
-	unsigned int blknum;
+	unsigned int blknum, index;
+	int level = 14;
 
 	blknum = chunksize / rabin_polynomial_min_block_size;
 	if (chunksize % rabin_polynomial_min_block_size)
@@ -100,9 +108,17 @@ create_rabin_context(uint64_t chunksize) {
 	if(ctx == NULL || current_window_data == NULL || ctx->blocks == NULL) {
 		fprintf(stderr,
 		    "Could not allocate rabin polynomial context, out of memory\n");
+		destroy_rabin_context(ctx);
 		return (NULL);
 	}
 
+	lzma_init(&(ctx->lzma_data), &(ctx->level), chunksize);
+	if (!(ctx->lzma_data)) {
+		fprintf(stderr,
+		    "Could not allocate rabin polynomial context, out of memory\n");
+		destroy_rabin_context(ctx);
+		return (NULL);
+	}
 	/*
 	 * We should compute the power for the window size.
 	 * static uint64_t polynomial_pow;
@@ -131,9 +147,12 @@ reset_rabin_context(rabin_context_t *ctx)
 void
 destroy_rabin_context(rabin_context_t *ctx)
 {
-	slab_free(NULL, ctx->current_window_data);
-	slab_free(NULL, ctx->blocks);
-	slab_free(NULL, ctx);
+	if (ctx) {
+		if (ctx->current_window_data) slab_free(NULL, ctx->current_window_data);
+		if (ctx->blocks) slab_free(NULL, ctx->blocks);
+		if (ctx->lzma_data) lzma_deinit(&(ctx->lzma_data));
+		slab_free(NULL, ctx);
+	}
 }
 
 /*
@@ -157,14 +176,14 @@ cmpblks(const void *a, const void *b)
  * Perform Deduplication based on Rabin Fingerprinting. A 32-byte window is used for
  * the rolling checksum and dedup blocks vary in size from 4K-128K.
  */
-void
+unsigned int
 rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 {
-	ssize_t i, last_offset;
+	ssize_t i, last_offset,j;
 	unsigned int blknum;
 	char *buf1 = (char *)buf;
 	unsigned int length;
-	ssize_t overhead;
+	ssize_t rabin_index_sz;
 
 	length = offset;
 	last_offset = 0;
@@ -186,6 +205,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		 */
 		ctx->cur_roll_checksum = (ctx->cur_roll_checksum << 1) + cur_byte;
 		ctx->cur_roll_checksum -= (pushed_out << RAB_POLYNOMIAL_WIN_SIZE);
+
 		// CRC64 Calculation swiped from LZMA
 		ctx->cur_checksum = lzma_crc64_table[0][cur_byte ^ A1(ctx->cur_checksum)] ^ S8(ctx->cur_checksum);
 
@@ -205,7 +225,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 			ctx->blocks[blknum].checksum = ctx->cur_checksum;
 			ctx->blocks[blknum].length = length;
 			ctx->blocks[blknum].refcount = 0;
-
 			blknum++;
 			ctx->cur_checksum = 0;
 			last_offset = i+1;
@@ -220,7 +239,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		ssize_t pos, matches;
 		int valid = 1;
 		char *tmp, *prev_offset;
-		unsigned int *blkarr, prev_index, prev_blk;
+		unsigned int *rabin_index, prev_index, prev_blk;
 
 		// Insert the last left-over trailing bytes, if any, into a block.
 		if (last_offset < *size) {
@@ -228,16 +247,17 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 			ctx->blocks[blknum].index = blknum;
 			ctx->blocks[blknum].checksum = ctx->cur_checksum;
 			ctx->blocks[blknum].length = *size - last_offset;
+			ctx->blocks[blknum].refcount = 0;
 			blknum++;
 			ctx->cur_checksum = 0;
 			last_offset = *size;
 		}
 
-		overhead = blknum * RABIN_ENTRY_SIZE + RABIN_HDR_SIZE;
+		rabin_index_sz = (ssize_t)blknum * RABIN_ENTRY_SIZE;
 		prev_cksum = 0;
 		prev_length = 0;
 		prev_offset = 0;
-		pos = overhead;
+		pos = rabin_index_sz + RABIN_HDR_SIZE;
 
 		/*
 		 * Now sort the block array based on checksums. This will bring virtually 
@@ -246,7 +266,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		 * TODO: Test with a heavily optimized MD5 (from OpenSSL?) later.
 		 */
 		qsort(ctx->blocks, blknum, sizeof (rabin_blockentry_t), cmpblks);
-		blkarr = (unsigned int *)(ctx->cbuf + RABIN_HDR_SIZE);
+		rabin_index = (unsigned int *)(ctx->cbuf + RABIN_HDR_SIZE);
 		matches = 0;
 
 		/*
@@ -260,7 +280,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		 * blocks. This helps in non-duplicate block merging later.
 		 */
 		for (blk = 0; blk < blknum; blk++) {
-			blkarr[ctx->blocks[blk].index] = blk;
+			rabin_index[ctx->blocks[blk].index] = blk;
 
 			if (blk > 0 && ctx->blocks[blk].checksum == prev_cksum &&
 			    ctx->blocks[blk].length == prev_length &&
@@ -279,7 +299,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 			prev_blk = blk;
 		}
 
-		if (matches < overhead) {
+		if (matches < rabin_index_sz) {
 			ctx->valid = 0;
 			return;
 		}
@@ -303,7 +323,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 				valid = 0;
 				break;
 			}
-			be = &(ctx->blocks[blkarr[blk]]);
+			be = &(ctx->blocks[rabin_index[blk]]);
 			if (be->length > 0) {
 				prev_offset = buf1 + be->offset;
 				memcpy(ctx->cbuf + pos, prev_offset, be->length);
@@ -318,61 +338,101 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 						prev_index = blk;
 						prev_length = be->length;
 					}
-					blkarr[blk] = htonl(be->length);
+					rabin_index[blk] = htonl(be->length);
 				} else {
 					if (be->refcount > 0) {
 						prev_index = 0;
 						prev_length = 0;
-						blkarr[blk] = htonl(be->length);
+						rabin_index[blk] = htonl(be->length);
 					} else {
 						if (prev_length + be->length <= RAB_POLYNOMIAL_MAX_BLOCK_SIZE) {
 							prev_length += be->length;
-							blkarr[prev_index] = htonl(prev_length);
-							blkarr[blk] = 0;
+							rabin_index[prev_index] = htonl(prev_length);
+							rabin_index[blk] = 0;
 						} else {
 							prev_index = 0;
 							prev_length = 0;
-							blkarr[blk] = htonl(be->length);
+							rabin_index[blk] = htonl(be->length);
 						}
 					}
 				}
 			} else {
 				prev_index = 0;
 				prev_length = 0;
-				blkarr[blk] = htonl(RAB_POLYNOMIAL_MAX_BLOCK_SIZE + be->index + 1);
+				rabin_index[blk] = htonl(RAB_POLYNOMIAL_MAX_BLOCK_SIZE + be->index + 1);
 			}
 		}
 
 cont:
 		if (valid) {
-			*((unsigned int *)(ctx->cbuf)) = htonl(blknum);
- 			*((ssize_t *)(ctx->cbuf + sizeof (unsigned int))) = htonll(*size);
+			uchar_t *cbuf = ctx->cbuf;
+			ssize_t *entries;
+
+			*((unsigned int *)cbuf) = htonl(blknum);
+			cbuf += sizeof (unsigned int);
+			entries = (ssize_t *)cbuf;
+			entries[0] = htonll(*size);
+			entries[1] = 0;
+			entries[2] = htonll(pos - rabin_index_sz - RABIN_HDR_SIZE);
 			*size = pos;
 			ctx->valid = 1;
+			/*
+			 * Remaining header entries: size of compressed index and size of
+			 * compressed data are inserted later via rabin_update_hdr, after actual compression!
+			 */
+			return (rabin_index_sz);
 		}
 	}
+	return (0);
+}
+
+void
+rabin_update_hdr(uchar_t *buf, ssize_t rabin_index_sz_cmp, ssize_t rabin_data_sz_cmp)
+{
+	ssize_t *entries;
+
+	buf += sizeof (unsigned int);
+	entries = (ssize_t *)buf;
+	entries[1] = htonll(rabin_index_sz_cmp);
+	entries[3] = htonll(rabin_data_sz_cmp);
+}
+
+void
+rabin_parse_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *rabin_index_sz,
+		ssize_t *rabin_data_sz, ssize_t *rabin_index_sz_cmp,
+		ssize_t *rabin_data_sz_cmp, ssize_t *rabin_deduped_size)
+{
+	ssize_t *entries;
+
+	*blknum = ntohl(*((unsigned int *)(buf)));
+	buf += sizeof (unsigned int);
+
+	entries = (ssize_t *)buf;
+	*rabin_data_sz = ntohll(entries[0]);
+	*rabin_index_sz = (ssize_t)(*blknum) * RABIN_ENTRY_SIZE;
+	*rabin_index_sz_cmp =  ntohll(entries[1]);
+	*rabin_deduped_size = ntohll(entries[2]);
+	*rabin_data_sz_cmp = ntohll(entries[3]);
 }
 
 void
 rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
 {
 	unsigned int blknum, blk, oblk, len;
-	unsigned int *blkarr;
-	ssize_t orig_size, sz;
-	ssize_t overhead, pos1, i;
+	unsigned int *rabin_index;
+	ssize_t data_sz, sz, indx_cmp, data_sz_cmp, deduped_sz;
+	ssize_t rabin_index_sz, pos1, i;
 	uchar_t *pos2;
 
-	blknum = ntohl(*((unsigned int *)(buf)));
-	orig_size = ntohll(*((ssize_t *)(buf + sizeof (unsigned int))));
-	blkarr = (unsigned int *)(buf + RABIN_HDR_SIZE);
-	overhead = blknum * RABIN_ENTRY_SIZE + RABIN_HDR_SIZE;
-	pos1 = overhead;
+	rabin_parse_hdr(buf, &blknum, &rabin_index_sz, &data_sz, &indx_cmp, &data_sz_cmp, &deduped_sz);
+	rabin_index = (unsigned int *)(buf + RABIN_HDR_SIZE);
+	pos1 = rabin_index_sz + RABIN_HDR_SIZE;
 	pos2 = ctx->cbuf;
 	sz = 0;
 	ctx->valid = 1;
 
 	for (blk = 0; blk < blknum; blk++) {
-		len = ntohl(blkarr[blk]);
+		len = ntohl(rabin_index[blk]);
 		if (len == 0) {
 			ctx->blocks[blk].length = 0;
 			ctx->blocks[blk].index = 0;
@@ -399,14 +459,23 @@ rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
 		memcpy(pos2, buf + pos1, len);
 		pos2 += len;
 		sz += len;
-		if (sz > orig_size) {
+		if (sz > data_sz) {
 			ctx->valid = 0;
 			break;
 		}
 	}
-	if (ctx->valid && sz < orig_size) {
+	if (ctx->valid && sz < data_sz) {
 		ctx->valid = 0;
 	}
-	*size = orig_size;
+	*size = data_sz;
 }
 
+/*
+ * TODO: Consolidate rabin dedup and compression/decompression in functions here rather than
+ * messy code in main program.
+int
+rabin_compress(rabin_context_t *ctx, uchar_t *from, ssize_t fromlen, uchar_t *to, ssize_t *tolen,
+    int level, char chdr, void *data, compress_func_ptr cmp)
+{
+}
+*/

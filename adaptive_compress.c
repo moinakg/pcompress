@@ -40,18 +40,18 @@ static unsigned int bzip2_count = 0;
 static unsigned int ppmd_count = 0;
 
 extern int lzma_compress(void *src, size_t srclen, void *dst,
-	size_t *destlen, int level, void *data);
+	size_t *destlen, int level, uchar_t chdr, void *data);
 extern int bzip2_compress(void *src, size_t srclen, void *dst,
-	size_t *destlen, int level, void *data);
+	size_t *destlen, int level, uchar_t chdr, void *data);
 extern int ppmd_compress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data);
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 
 extern int lzma_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data);
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 extern int bzip2_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data);
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 extern int ppmd_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data);
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 
 extern int lzma_init(void **data, int *level, ssize_t chunksize);
 extern int lzma_deinit(void **data);
@@ -137,7 +137,7 @@ adapt_deinit(void **data)
 
 int
 adapt_compress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data)
+	size_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	int rv, rv1, rv2;
@@ -156,18 +156,18 @@ adapt_compress(void *src, size_t srclen, void *dst,
 	inc = &ppmd_count;
 	dst2len = *dstlen;
 	dst3len = *dstlen;
-	rv1 = ppmd_compress(src, srclen, dst, dstlen, level, adat->ppmd_data);
+	rv1 = ppmd_compress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data);
 	if (rv1 < 0) *dstlen = dst3len;
 
 	if (adat->adapt_mode == 2) {
-		rv2 = lzma_compress(src, srclen, dst2, &dst2len, level, adat->lzma_data);
+		rv2 = lzma_compress(src, srclen, dst2, &dst2len, level, chdr, adat->lzma_data);
 		if (rv2 < 0) dst2len = dst3len;
 		if (dst2len < *dstlen) {
 			inc = &lzma_count;
 			rv = COMPRESS_LZMA;
 		}
 	} else {
-		rv2 = bzip2_compress(src, srclen, dst2, &dst2len, level, NULL);
+		rv2 = bzip2_compress(src, srclen, dst2, &dst2len, level, chdr, NULL);
 		if (rv2 < 0) dst2len = dst3len;
 		if (dst2len < *dstlen) {
 			inc = &bzip2_count;
@@ -194,21 +194,21 @@ adapt_compress(void *src, size_t srclen, void *dst,
 
 int
 adapt_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data)
+	size_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t HDR;
 
-	HDR = *((uchar_t *)src);
+	HDR = chdr;
 
 	if (HDR & (COMPRESS_LZMA << 4)) {
-		return (lzma_decompress(src, srclen, dst, dstlen, level, adat->lzma_data));
+		return (lzma_decompress(src, srclen, dst, dstlen, level, chdr, adat->lzma_data));
 
 	} else if (HDR & (COMPRESS_BZIP2 << 4)) {
-		return (bzip2_decompress(src, srclen, dst, dstlen, level, NULL));
+		return (bzip2_decompress(src, srclen, dst, dstlen, level, chdr, NULL));
 
 	} else if (HDR & (COMPRESS_PPMD << 4)) {
-		return (ppmd_decompress(src, srclen, dst, dstlen, level, adat->ppmd_data));
+		return (ppmd_decompress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data));
 
 	} else {
 		fprintf(stderr, "Unrecognized compression mode, file corrupt.\n");

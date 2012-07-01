@@ -51,40 +51,31 @@ extern "C" {
 #define	CHUNK_FLAG_DEDUP	2
 #define	COMP_EXTN	".pz"
 
-/* Pointer type for compress and decompress functions. */
-typedef int (*compress_func_ptr)(void *src, size_t srclen, void *dst,
-	size_t *destlen, int level, void *data);
-
-/* Pointer type for algo specific init/deinit/stats functions. */
-typedef int (*init_func_ptr)(void **data, int *level, ssize_t chunksize);
-typedef int (*deinit_func_ptr)(void **data);
-typedef void (*stats_func_ptr)(int show);
-
 extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
 extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, size_t size,
 	uint64_t crc, uint64_t *cnt);
 
 extern int zlib_compress(void *src, size_t srclen, void *dst,
-	size_t *destlen, int level, void *data);
+	size_t *destlen, int level, uchar_t chdr, void *data);
 extern int lzma_compress(void *src, size_t srclen, void *dst,
-	size_t *destlen, int level, void *data);
+	size_t *destlen, int level, uchar_t chdr, void *data);
 extern int bzip2_compress(void *src, size_t srclen, void *dst,
-	size_t *destlen, int level, void *data);
+	size_t *destlen, int level, uchar_t chdr, void *data);
 extern int adapt_compress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data);
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 extern int ppmd_compress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data);
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 
 extern int zlib_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data);
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 extern int lzma_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data);
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 extern int bzip2_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data);
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 extern int adapt_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data);
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 extern int ppmd_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, void *data);
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 
 extern int adapt_init(void **data, int *level, ssize_t chunksize);
 extern int adapt2_init(void **data, int *level, ssize_t chunksize);

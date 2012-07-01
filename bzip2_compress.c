@@ -81,7 +81,8 @@ bzerr(int err)
 }
 
 int
-bzip2_compress(void *src, size_t srclen, void *dst, size_t *dstlen, int level, void *data)
+bzip2_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
+	       int level, uchar_t chdr, void *data)
 {
 	bz_stream bzs;
 	int ret;
@@ -120,7 +121,8 @@ bzip2_compress(void *src, size_t srclen, void *dst, size_t *dstlen, int level, v
 }
 
 int
-bzip2_decompress(void *src, size_t srclen, void *dst, size_t *dstlen, int level, void *data)
+bzip2_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
+		 int level, uchar_t chdr, void *data)
 {
 	bz_stream bzs;
 	int ret;
@@ -135,7 +137,7 @@ bzip2_decompress(void *src, size_t srclen, void *dst, size_t *dstlen, int level,
 		return (-1);
 	}
 
-	bzs.next_in = (uchar_t *)src + CHDR_SZ;
+	bzs.next_in = (uchar_t *)src;
 	bzs.avail_in = srclen;
 	bzs.next_out = dst;
 	bzs.avail_out = *dstlen;
