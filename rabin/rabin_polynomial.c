@@ -101,6 +101,11 @@ create_rabin_context(uint64_t chunksize) {
 	if (chunksize % rabin_polynomial_min_block_size)
 		blknum++;
 
+	if (blknum > RABIN_MAX_BLOCKS) {
+		fprintf(stderr, "Chunk size too large for dedup.\n");
+		destroy_rabin_context(ctx);
+		return (NULL);
+	}
 	ctx = (rabin_context_t *)slab_alloc(NULL, sizeof (rabin_context_t));
 	current_window_data = slab_alloc(NULL, RAB_POLYNOMIAL_WIN_SIZE);
 	ctx->blocks = (rabin_blockentry_t *)slab_alloc(NULL,
@@ -345,7 +350,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 						prev_length = 0;
 						rabin_index[blk] = htonl(be->length);
 					} else {
-						if (prev_length + be->length <= RAB_POLYNOMIAL_MAX_BLOCK_SIZE) {
+						if (prev_length + be->length <= RABIN_MAX_BLOCK_SIZE) {
 							prev_length += be->length;
 							rabin_index[prev_index] = htonl(prev_length);
 							rabin_index[blk] = 0;
@@ -359,7 +364,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 			} else {
 				prev_index = 0;
 				prev_length = 0;
-				rabin_index[blk] = htonl(RAB_POLYNOMIAL_MAX_BLOCK_SIZE + be->index + 1);
+				rabin_index[blk] = htonl(be->index | RABIN_INDEX_FLAG);
 			}
 		}
 
@@ -437,13 +442,13 @@ rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
 			ctx->blocks[blk].length = 0;
 			ctx->blocks[blk].index = 0;
 
-		} else if (len <= RAB_POLYNOMIAL_MAX_BLOCK_SIZE) {
+		} else if (!(len & RABIN_INDEX_FLAG)) {
 			ctx->blocks[blk].length = len;
 			ctx->blocks[blk].offset = pos1;
 			pos1 += len;
 		} else {
 			ctx->blocks[blk].length = 0;
-			ctx->blocks[blk].index = len - RAB_POLYNOMIAL_MAX_BLOCK_SIZE - 1;
+			ctx->blocks[blk].index = len & RABIN_INDEX_VALUE;
 		}
 	}
 	for (blk = 0; blk < blknum; blk++) {

@@ -99,6 +99,21 @@ typedef struct {
 // size of deduped data, size of compressed data
 #define	RABIN_HDR_SIZE (sizeof (unsigned int) + sizeof (ssize_t) + sizeof (ssize_t) + sizeof (ssize_t) + sizeof (ssize_t))
 
+// Maximum number of dedup blocks supported (2^31 - 1)
+#define	RABIN_MAX_BLOCKS (0x7fffffff)
+
+// Maximum possible block size for a single rabin block. This is a hard limit much
+// larger than RAB_POLYNOMIAL_MAX_BLOCK_SIZE. Useful when merging non-duplicate blocks.
+// This is also 2^31 - 1.
+#define RABIN_MAX_BLOCK_SIZE (RABIN_MAX_BLOCKS)
+
+// Mask to determine whether Rabin index entry is a length value or index value.
+// MSB = 1 : Index
+// MSB = 0 : Length
+#define RABIN_INDEX_FLAG (0x80000000)
+// Mask to extract value from a rabin index entry
+#define RABIN_INDEX_VALUE (0x7fffffff)
+
 typedef struct {
 	unsigned char *current_window_data;
 	rabin_blockentry_t *blocks;
