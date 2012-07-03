@@ -83,22 +83,36 @@ extern int lzma_decompress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
 extern int lzma_deinit(void **data);
 
-unsigned int rabin_polynomial_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
-unsigned int rabin_polynomial_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE;
-unsigned int rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK;
+uint32_t rabin_polynomial_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
 
 /*
  * Initialize the algorithm with the default params.
  */
 rabin_context_t *
-create_rabin_context(uint64_t chunksize) {
+create_rabin_context(uint64_t chunksize, char *algo) {
 	rabin_context_t *ctx;
 	unsigned char *current_window_data;
-	unsigned int blknum, index;
+	uint32_t blknum, index;
 	int level = 14;
 
-	blknum = chunksize / rabin_polynomial_min_block_size;
-	if (chunksize % rabin_polynomial_min_block_size)
+	/*
+	 * For LZMA we use 4K minimum Rabin block size. For everything else it
+	 * is 1K based on experimentation.
+	 */
+	ctx = (rabin_context_t *)slab_alloc(NULL, sizeof (rabin_context_t));
+	ctx->rabin_poly_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
+	if (memcmp(algo, "lzma", 4) == 0) {
+		ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE;
+		ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK;
+		ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE;
+	} else {
+		ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE2;
+		ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK2;
+		ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE2;
+	}
+
+	blknum = chunksize / ctx->rabin_poly_min_block_size;
+	if (chunksize % ctx->rabin_poly_min_block_size)
 		blknum++;
 
 	if (blknum > RABIN_MAX_BLOCKS) {
@@ -106,10 +120,9 @@ create_rabin_context(uint64_t chunksize) {
 		destroy_rabin_context(ctx);
 		return (NULL);
 	}
-	ctx = (rabin_context_t *)slab_alloc(NULL, sizeof (rabin_context_t));
 	current_window_data = slab_alloc(NULL, RAB_POLYNOMIAL_WIN_SIZE);
 	ctx->blocks = (rabin_blockentry_t *)slab_alloc(NULL,
-		blknum * rabin_polynomial_min_block_size);
+		blknum * ctx->rabin_poly_min_block_size);
 	if(ctx == NULL || current_window_data == NULL || ctx->blocks == NULL) {
 		fprintf(stderr,
 		    "Could not allocate rabin polynomial context, out of memory\n");
@@ -181,13 +194,13 @@ cmpblks(const void *a, const void *b)
  * Perform Deduplication based on Rabin Fingerprinting. A 32-byte window is used for
  * the rolling checksum and dedup blocks vary in size from 4K-128K.
  */
-unsigned int
+uint32_t
 rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 {
 	ssize_t i, last_offset,j;
-	unsigned int blknum;
+	uint32_t blknum;
 	char *buf1 = (char *)buf;
-	unsigned int length;
+	uint32_t length;
 	ssize_t rabin_index_sz;
 
 	length = offset;
@@ -195,11 +208,12 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 	blknum = 0;
 	ctx->valid = 0;
 
-	if (*size < RAB_POLYNOMIAL_AVG_BLOCK_SIZE) return;
+	if (*size < ctx->rabin_poly_avg_block_size) return;
 	for (i=offset; i<*size; i++) {
 		char cur_byte = buf1[i];
 		uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
 		ctx->current_window_data[ctx->window_pos] = cur_byte;
+		int msk;
 		/*
 		 * We want to do:
 		 * cur_roll_checksum = cur_roll_checksum * RAB_POLYNOMIAL_CONST + cur_byte;
@@ -220,10 +234,10 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		if (ctx->window_pos == RAB_POLYNOMIAL_WIN_SIZE) // Loop back around
 			ctx->window_pos=0;
 
-		if (length < rabin_polynomial_min_block_size) continue;
+		if (length < ctx->rabin_poly_min_block_size) continue;
 
 		// If we hit our special value or reached the max block size update block offset
-		if ((ctx->cur_roll_checksum & rabin_avg_block_mask) == RAB_POLYNOMIAL_CONST ||
+		if ((ctx->cur_roll_checksum & ctx->rabin_avg_block_mask) == RAB_POLYNOMIAL_CONST ||
 		    length >= rabin_polynomial_max_block_size) {
 			ctx->blocks[blknum].offset = last_offset;
 			ctx->blocks[blknum].index = blknum; // Need to store for sorting
@@ -240,11 +254,11 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
 		uint64_t prev_cksum;
-		unsigned int blk, prev_length;
-		ssize_t pos, matches;
+		uint32_t blk, prev_length;
+		ssize_t pos, matchlen;
 		int valid = 1;
 		char *tmp, *prev_offset;
-		unsigned int *rabin_index, prev_index, prev_blk;
+		uint32_t *rabin_index, prev_index, prev_blk;
 
 		// Insert the last left-over trailing bytes, if any, into a block.
 		if (last_offset < *size) {
@@ -271,8 +285,8 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		 * TODO: Test with a heavily optimized MD5 (from OpenSSL?) later.
 		 */
 		qsort(ctx->blocks, blknum, sizeof (rabin_blockentry_t), cmpblks);
-		rabin_index = (unsigned int *)(ctx->cbuf + RABIN_HDR_SIZE);
-		matches = 0;
+		rabin_index = (uint32_t *)(ctx->cbuf + RABIN_HDR_SIZE);
+		matchlen = 0;
 
 		/*
 		 * Now make a pass through the sorted block array making identical blocks
@@ -293,7 +307,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 				ctx->blocks[blk].length = 0;
 				ctx->blocks[blk].index = prev_index;
 				(ctx->blocks[prev_blk].refcount)++;
-				matches += prev_length;
+				matchlen += prev_length;
 				continue;
 			}
 
@@ -304,7 +318,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 			prev_blk = blk;
 		}
 
-		if (matches < rabin_index_sz) {
+		if (matchlen < rabin_index_sz) {
 			ctx->valid = 0;
 			return;
 		}
@@ -367,14 +381,13 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 				rabin_index[blk] = htonl(be->index | RABIN_INDEX_FLAG);
 			}
 		}
-
 cont:
 		if (valid) {
 			uchar_t *cbuf = ctx->cbuf;
 			ssize_t *entries;
 
-			*((unsigned int *)cbuf) = htonl(blknum);
-			cbuf += sizeof (unsigned int);
+			*((uint32_t *)cbuf) = htonl(blknum);
+			cbuf += sizeof (uint32_t);
 			entries = (ssize_t *)cbuf;
 			entries[0] = htonll(*size);
 			entries[1] = 0;
@@ -396,21 +409,21 @@ rabin_update_hdr(uchar_t *buf, ssize_t rabin_index_sz_cmp, ssize_t rabin_data_sz
 {
 	ssize_t *entries;
 
-	buf += sizeof (unsigned int);
+	buf += sizeof (uint32_t);
 	entries = (ssize_t *)buf;
 	entries[1] = htonll(rabin_index_sz_cmp);
 	entries[3] = htonll(rabin_data_sz_cmp);
 }
 
 void
-rabin_parse_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *rabin_index_sz,
+rabin_parse_hdr(uchar_t *buf, uint32_t *blknum, ssize_t *rabin_index_sz,
 		ssize_t *rabin_data_sz, ssize_t *rabin_index_sz_cmp,
 		ssize_t *rabin_data_sz_cmp, ssize_t *rabin_deduped_size)
 {
 	ssize_t *entries;
 
-	*blknum = ntohl(*((unsigned int *)(buf)));
-	buf += sizeof (unsigned int);
+	*blknum = ntohl(*((uint32_t *)(buf)));
+	buf += sizeof (uint32_t);
 
 	entries = (ssize_t *)buf;
 	*rabin_data_sz = ntohll(entries[0]);
@@ -423,14 +436,14 @@ rabin_parse_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *rabin_index_sz,
 void
 rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
 {
-	unsigned int blknum, blk, oblk, len;
-	unsigned int *rabin_index;
+	uint32_t blknum, blk, oblk, len;
+	uint32_t *rabin_index;
 	ssize_t data_sz, sz, indx_cmp, data_sz_cmp, deduped_sz;
 	ssize_t rabin_index_sz, pos1, i;
 	uchar_t *pos2;
 
 	rabin_parse_hdr(buf, &blknum, &rabin_index_sz, &data_sz, &indx_cmp, &data_sz_cmp, &deduped_sz);
-	rabin_index = (unsigned int *)(buf + RABIN_HDR_SIZE);
+	rabin_index = (uint32_t *)(buf + RABIN_HDR_SIZE);
 	pos1 = rabin_index_sz + RABIN_HDR_SIZE;
 	pos2 = ctx->cbuf;
 	sz = 0;

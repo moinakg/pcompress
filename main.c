@@ -362,6 +362,7 @@ start_decompress(const char *filename, const char *to_filename)
 		fprintf(stderr, "%s is not a pcompressed file.\n", filename);
 		UNCOMP_BAIL;
 	}
+	algo = algorithm;
 
 	if (Read(compfd, &version, sizeof (version)) < sizeof (version) ||
 	    Read(compfd, &flags, sizeof (flags)) < sizeof (flags) ||
@@ -433,7 +434,7 @@ start_decompress(const char *filename, const char *to_filename)
 		if (_init_func)
 			_init_func(&(tdat->data), &(tdat->level), chunksize);
 		if (enable_rabin_scan)
-			tdat->rctx = create_rabin_context(chunksize);
+			tdat->rctx = create_rabin_context(chunksize, algo);
 		else
 			tdat->rctx = NULL;
 		if (pthread_create(&(tdat->thr), NULL, perform_decompress,
@@ -813,9 +814,11 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			chunksize = sbuf.st_size;
 			nthreads = 1;
 		} else {
-			nthreads = sbuf.st_size / chunksize;
-			if (sbuf.st_size % chunksize)
-				nthreads++;
+			if (nthreads > sbuf.st_size / chunksize) {
+				nthreads = sbuf.st_size / chunksize;
+				if (sbuf.st_size % chunksize)
+					nthreads++;
+			}
 		}
 
 		/*
@@ -894,7 +897,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		if (_init_func)
 			_init_func(&(tdat->data), &(tdat->level), chunksize);
 		if (enable_rabin_scan)
-			tdat->rctx = create_rabin_context(chunksize);
+			tdat->rctx = create_rabin_context(chunksize, algo);
 		else
 			tdat->rctx = NULL;
 
