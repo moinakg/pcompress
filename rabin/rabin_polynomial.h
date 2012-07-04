@@ -137,7 +137,7 @@ typedef struct {
 	int level;
 } rabin_context_t;
 
-extern rabin_context_t *create_rabin_context(uint64_t chunksize, char *algo);
+extern rabin_context_t *create_rabin_context(uint64_t chunksize, const char *algo);
 extern void destroy_rabin_context(rabin_context_t *ctx);
 extern unsigned int rabin_dedup(rabin_context_t *ctx, unsigned char *buf, 
 	ssize_t *size, ssize_t offset);

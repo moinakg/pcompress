@@ -89,7 +89,7 @@ uint32_t rabin_polynomial_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
  * Initialize the algorithm with the default params.
  */
 rabin_context_t *
-create_rabin_context(uint64_t chunksize, char *algo) {
+create_rabin_context(uint64_t chunksize, const char *algo) {
 	rabin_context_t *ctx;
 	unsigned char *current_window_data;
 	uint32_t blknum, index;
@@ -254,7 +254,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
 		uint64_t prev_cksum;
-		uint32_t blk, prev_length;
+		uint32_t blk, prev_length, nblocks;
 		ssize_t pos, matchlen;
 		int valid = 1;
 		char *tmp, *prev_offset;
@@ -331,6 +331,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		 */
 		prev_index = 0;
 		prev_length = 0;
+		nblocks = 0;
 		for (blk = 0; blk < blknum; blk++) {
 			rabin_blockentry_t *be;
 
@@ -368,6 +369,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 							prev_length += be->length;
 							rabin_index[prev_index] = htonl(prev_length);
 							rabin_index[blk] = 0;
+							nblocks++;
 						} else {
 							prev_index = 0;
 							prev_length = 0;
@@ -386,6 +388,7 @@ cont:
 			uchar_t *cbuf = ctx->cbuf;
 			ssize_t *entries;
 
+printf("blknum: %u, nblocks: %u\n", blknum, nblocks);
 			*((uint32_t *)cbuf) = htonl(blknum);
 			cbuf += sizeof (uint32_t);
 			entries = (ssize_t *)cbuf;
