@@ -191,7 +191,7 @@ cmpblks(const void *a, const void *b)
 }
 
 /**
- * Perform Deduplication based on Rabin Fingerprinting. A 32-byte window is used for
+ * Perform Deduplication based on Rabin Fingerprinting. A 31-byte window is used for
  * the rolling checksum and dedup blocks vary in size from 4K-128K.
  */
 uint32_t
@@ -388,7 +388,6 @@ cont:
 			uchar_t *cbuf = ctx->cbuf;
 			ssize_t *entries;
 
-printf("blknum: %u, nblocks: %u\n", blknum, nblocks);
 			*((uint32_t *)cbuf) = htonl(blknum);
 			cbuf += sizeof (uint32_t);
 			entries = (ssize_t *)cbuf;
