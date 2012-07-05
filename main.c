@@ -434,7 +434,7 @@ start_decompress(const char *filename, const char *to_filename)
 		if (_init_func)
 			_init_func(&(tdat->data), &(tdat->level), chunksize);
 		if (enable_rabin_scan)
-			tdat->rctx = create_rabin_context(chunksize, algo);
+			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, algo);
 		else
 			tdat->rctx = NULL;
 		if (pthread_create(&(tdat->thr), NULL, perform_decompress,
@@ -602,7 +602,7 @@ redo:
 		rbytes = tdat->rbytes;
 		reset_rabin_context(tdat->rctx);
 		rctx->cbuf = tdat->uncompressed_chunk;
-		rabin_index_sz = rabin_dedup(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0);
+		rabin_index_sz = rabin_dedup(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0, NULL);
 		if (!rctx->valid) {
 			memcpy(tdat->uncompressed_chunk, tdat->cmp_seg, rbytes);
 			tdat->rbytes = rbytes;
@@ -630,13 +630,15 @@ redo:
 		    tdat->rctx->level, 0, tdat->rctx->lzma_data);
 
 		index_size_cmp += RABIN_HDR_SIZE;
+		rabin_index_sz += RABIN_HDR_SIZE;
 		if (rv == 0) {
 			/* Compress data chunk. */
-			rv = tdat->compress(tdat->uncompressed_chunk + rabin_index_sz + RABIN_HDR_SIZE,
+			rv = tdat->compress(tdat->uncompressed_chunk + rabin_index_sz,
 			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
 		            tdat->level, 0, tdat->data);
 			/* Now update rabin header with the compressed sizes. */
-			rabin_update_hdr(compressed_chunk, index_size_cmp - RABIN_HDR_SIZE , _chunksize);
+			rabin_update_hdr(compressed_chunk, index_size_cmp - RABIN_HDR_SIZE,
+					 _chunksize);
 		}
 		_chunksize += index_size_cmp;
 	} else {
@@ -881,7 +883,10 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			fprintf(stderr, "Out of memory\n");
 			COMP_BAIL;
 		}
-		tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL, chunksize);
+		if (enable_rabin_scan)
+			tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL, compressed_chunksize + CHDR_SZ);
+		else
+			tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL, chunksize);
 		if (!tdat->uncompressed_chunk) {
 			fprintf(stderr, "Out of memory\n");
 			COMP_BAIL;
@@ -897,7 +902,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		if (_init_func)
 			_init_func(&(tdat->data), &(tdat->level), chunksize);
 		if (enable_rabin_scan)
-			tdat->rctx = create_rabin_context(chunksize, algo);
+			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, algo);
 		else
 			tdat->rctx = NULL;
 

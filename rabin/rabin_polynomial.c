@@ -89,7 +89,7 @@ uint32_t rabin_polynomial_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
  * Initialize the algorithm with the default params.
  */
 rabin_context_t *
-create_rabin_context(uint64_t chunksize, const char *algo) {
+create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *algo) {
 	rabin_context_t *ctx;
 	unsigned char *current_window_data;
 	uint32_t blknum, index;
@@ -149,6 +149,7 @@ create_rabin_context(uint64_t chunksize, const char *algo) {
 	 */
 
 	ctx->current_window_data = current_window_data;
+	ctx->real_chunksize = real_chunksize;
 	reset_rabin_context(ctx);
 	return (ctx);
 }
@@ -182,11 +183,11 @@ cmpblks(const void *a, const void *b)
 	rabin_blockentry_t *a1 = (rabin_blockentry_t *)a;
 	rabin_blockentry_t *b1 = (rabin_blockentry_t *)b;
 
-	if (a1->checksum < b1->checksum)
+	if (a1->cksum_n_offset < b1->cksum_n_offset)
 		return (-1);
-	else if (a1->checksum == b1->checksum)
+	else if (a1->cksum_n_offset == b1->cksum_n_offset)
 		return (0);
-	else if (a1->checksum > b1->checksum)
+	else if (a1->cksum_n_offset > b1->cksum_n_offset)
 		return (1);
 }
 
@@ -195,18 +196,18 @@ cmpblks(const void *a, const void *b)
  * the rolling checksum and dedup blocks vary in size from 4K-128K.
  */
 uint32_t
-rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
+rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, ssize_t *rabin_pos)
 {
 	ssize_t i, last_offset,j;
 	uint32_t blknum;
 	char *buf1 = (char *)buf;
 	uint32_t length;
-	ssize_t rabin_index_sz;
 
 	length = offset;
 	last_offset = 0;
 	blknum = 0;
 	ctx->valid = 0;
+	ctx->cur_checksum = 0;
 
 	if (*size < ctx->rabin_poly_avg_block_size) return;
 	for (i=offset; i<*size; i++) {
@@ -241,7 +242,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		    length >= rabin_polynomial_max_block_size) {
 			ctx->blocks[blknum].offset = last_offset;
 			ctx->blocks[blknum].index = blknum; // Need to store for sorting
-			ctx->blocks[blknum].checksum = ctx->cur_checksum;
+			ctx->blocks[blknum].cksum_n_offset = ctx->cur_checksum;
 			ctx->blocks[blknum].length = length;
 			ctx->blocks[blknum].refcount = 0;
 			blknum++;
@@ -251,20 +252,25 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		}
 	}
 
+	if (rabin_pos) {
+		*rabin_pos = last_offset;
+		return (0);
+	}
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
 		uint64_t prev_cksum;
-		uint32_t blk, prev_length, nblocks;
-		ssize_t pos, matchlen;
+		uint32_t blk, prev_length;
+		ssize_t pos, matchlen, pos1;
 		int valid = 1;
 		char *tmp, *prev_offset;
-		uint32_t *rabin_index, prev_index, prev_blk;
+		uint32_t *blkarr, *trans, *rabin_index, prev_index, prev_blk;
+		ssize_t rabin_index_sz;
 
 		// Insert the last left-over trailing bytes, if any, into a block.
 		if (last_offset < *size) {
 			ctx->blocks[blknum].offset = last_offset;
 			ctx->blocks[blknum].index = blknum;
-			ctx->blocks[blknum].checksum = ctx->cur_checksum;
+			ctx->blocks[blknum].cksum_n_offset = ctx->cur_checksum;
 			ctx->blocks[blknum].length = *size - last_offset;
 			ctx->blocks[blknum].refcount = 0;
 			blknum++;
@@ -276,7 +282,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		prev_cksum = 0;
 		prev_length = 0;
 		prev_offset = 0;
-		pos = rabin_index_sz + RABIN_HDR_SIZE;
 
 		/*
 		 * Now sort the block array based on checksums. This will bring virtually 
@@ -286,6 +291,13 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		 */
 		qsort(ctx->blocks, blknum, sizeof (rabin_blockentry_t), cmpblks);
 		rabin_index = (uint32_t *)(ctx->cbuf + RABIN_HDR_SIZE);
+
+		/*
+		 * We need 2 temporary arrays. We just use available space in the last
+		 * portion of the buffer that will hold the deduped segment.
+		 */
+		blkarr = (uint32_t *)(ctx->cbuf + ctx->real_chunksize - (rabin_index_sz * 2 + 1));
+		trans = (uint32_t *)(ctx->cbuf + ctx->real_chunksize - (rabin_index_sz + 1));
 		matchlen = 0;
 
 		/*
@@ -299,9 +311,9 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		 * blocks. This helps in non-duplicate block merging later.
 		 */
 		for (blk = 0; blk < blknum; blk++) {
-			rabin_index[ctx->blocks[blk].index] = blk;
+			blkarr[ctx->blocks[blk].index] = blk;
 
-			if (blk > 0 && ctx->blocks[blk].checksum == prev_cksum &&
+			if (blk > 0 && ctx->blocks[blk].cksum_n_offset == prev_cksum &&
 			    ctx->blocks[blk].length == prev_length &&
 			    memcmp(prev_offset, buf1 + ctx->blocks[blk].offset, prev_length) == 0) {
 				ctx->blocks[blk].length = 0;
@@ -312,7 +324,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 			}
 
 			prev_offset = buf1 + ctx->blocks[blk].offset;
-			prev_cksum = ctx->blocks[blk].checksum;
+			prev_cksum = ctx->blocks[blk].cksum_n_offset;
 			prev_length = ctx->blocks[blk].length;
 			prev_index = ctx->blocks[blk].index;
 			prev_blk = blk;
@@ -325,29 +337,18 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		/*
 		 * Another pass, this time through the block index in the chunk. We insert
 		 * block length into unique block entries. For block entries that are
-		 * identical with another one we store the index number + max rabin block length.
+		 * identical with another one we store the index number with msb set.
 		 * This way we can differentiate between a unique block length entry and a
 		 * pointer to another block without needing a separate flag.
 		 */
 		prev_index = 0;
 		prev_length = 0;
-		nblocks = 0;
+		pos = 0;
 		for (blk = 0; blk < blknum; blk++) {
 			rabin_blockentry_t *be;
 
-			/*
-			 * If blocks are overflowing the allowed chunk size then dedup did not
-			 * help at all. We invalidate the dedup operation.
-			 */
-			if (pos > last_offset) {
-				valid = 0;
-				break;
-			}
-			be = &(ctx->blocks[rabin_index[blk]]);
+			be = &(ctx->blocks[blkarr[blk]]);
 			if (be->length > 0) {
-				prev_offset = buf1 + be->offset;
-				memcpy(ctx->cbuf + pos, prev_offset, be->length);
-				pos += be->length;
 				/*
 				 * Update Index entry with the length. Also try to merge runs
 				 * of unique (non-duplicate) blocks into a single block entry
@@ -355,32 +356,67 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 				 */
 				if (prev_index == 0) {
 					if (be->refcount == 0) {
-						prev_index = blk;
+						prev_index = pos;
 						prev_length = be->length;
 					}
-					rabin_index[blk] = htonl(be->length);
+					rabin_index[pos] = be->length;
+					ctx->blocks[pos].cksum_n_offset = be->offset;
+					trans[blk] = pos;
+					pos++;
 				} else {
 					if (be->refcount > 0) {
 						prev_index = 0;
 						prev_length = 0;
-						rabin_index[blk] = htonl(be->length);
+						rabin_index[pos] = be->length;
+						ctx->blocks[pos].cksum_n_offset = be->offset;
+						trans[blk] = pos;
+						pos++;
 					} else {
 						if (prev_length + be->length <= RABIN_MAX_BLOCK_SIZE) {
 							prev_length += be->length;
-							rabin_index[prev_index] = htonl(prev_length);
-							rabin_index[blk] = 0;
-							nblocks++;
+							rabin_index[prev_index] = prev_length;
 						} else {
 							prev_index = 0;
 							prev_length = 0;
-							rabin_index[blk] = htonl(be->length);
+							rabin_index[pos] = be->length;
+							ctx->blocks[pos].cksum_n_offset = be->offset;
+							trans[blk] = pos;
+							pos++;
 						}
 					}
 				}
 			} else {
 				prev_index = 0;
 				prev_length = 0;
-				rabin_index[blk] = htonl(be->index | RABIN_INDEX_FLAG);
+				blkarr[blk] = htonl(be->index | RABIN_INDEX_FLAG);
+				rabin_index[pos] = be->index | RABIN_INDEX_FLAG;
+				trans[blk] = pos;
+				pos++;
+			}
+		}
+
+		/*
+		 * Final pass, copy the data.
+		 */
+		blknum = pos;
+		rabin_index_sz = (ssize_t)pos * RABIN_ENTRY_SIZE;
+		pos1 = rabin_index_sz + RABIN_HDR_SIZE;
+		for (blk = 0; blk < blknum; blk++) {
+			if (rabin_index[blk] & RABIN_INDEX_FLAG) {
+				j = rabin_index[blk] & RABIN_INDEX_VALUE;
+				rabin_index[blk] = htonl(trans[j] | RABIN_INDEX_FLAG);
+			} else {
+				/*
+				 * If blocks are overflowing the allowed chunk size then dedup did not
+				 * help at all. We invalidate the dedup operation.
+				 */
+				if (pos1 > last_offset) {
+					valid = 0;
+					break;
+				}
+				memcpy(ctx->cbuf + pos1, buf1 + ctx->blocks[blk].cksum_n_offset, rabin_index[blk]);
+				pos1 += rabin_index[blk];
+				rabin_index[blk] = htonl(rabin_index[blk]);
 			}
 		}
 cont:
@@ -393,9 +429,10 @@ cont:
 			entries = (ssize_t *)cbuf;
 			entries[0] = htonll(*size);
 			entries[1] = 0;
-			entries[2] = htonll(pos - rabin_index_sz - RABIN_HDR_SIZE);
-			*size = pos;
+			entries[2] = htonll(pos1 - rabin_index_sz - RABIN_HDR_SIZE);
+			*size = pos1;
 			ctx->valid = 1;
+
 			/*
 			 * Remaining header entries: size of compressed index and size of
 			 * compressed data are inserted later via rabin_update_hdr, after actual compression!

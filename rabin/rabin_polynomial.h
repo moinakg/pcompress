@@ -85,7 +85,7 @@
 
 typedef struct {
 	ssize_t offset;
-	uint64_t checksum;
+	uint64_t cksum_n_offset; // Dual purpose variable
 	unsigned int index;
 	unsigned int length;
 	unsigned short refcount;
@@ -131,16 +131,17 @@ typedef struct {
 	uint32_t rabin_poly_min_block_size;
 	uint32_t rabin_poly_avg_block_size;
 	uint32_t rabin_avg_block_mask;
+	uint64_t real_chunksize;
 	int dedup;
 	int valid;
 	void *lzma_data;
 	int level;
 } rabin_context_t;
 
-extern rabin_context_t *create_rabin_context(uint64_t chunksize, const char *algo);
+extern rabin_context_t *create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *algo);
 extern void destroy_rabin_context(rabin_context_t *ctx);
 extern unsigned int rabin_dedup(rabin_context_t *ctx, unsigned char *buf, 
-	ssize_t *size, ssize_t offset);
+	ssize_t *size, ssize_t offset, ssize_t *rabin_pos);
 extern void rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size);
 extern void rabin_parse_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *rabin_index_sz,
 		ssize_t *rabin_data_sz, ssize_t *rabin_index_sz_cmp,
