@@ -602,7 +602,7 @@ redo:
 		rbytes = tdat->rbytes;
 		reset_rabin_context(tdat->rctx);
 		rctx->cbuf = tdat->uncompressed_chunk;
-		rabin_index_sz = rabin_dedup(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0, NULL);
+		rabin_index_sz = rabin_dedup(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0);
 		if (!rctx->valid) {
 			memcpy(tdat->uncompressed_chunk, tdat->cmp_seg, rbytes);
 			tdat->rbytes = rbytes;

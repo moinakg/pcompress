@@ -74,10 +74,10 @@
 #define	RAB_POLYNOMIAL_MIN_BLOCK_SIZE RAB_POLYNOMIAL_AVG_BLOCK_SIZE
 #define	RAB_POLYNOMIAL_MAX_BLOCK_SIZE (128 * 1024)
 
-#define	RAB_POLYNOMIAL_AVG_BLOCK_SHIFT2 10
+#define	RAB_POLYNOMIAL_AVG_BLOCK_SHIFT2 12
 #define	RAB_POLYNOMIAL_AVG_BLOCK_SIZE2 (1 << RAB_POLYNOMIAL_AVG_BLOCK_SHIFT)
 #define	RAB_POLYNOMIAL_AVG_BLOCK_MASK2 (RAB_POLYNOMIAL_AVG_BLOCK_SIZE - 1)
-#define	RAB_POLYNOMIAL_MIN_BLOCK_SIZE2 RAB_POLYNOMIAL_AVG_BLOCK_SIZE
+#define	RAB_POLYNOMIAL_MIN_BLOCK_SIZE2 2048
 
 #define	RAB_POLYNOMIAL_WIN_SIZE 31
 #define	RAB_POLYNOMIAL_MIN_WIN_SIZE 17
@@ -131,6 +131,7 @@ typedef struct {
 	uint32_t rabin_poly_min_block_size;
 	uint32_t rabin_poly_avg_block_size;
 	uint32_t rabin_avg_block_mask;
+	uint32_t rabin_break_patt;
 	uint64_t real_chunksize;
 	int dedup;
 	int valid;
@@ -138,10 +139,11 @@ typedef struct {
 	int level;
 } rabin_context_t;
 
-extern rabin_context_t *create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *algo);
+extern rabin_context_t *create_rabin_context(uint64_t chunksize, uint64_t real_chunksize,
+	const char *algo);
 extern void destroy_rabin_context(rabin_context_t *ctx);
 extern unsigned int rabin_dedup(rabin_context_t *ctx, unsigned char *buf, 
-	ssize_t *size, ssize_t offset, ssize_t *rabin_pos);
+	ssize_t *size, ssize_t offset);
 extern void rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size);
 extern void rabin_parse_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *rabin_index_sz,
 		ssize_t *rabin_data_sz, ssize_t *rabin_index_sz_cmp,

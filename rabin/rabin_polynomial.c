@@ -105,10 +105,12 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 		ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE;
 		ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK;
 		ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE;
+		ctx->rabin_break_patt = RAB_POLYNOMIAL_CONST;
 	} else {
 		ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE2;
 		ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK2;
 		ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE2;
+		ctx->rabin_break_patt = 0;
 	}
 
 	blknum = chunksize / ctx->rabin_poly_min_block_size;
@@ -196,7 +198,7 @@ cmpblks(const void *a, const void *b)
  * the rolling checksum and dedup blocks vary in size from 4K-128K.
  */
 uint32_t
-rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, ssize_t *rabin_pos)
+rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 {
 	ssize_t i, last_offset,j;
 	uint32_t blknum;
@@ -214,7 +216,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		char cur_byte = buf1[i];
 		uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
 		ctx->current_window_data[ctx->window_pos] = cur_byte;
-		int msk;
 		/*
 		 * We want to do:
 		 * cur_roll_checksum = cur_roll_checksum * RAB_POLYNOMIAL_CONST + cur_byte;
@@ -238,7 +239,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		if (length < ctx->rabin_poly_min_block_size) continue;
 
 		// If we hit our special value or reached the max block size update block offset
-		if ((ctx->cur_roll_checksum & ctx->rabin_avg_block_mask) == RAB_POLYNOMIAL_CONST ||
+		if ((ctx->cur_roll_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
 		    length >= rabin_polynomial_max_block_size) {
 			ctx->blocks[blknum].offset = last_offset;
 			ctx->blocks[blknum].index = blknum; // Need to store for sorting
@@ -252,10 +253,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		}
 	}
 
-	if (rabin_pos) {
-		*rabin_pos = last_offset;
-		return (0);
-	}
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
 		uint64_t prev_cksum;
@@ -388,7 +385,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			} else {
 				prev_index = 0;
 				prev_length = 0;
-				blkarr[blk] = htonl(be->index | RABIN_INDEX_FLAG);
 				rabin_index[pos] = be->index | RABIN_INDEX_FLAG;
 				trans[blk] = pos;
 				pos++;

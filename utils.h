@@ -98,8 +98,6 @@ extern int parse_numeric(ssize_t *val, const char *str);
 extern char *bytes_to_size(uint64_t bytes);
 extern ssize_t Read(int fd, void *buf, size_t count);
 extern ssize_t Write(int fd, const void *buf, size_t count);
-// extern ssize_t Dedup_Read(int fd, uchar_t **buf, size_t count,
-// 	ssize_t *rabin_count, void *ctx);
 
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, size_t srclen, void *dst,
