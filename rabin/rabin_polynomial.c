@@ -96,12 +96,12 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 	int level = 14;
 
 	/*
-	 * For LZMA we use 4K minimum Rabin block size. For everything else it
-	 * is 1K based on experimentation.
+	 * For LZMA with chunksize <= LZMA Window size we use 4K minimum Rabin
+	 * block size. For everything else it is 1K based on experimentation.
 	 */
 	ctx = (rabin_context_t *)slab_alloc(NULL, sizeof (rabin_context_t));
 	ctx->rabin_poly_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
-	if (memcmp(algo, "lzma", 4) == 0) {
+	if (memcmp(algo, "lzma", 4) == 0 && chunksize <= LZMA_WINDOW_MAX) {
 		ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE;
 		ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK;
 		ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE;
