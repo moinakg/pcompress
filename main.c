@@ -1291,6 +1291,8 @@ main(int argc, char *argv[])
 		usage();
 		exit(1);
 	}
+	if (!enable_rabin_scan)
+		enable_rabin_split = 0;
 
 	if (num_rem == 0 && !pipe_mode) {
 		usage(); /* At least 1 filename needed. */
