@@ -78,6 +78,7 @@ static int nthreads = 0;
 static int hide_mem_stats = 1;
 static int hide_cmp_stats = 1;
 static int enable_rabin_scan = 0;
+static int enable_rabin_split = 1;
 static unsigned int chunk_num;
 static uint64_t largest_chunk, smallest_chunk, avg_chunk;
 static const char *exec_name;
@@ -116,6 +117,7 @@ usage(void)
 	    "   %s -p ...\n"
 	    "4) Attempt Rabin fingerprinting based deduplication on chunks:\n"
 	    "   %s -D ...\n"
+	    "   %s -D -r ... - Do NOT split chunks at a rabin boundary. Default is to split.\n"
 	    "5) Number of threads can optionally be specified: -t <1 - 256 count>\n"
 	    "6) Pass '-M' to display memory allocator statistics\n"
 	    "7) Pass '-C' to display compression statistics\n\n",
@@ -602,7 +604,7 @@ redo:
 		rbytes = tdat->rbytes;
 		reset_rabin_context(tdat->rctx);
 		rctx->cbuf = tdat->uncompressed_chunk;
-		rabin_index_sz = rabin_dedup(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0);
+		rabin_index_sz = rabin_dedup(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0, NULL);
 		if (!rctx->valid) {
 			memcpy(tdat->uncompressed_chunk, tdat->cmp_seg, rbytes);
 			tdat->rbytes = rbytes;
@@ -753,7 +755,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	char tmpfile1[MAXPATHLEN];
 	char to_filename[MAXPATHLEN];
 	ssize_t compressed_chunksize;
-	ssize_t n_chunksize, rbytes;
+	ssize_t n_chunksize, rbytes, rabin_count;
 	short version, flags;
 	struct stat sbuf;
 	int compfd = -1, uncompfd = -1, err;
@@ -762,6 +764,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	struct cmp_data **dary = NULL, *tdat;
 	pthread_t writer_thr;
 	uchar_t *cread_buf, *pos;
+	rabin_context_t *rctx;
 
 	/*
 	 * Compressed buffer size must include zlib scratch space and
@@ -956,11 +959,17 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	largest_chunk = 0;
 	smallest_chunk = chunksize;
 	avg_chunk = 0;
+	rabin_count = 0;
 
 	/*
 	 * Read the first chunk into a spare buffer (a simple double-buffering).
 	 */
-	rbytes = Read(uncompfd, cread_buf, chunksize);
+	if (enable_rabin_split) {
+		rctx = create_rabin_context(chunksize, 0, algo);
+		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
+	} else {
+		rbytes = Read(uncompfd, cread_buf, chunksize);
+	}
 
 	while (!bail) {
 		uchar_t *tmp;
@@ -990,6 +999,18 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 				tdat->cmp_seg = cread_buf;
 				cread_buf = tmp;
 				tdat->compressed_chunk = tdat->cmp_seg + sizeof (chunksize) + sizeof (uint64_t);
+
+				/*
+				 * If there is data after the last rabin boundary in the chunk, then
+				 * rabin_count will be non-zero. We carry over the data to the beginning
+				 * of the next chunk.
+				 */
+				if (rabin_count) {
+					memcpy(cread_buf,
+					    tdat->cmp_seg + rabin_count, rbytes - rabin_count);
+					tdat->rbytes = rabin_count;
+					rabin_count = rbytes - rabin_count;
+				}
 			} else {
 				tmp = tdat->uncompressed_chunk;
 				tdat->uncompressed_chunk = cread_buf;
@@ -1014,7 +1035,11 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			 * Read the next buffer we want to process while previous
 			 * buffer is in progress.
 			 */
-			rbytes = Read(uncompfd, cread_buf, chunksize);
+			if (enable_rabin_split) {
+				rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
+			} else {
+				rbytes = Read(uncompfd, cread_buf, chunksize);
+			}
 		}
 	}
 
@@ -1088,6 +1113,7 @@ comp_done:
 		}
 		slab_free(NULL, dary);
 	}
+	if (enable_rabin_split) destroy_rabin_context(rctx);
 	slab_free(NULL, cread_buf);
 	if (!pipe_mode) {
 		if (compfd != -1) close(compfd);
@@ -1177,7 +1203,7 @@ main(int argc, char *argv[])
 	level = 6;
 	slab_init();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCD")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDr")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -1231,6 +1257,10 @@ main(int argc, char *argv[])
 
 		    case 'D':
 			enable_rabin_scan = 1;
+			break;
+
+		    case 'r':
+			enable_rabin_split = 0;
 			break;
 
 		    case '?':

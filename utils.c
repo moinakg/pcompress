@@ -194,6 +194,39 @@ Read(int fd, void *buf, size_t count)
 	return (count - rem);
 }
 
+/*
+ * Read the requested chunk and return the last rabin boundary in the chunk.
+ * This helps in splitting chunks at rabin boundaries rather than fixed points.
+ * The request buffer may have some data at the beginning carried over from
+ * after the previous rabin boundary.
+ */
+ssize_t
+Read_Adjusted(int fd, uchar_t *buf, size_t count, ssize_t *rabin_count, void *ctx)
+{
+        char *buf2;
+        ssize_t rcount;
+        rabin_context_t *rctx = (rabin_context_t *)ctx;
+
+        if (!ctx)  return (Read(fd, buf, count));
+        buf2 = buf;
+        if (*rabin_count) {
+                buf2 = (char *)buf + *rabin_count;
+                count -= *rabin_count;
+        }
+        rcount = Read(fd, buf2, count);
+        if (rcount > 0) {
+                rcount += *rabin_count;
+		if (!rcount < count)
+			rabin_dedup(rctx, buf, &rcount, *rabin_count, rabin_count);
+		else
+			*rabin_count = 0;
+        } else {
+                if (rcount == 0) rcount = *rabin_count;
+                *rabin_count = 0;
+        }
+        return (rcount);
+}
+
 ssize_t
 Write(int fd, const void *buf, size_t count)
 {

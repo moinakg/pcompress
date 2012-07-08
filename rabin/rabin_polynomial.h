@@ -144,7 +144,7 @@ extern rabin_context_t *create_rabin_context(uint64_t chunksize, uint64_t real_c
 	const char *algo);
 extern void destroy_rabin_context(rabin_context_t *ctx);
 extern unsigned int rabin_dedup(rabin_context_t *ctx, unsigned char *buf, 
-	ssize_t *size, ssize_t offset);
+	ssize_t *size, ssize_t offset, ssize_t *rabin_pos);
 extern void rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size);
 extern void rabin_parse_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *rabin_index_sz,
 		ssize_t *rabin_data_sz, ssize_t *rabin_index_sz_cmp,

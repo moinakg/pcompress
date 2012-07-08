@@ -123,21 +123,27 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 		return (NULL);
 	}
 	current_window_data = slab_alloc(NULL, RAB_POLYNOMIAL_WIN_SIZE);
-	ctx->blocks = (rabin_blockentry_t *)slab_alloc(NULL,
-		blknum * ctx->rabin_poly_min_block_size);
-	if(ctx == NULL || current_window_data == NULL || ctx->blocks == NULL) {
+	ctx->blocks = NULL;
+	if (real_chunksize > 0) {
+		ctx->blocks = (rabin_blockentry_t *)slab_alloc(NULL,
+			blknum * ctx->rabin_poly_min_block_size);
+	}
+	if(ctx == NULL || current_window_data == NULL || (ctx->blocks == NULL && real_chunksize > 0)) {
 		fprintf(stderr,
 		    "Could not allocate rabin polynomial context, out of memory\n");
 		destroy_rabin_context(ctx);
 		return (NULL);
 	}
 
-	lzma_init(&(ctx->lzma_data), &(ctx->level), chunksize);
-	if (!(ctx->lzma_data)) {
-		fprintf(stderr,
-		    "Could not allocate rabin polynomial context, out of memory\n");
-		destroy_rabin_context(ctx);
-		return (NULL);
+	ctx->lzma_data = NULL;
+	if (real_chunksize > 0) {
+		lzma_init(&(ctx->lzma_data), &(ctx->level), chunksize);
+		if (!(ctx->lzma_data)) {
+			fprintf(stderr,
+			    "Could not allocate rabin polynomial context, out of memory\n");
+			destroy_rabin_context(ctx);
+			return (NULL);
+		}
 	}
 	/*
 	 * We should compute the power for the window size.
@@ -198,7 +204,7 @@ cmpblks(const void *a, const void *b)
  * the rolling checksum and dedup blocks vary in size from 4K-128K.
  */
 uint32_t
-rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
+rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, ssize_t *rabin_pos)
 {
 	ssize_t i, last_offset,j;
 	uint32_t blknum;
@@ -211,6 +217,14 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 	ctx->valid = 0;
 	ctx->cur_checksum = 0;
 
+	/* 
+	 * If rabin_pos is non-zero then we are being asked to scan for the last rabin boundary
+	 * in the chunk. We start scanning at chunk end - max rabin block size. We avoid doing
+	 * a full chunk scan.
+	 */
+	if (rabin_pos) {
+		offset = *size - RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
+	}
 	if (*size < ctx->rabin_poly_avg_block_size) return;
 	for (i=offset; i<*size; i++) {
 		char cur_byte = buf1[i];
@@ -241,18 +255,24 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset)
 		// If we hit our special value or reached the max block size update block offset
 		if ((ctx->cur_roll_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
 		    length >= rabin_polynomial_max_block_size) {
-			ctx->blocks[blknum].offset = last_offset;
-			ctx->blocks[blknum].index = blknum; // Need to store for sorting
-			ctx->blocks[blknum].cksum_n_offset = ctx->cur_checksum;
-			ctx->blocks[blknum].length = length;
-			ctx->blocks[blknum].refcount = 0;
-			blknum++;
+			if (rabin_pos == NULL) {
+				ctx->blocks[blknum].offset = last_offset;
+				ctx->blocks[blknum].index = blknum; // Need to store for sorting
+				ctx->blocks[blknum].cksum_n_offset = ctx->cur_checksum;
+				ctx->blocks[blknum].length = length;
+				ctx->blocks[blknum].refcount = 0;
+				blknum++;
+			}
 			ctx->cur_checksum = 0;
 			last_offset = i+1;
 			length = 0;
 		}
 	}
 
+	if (rabin_pos && last_offset < *size) {
+		*rabin_pos = last_offset;
+		return (0);
+	}
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
 		uint64_t prev_cksum;
