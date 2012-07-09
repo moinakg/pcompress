@@ -31,8 +31,6 @@
 #include <allocator.h>
 
 #define	SZ_ERROR_DESTLEN	100
-#define	LZMA_MAX_DICT		(1 << 30)
-#define	LZMA_DICT_THRESH	(1 << 29)
 #define	LZMA_DEFAULT_DICT	(1 << 24)
 
 CLzmaEncProps *p = NULL;
@@ -73,12 +71,20 @@ lzma_init(void **data, int *level, ssize_t chunksize)
 			p->dictSize = 0;
 		}
 		/* Determine the fast bytes value. */
-		if (*level < 7)
+		if (*level < 7) {
 			p->fb = 32;
-		else if (*level < 10)
+
+		} else if (*level < 10) {
 			p->fb = 64;
-		else
+
+		} else if (*level < 13) {
+			p->fb = 64;
+			p->mc = 128;
+
+		} else {
 			p->fb = 128;
+			p->mc = 256;
+		}
 		p->level = *level;
 		LzmaEncProps_Normalize(p);
 		slab_cache_add(p->litprob_sz);

@@ -819,7 +819,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			chunksize = sbuf.st_size;
 			nthreads = 1;
 		} else {
-			if (nthreads > sbuf.st_size / chunksize) {
+			if (nthreads == 0 || nthreads > sbuf.st_size / chunksize) {
 				nthreads = sbuf.st_size / chunksize;
 				if (sbuf.st_size % chunksize)
 					nthreads++;

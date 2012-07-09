@@ -92,7 +92,7 @@ rabin_context_t *
 create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *algo) {
 	rabin_context_t *ctx;
 	unsigned char *current_window_data;
-	uint32_t blknum, index;
+	uint32_t blknum;
 	int level = 14;
 
 	/*
