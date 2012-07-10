@@ -85,6 +85,7 @@ lzma_init(void **data, int *level, ssize_t chunksize)
 			p->fb = 128;
 			p->mc = 256;
 		}
+		if (*level > 9) *level = 9;
 		p->level = *level;
 		LzmaEncProps_Normalize(p);
 		slab_cache_add(p->litprob_sz);

@@ -96,12 +96,20 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 	int level = 14;
 
 	/*
+	 * Rabin window size must be power of 2 for optimization.
+	 */
+	if (!ISP2(RAB_POLYNOMIAL_WIN_SIZE)) {
+		fprintf(stderr, "Rabin window size must be a power of 2 in range 4 <= x <= 64\n");
+		return (NULL);
+	}
+	/*
 	 * For LZMA with chunksize <= LZMA Window size we use 4K minimum Rabin
 	 * block size. For everything else it is 1K based on experimentation.
 	 */
 	ctx = (rabin_context_t *)slab_alloc(NULL, sizeof (rabin_context_t));
 	ctx->rabin_poly_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
-	if (memcmp(algo, "lzma", 4) == 0 && chunksize <= LZMA_WINDOW_MAX) {
+	if ((memcmp(algo, "lzma", 4) == 0 || memcmp(algo, "adapt", 5) == 0) &&
+	    chunksize <= LZMA_WINDOW_MAX) {
 		ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE;
 		ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK;
 		ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE;
@@ -216,6 +224,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 	blknum = 0;
 	ctx->valid = 0;
 	ctx->cur_checksum = 0;
+	j = 0;
 
 	/* 
 	 * If rabin_pos is non-zero then we are being asked to scan for the last rabin boundary
@@ -244,11 +253,13 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		// CRC64 Calculation swiped from LZMA
 		ctx->cur_checksum = lzma_crc64_table[0][cur_byte ^ A1(ctx->cur_checksum)] ^ S8(ctx->cur_checksum);
 
-		ctx->window_pos++;
-		length++;
+		// Count how many bytes have msb set. Needed to detect 7-bit text data.
+		j += (cur_byte >> 7);
 
-		if (ctx->window_pos == RAB_POLYNOMIAL_WIN_SIZE) // Loop back around
-			ctx->window_pos=0;
+		// Window pos has to rotate from 0 .. RAB_POLYNOMIAL_WIN_SIZE-1
+		// This requires RAB_POLYNOMIAL_WIN_SIZE to be power of 2
+		ctx->window_pos = (ctx->window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
+		length++;
 
 		if (length < ctx->rabin_poly_min_block_size) continue;
 
@@ -273,6 +284,11 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		*rabin_pos = last_offset;
 		return (0);
 	}
+	if (j < *size * 0.55)
+		ctx->data_type = DATA_BINARY;
+	else
+		ctx->data_type = DATA_TEXT;
+printf("Original size: %lld\n", *size);
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
 		uint64_t prev_cksum;
@@ -448,6 +464,7 @@ cont:
 			entries[2] = htonll(pos1 - rabin_index_sz - RABIN_HDR_SIZE);
 			*size = pos1;
 			ctx->valid = 1;
+printf("Deduped size: %lld, blknum: %u\n", *size, blknum);
 
 			/*
 			 * Remaining header entries: size of compressed index and size of

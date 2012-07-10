@@ -31,6 +31,9 @@
 extern "C" {
 #endif
 
+#define	DATA_TEXT	1
+#define	DATA_BINARY	2
+
 #if !defined(sun) && !defined(__sun)
 #define ulong_t u_long
 #define uchar_t u_char
@@ -91,6 +94,8 @@ typedef unsigned long uintptr_t;
 #		define ATOMIC_SUB(var, val) var -= val
 #	endif
 #endif
+
+#define ISP2(x) ((x != 0) && ((x & (~x + 1)) == x))
 
 extern void err_exit(int show_errno, const char *format, ...);
 extern const char *get_execname(const char *);

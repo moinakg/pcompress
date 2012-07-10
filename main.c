@@ -189,7 +189,7 @@ redo:
 	}
 
 	if (HDR & COMPRESSED) {
-		if (enable_rabin_scan && (HDR & FLAG_DEDUP)) {
+		if (enable_rabin_scan && (HDR & CHUNK_FLAG_DEDUP)) {
 			uchar_t *cmpbuf, *ubuf;
 
 			/* Extract various sizes from rabin header. */
@@ -232,7 +232,7 @@ redo:
 		goto cont;
 	}
 	/* Rebuild chunk from dedup blocks. */
-	if (enable_rabin_scan && (HDR & FLAG_DEDUP)) {
+	if (enable_rabin_scan && (HDR & CHUNK_FLAG_DEDUP)) {
 		rabin_context_t *rctx;
 		uchar_t *tmp;
 
@@ -488,6 +488,7 @@ start_decompress(const char *filename, const char *to_filename)
 				UNCOMP_BAIL;
 			}
 			tdat->len_cmp = htonll(tdat->len_cmp);
+
 			/*
 			 * Zero compressed len means end of file.
 			 */
@@ -507,7 +508,6 @@ start_decompress(const char *filename, const char *to_filename)
 			 */
 			tdat->rbytes = Read(compfd, tdat->compressed_chunk,
 			    tdat->len_cmp + sizeof(tdat->crc64) + CHDR_SZ);
-
 			if (main_cancel) break;
 			if (tdat->rbytes < tdat->len_cmp + sizeof(tdat->crc64) + CHDR_SZ) {
 				if (tdat->rbytes < 0) {
