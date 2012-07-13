@@ -80,7 +80,7 @@
 #define	RAB_POLYNOMIAL_MIN_BLOCK_SIZE2 2048
 
 #define LZMA_WINDOW_MAX (128L * 1024L * 1024L)
-#define	RAB_POLYNOMIAL_WIN_SIZE 32
+#define	RAB_POLYNOMIAL_WIN_SIZE 16
 #define	RAB_POLYNOMIAL_MIN_WIN_SIZE 8
 #define	RAB_POLYNOMIAL_MAX_WIN_SIZE 64
 
@@ -126,8 +126,6 @@ typedef struct {
 	rabin_blockentry_t *blocks;
 	unsigned char *cbuf;
 	int window_pos;
-	uint64_t cur_roll_checksum;
-	uint64_t cur_checksum;
 	uint32_t rabin_poly_max_block_size;
 	uint32_t rabin_poly_min_block_size;
 	uint32_t rabin_poly_avg_block_size;
@@ -135,7 +133,6 @@ typedef struct {
 	uint32_t rabin_break_patt;
 	uint64_t real_chunksize;
 	short valid;
-	short data_type;
 	void *lzma_data;
 	int level;
 } rabin_context_t;

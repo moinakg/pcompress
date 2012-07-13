@@ -62,18 +62,6 @@
 #include <allocator.h>
 #include <utils.h>
 
-// CRC64 pieces from LZMA's implementation -----------------
-#include <crc_macros.h>
-
-#ifdef WORDS_BIGENDIAN
-#	define A1(x) ((x) >> 56)
-#else
-#	define A1 A
-#endif
-
-extern const uint64_t lzma_crc64_table[4][256];
-// ---------------------------------------------------------
-
 #include "rabin_polynomial.h"
 
 extern int lzma_init(void **data, int *level, ssize_t chunksize);
@@ -175,8 +163,6 @@ reset_rabin_context(rabin_context_t *ctx)
 {
 	memset(ctx->current_window_data, 0, RAB_POLYNOMIAL_WIN_SIZE);
 	ctx->window_pos = 0;
-	ctx->cur_roll_checksum = 0;
-	ctx->cur_checksum = 0;
 }
 
 void
@@ -214,16 +200,18 @@ cmpblks(const void *a, const void *b)
 uint32_t
 rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, ssize_t *rabin_pos)
 {
-	ssize_t i, last_offset,j;
+	ssize_t i, last_offset, j;
 	uint32_t blknum;
 	char *buf1 = (char *)buf;
 	uint32_t length;
+	uint64_t cur_roll_checksum[2];
 
 	length = offset;
 	last_offset = 0;
 	blknum = 0;
 	ctx->valid = 0;
-	ctx->cur_checksum = 0;
+	cur_roll_checksum[0] = 0;
+	cur_roll_checksum[1] = 0;
 	j = 0;
 
 	/* 
@@ -243,40 +231,40 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		 * We want to do:
 		 * cur_roll_checksum = cur_roll_checksum * RAB_POLYNOMIAL_CONST + cur_byte;
 		 * cur_roll_checksum -= pushed_out * polynomial_pow;
-		 * cur_checksum = cur_checksum * RAB_POLYNOMIAL_CONST + cur_byte;
 		 *
 		 * However since RAB_POLYNOMIAL_CONST == 2, we use shifts.
 		 */
-		ctx->cur_roll_checksum = (ctx->cur_roll_checksum << 1) + cur_byte;
-		ctx->cur_roll_checksum -= (pushed_out << RAB_POLYNOMIAL_WIN_SIZE);
+		cur_roll_checksum[1] = (cur_roll_checksum[1] << 1) + cur_byte;
+		cur_roll_checksum[1] -= (pushed_out << RAB_POLYNOMIAL_WIN_SIZE);
 
-		// CRC64 Calculation swiped from LZMA
-		ctx->cur_checksum = lzma_crc64_table[0][cur_byte ^ A1(ctx->cur_checksum)] ^ S8(ctx->cur_checksum);
+		// Compute Sum 0 mod 25 Sketch. We are avoiding a branch here.
+		// See: http://www.armedia.com/wp/SimilarityIndex.pdf
+		j += cur_roll_checksum[(cur_roll_checksum[1] % 25 == 0)];
 
-		// Count how many bytes have msb set. Needed to detect 7-bit text data.
-		j += (cur_byte >> 7);
-
-		// Window pos has to rotate from 0 .. RAB_POLYNOMIAL_WIN_SIZE-1
-		// This requires RAB_POLYNOMIAL_WIN_SIZE to be power of 2
+		/*
+		 * Window pos has to rotate from 0 .. RAB_POLYNOMIAL_WIN_SIZE-1
+		 * We avoid a branch here by masking. This requires RAB_POLYNOMIAL_WIN_SIZE
+		 * to be power of 2
+		 */
 		ctx->window_pos = (ctx->window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
 		length++;
 
 		if (length < ctx->rabin_poly_min_block_size) continue;
 
 		// If we hit our special value or reached the max block size update block offset
-		if ((ctx->cur_roll_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
+		if ((cur_roll_checksum[1] & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
 		    length >= rabin_polynomial_max_block_size) {
 			if (rabin_pos == NULL) {
 				ctx->blocks[blknum].offset = last_offset;
 				ctx->blocks[blknum].index = blknum; // Need to store for sorting
-				ctx->blocks[blknum].cksum_n_offset = ctx->cur_checksum;
+				ctx->blocks[blknum].cksum_n_offset = j;
 				ctx->blocks[blknum].length = length;
 				ctx->blocks[blknum].refcount = 0;
 				blknum++;
 			}
-			ctx->cur_checksum = 0;
 			last_offset = i+1;
 			length = 0;
+			j = 0;
 		}
 	}
 
@@ -284,10 +272,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		*rabin_pos = last_offset;
 		return (0);
 	}
-	if (j > *size * 0.40)
-		ctx->data_type = DATA_BINARY;
-	else
-		ctx->data_type = DATA_TEXT;
 
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
@@ -303,11 +287,10 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		if (last_offset < *size) {
 			ctx->blocks[blknum].offset = last_offset;
 			ctx->blocks[blknum].index = blknum;
-			ctx->blocks[blknum].cksum_n_offset = ctx->cur_checksum;
+			ctx->blocks[blknum].cksum_n_offset = j;
 			ctx->blocks[blknum].length = *size - last_offset;
 			ctx->blocks[blknum].refcount = 0;
 			blknum++;
-			ctx->cur_checksum = 0;
 			last_offset = *size;
 		}
 
@@ -355,14 +338,12 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 				matchlen += prev_length;
 				continue;
 			}
-
 			prev_offset = buf1 + ctx->blocks[blk].offset;
 			prev_cksum = ctx->blocks[blk].cksum_n_offset;
 			prev_length = ctx->blocks[blk].length;
 			prev_index = ctx->blocks[blk].index;
 			prev_blk = blk;
 		}
-
 		if (matchlen < rabin_index_sz) {
 			ctx->valid = 0;
 			return;
