@@ -52,6 +52,7 @@ extern "C" {
 #       endif
 #endif
 typedef unsigned long uintptr_t;
+typedef ssize_t bsize_t;
 
 #undef WORDS_BIGENDIAN
 #if BYTE_ORDER == BIG_ENDIAN

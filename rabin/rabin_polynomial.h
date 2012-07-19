@@ -84,19 +84,15 @@
 #define	RAB_POLYNOMIAL_MIN_WIN_SIZE 8
 #define	RAB_POLYNOMIAL_MAX_WIN_SIZE 64
 
-typedef struct {
-	ssize_t offset;
-	uint64_t cksum_n_offset; // Dual purpose variable
-	unsigned int index;
-	unsigned int length;
-	unsigned short refcount;
-} rabin_blockentry_t;
+// Minimum practical chunk size when doing dedup
+#define	RAB_MIN_CHUNK_SIZE (1048576L)
+
+// Number of bytes to compute one maximal fingerprint value
+#define	SKETCH_BASIC_BLOCK_SZ (1024)
 
 // An entry in the Rabin block array in the chunk.
-// It is either a length value <= RAB_POLYNOMIAL_MAX_BLOCK_SIZE or
-// if value > RAB_POLYNOMIAL_MAX_BLOCK_SIZE then
-// value - RAB_POLYNOMIAL_MAX_BLOCK_SIZE is index of block with which
-// this block is a duplicate.
+// It is either a length value <= RABIN_MAX_BLOCK_SIZE or an index value with
+// which this block is a duplicate/similar. The entries are variable sized.
 // Offset can be dynamically calculated.
 //
 #define	RABIN_ENTRY_SIZE (sizeof (unsigned int))
@@ -106,20 +102,43 @@ typedef struct {
 // size of deduped data, size of compressed data
 #define	RABIN_HDR_SIZE (sizeof (unsigned int) + sizeof (ssize_t) + sizeof (ssize_t) + sizeof (ssize_t) + sizeof (ssize_t))
 
-// Maximum number of dedup blocks supported (2^31 - 1)
-#define	RABIN_MAX_BLOCKS (0x7fffffff)
+// Maximum number of dedup blocks supported (2^30 - 1)
+#define	RABIN_MAX_BLOCKS (0x3FFFFFFFUL)
 
 // Maximum possible block size for a single rabin block. This is a hard limit much
 // larger than RAB_POLYNOMIAL_MAX_BLOCK_SIZE. Useful when merging non-duplicate blocks.
 // This is also 2^31 - 1.
-#define RABIN_MAX_BLOCK_SIZE (RABIN_MAX_BLOCKS)
+#define	RABIN_MAX_BLOCK_SIZE (RABIN_MAX_BLOCKS)
 
-// Mask to determine whether Rabin index entry is a length value or index value.
+// Masks to determine whether Rabin index entry is a length value, duplicate index value
+// or similar index value.
 // MSB = 1 : Index
 // MSB = 0 : Length
-#define RABIN_INDEX_FLAG (0x80000000)
+// MSB-1 = 1: Similarity Index
+// MSB-1 = 0: Exact Duplicate Index
+#define	RABIN_INDEX_FLAG (0x80000000UL)
+#define	SET_SIMILARITY_FLAG (0x40000000UL)
+#define	GET_SIMILARITY_FLAG SET_SIMILARITY_FLAG
+#define	CLEAR_SIMILARITY_FLAG (0xBFFFFFFFUL)
+
 // Mask to extract value from a rabin index entry
-#define RABIN_INDEX_VALUE (0x7fffffff)
+#define	RABIN_INDEX_VALUE (0x3FFFFFFFUL)
+
+// Tolerance for partial similarity check. We expect 80% similarity for
+// delta compression. See: http://www.armedia.com/wp/SimilarityIndex.pdf
+#define	SIMILARITY_TOLERANCE (0.2f)
+#define	SIMILAR_EXACT 1
+#define	SIMILAR_PARTIAL 2
+
+typedef struct {
+	ssize_t offset;
+	uint64_t cksum_n_offset; // Dual purpose variable
+	unsigned int index;
+	unsigned int length;
+	unsigned int new_length;
+	unsigned short refcount;
+	short similar;
+} rabin_blockentry_t;
 
 typedef struct {
 	unsigned char *current_window_data;
@@ -134,11 +153,11 @@ typedef struct {
 	uint64_t real_chunksize;
 	short valid;
 	void *lzma_data;
-	int level;
+	int level, delta_flag;
 } rabin_context_t;
 
 extern rabin_context_t *create_rabin_context(uint64_t chunksize, uint64_t real_chunksize,
-	const char *algo);
+	const char *algo, int delta_flag);
 extern void destroy_rabin_context(rabin_context_t *ctx);
 extern unsigned int rabin_dedup(rabin_context_t *ctx, unsigned char *buf, 
 	ssize_t *size, ssize_t offset, ssize_t *rabin_pos);

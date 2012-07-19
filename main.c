@@ -78,6 +78,7 @@ static int nthreads = 0;
 static int hide_mem_stats = 1;
 static int hide_cmp_stats = 1;
 static int enable_rabin_scan = 0;
+static int enable_delta_encode = 0;
 static int enable_rabin_split = 1;
 static unsigned int chunk_num;
 static uint64_t largest_chunk, smallest_chunk, avg_chunk;
@@ -118,10 +119,12 @@ usage(void)
 	    "4) Attempt Rabin fingerprinting based deduplication on chunks:\n"
 	    "   %s -D ...\n"
 	    "   %s -D -r ... - Do NOT split chunks at a rabin boundary. Default is to split.\n"
-	    "5) Number of threads can optionally be specified: -t <1 - 256 count>\n"
-	    "6) Pass '-M' to display memory allocator statistics\n"
-	    "7) Pass '-C' to display compression statistics\n\n",
-	    exec_name, exec_name, exec_name, exec_name);
+	    "5) Perform Delta Encoding in addition to Exact Dedup:\n"
+	    "   %s -E ... - This also implies '-D'.\n"
+	    "6) Number of threads can optionally be specified: -t <1 - 256 count>\n"
+	    "7) Pass '-M' to display memory allocator statistics\n"
+	    "8) Pass '-C' to display compression statistics\n\n",
+	    exec_name, exec_name, exec_name, exec_name, exec_name, exec_name);
 }
 
 void
@@ -436,7 +439,8 @@ start_decompress(const char *filename, const char *to_filename)
 		if (_init_func)
 			_init_func(&(tdat->data), &(tdat->level), chunksize);
 		if (enable_rabin_scan)
-			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, algo);
+			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize,
+			    algo, enable_delta_encode);
 		else
 			tdat->rctx = NULL;
 		if (pthread_create(&(tdat->thr), NULL, perform_decompress,
@@ -905,7 +909,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		if (_init_func)
 			_init_func(&(tdat->data), &(tdat->level), chunksize);
 		if (enable_rabin_scan)
-			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, algo);
+			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize,
+			    algo, enable_delta_encode);
 		else
 			tdat->rctx = NULL;
 
@@ -965,7 +970,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 * Read the first chunk into a spare buffer (a simple double-buffering).
 	 */
 	if (enable_rabin_split) {
-		rctx = create_rabin_context(chunksize, 0, algo);
+		rctx = create_rabin_context(chunksize, 0, algo, enable_delta_encode);
 		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 	} else {
 		rbytes = Read(uncompfd, cread_buf, chunksize);
@@ -1203,7 +1208,7 @@ main(int argc, char *argv[])
 	level = 6;
 	slab_init();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDr")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEr")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -1257,6 +1262,11 @@ main(int argc, char *argv[])
 
 		    case 'D':
 			enable_rabin_scan = 1;
+			break;
+
+		    case 'E':
+			enable_rabin_scan = 1;
+			enable_delta_encode = 1;
 			break;
 
 		    case 'r':

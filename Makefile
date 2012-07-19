@@ -31,6 +31,10 @@ RABINSRCS = rabin/rabin_polynomial.c
 RABINHDRS = rabin/rabin_polynomial.h utils.h
 RABINOBJS = $(RABINSRCS:.c=.o)
 
+BSDIFFSRCS = bsdiff/bsdiff.c bsdiff/bspatch.c bsdiff/rle_encoder.c
+BSDIFFHDRS = bsdiff/bscommon.h utils.h allocator.h
+BSDIFFOBJS = $(BSDIFFSRCS:.c=.o)
+
 LZMASRCS = lzma/LzmaEnc.c lzma/LzFind.c lzma/LzmaDec.c
 LZMAHDRS = lzma/CpuArch.h lzma/LzFind.h lzma/LzmaEnc.h lzma/Types.h \
 	lzma/LzHash.h lzma/LzmaDec.h utils.h
@@ -44,10 +48,10 @@ CRCSRCS = lzma/crc64_fast.c lzma/crc64_table.c
 CRCHDRS = lzma/crc64_table_le.h lzma/crc64_table_be.h lzma/crc_macros.h
 CRCOBJS = $(CRCSRCS:.c=.o)
 
-BAKFILES = *~ lzma/*~ rabin/*~
+BAKFILES = *~ lzma/*~ rabin/*~ bsdiff/*~
 
 RM = rm -f
-CPPFLAGS = -I. -I./lzma -I./rabin -D_7ZIP_ST -DNODEFAULT_PROPS -DFILE_OFFSET_BITS=64 \
+CPPFLAGS = -I. -I./lzma -I./rabin -I./bsdiff -D_7ZIP_ST -DNODEFAULT_PROPS -DFILE_OFFSET_BITS=64 \
 	-D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32
 VEC_FLAGS = -ftree-vectorize
 LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
@@ -57,6 +61,7 @@ ifdef DEBUG
 LINK = g++ -m64 -pthread -msse3
 COMPILE = gcc -m64 -O -g -msse3 -c
 COMPILE_cpp = g++ -m64 -O -g -msse3 -c
+VEC_FLAGS = 
 ifdef DEBUG_NO_SLAB
 CPPFLAGS += -DDEBUG_NO_SLAB
 endif
@@ -84,12 +89,15 @@ $(PPMDOBJS): $(PPMDSRCS) $(PPMDHDRS)
 $(RABINOBJS): $(RABINSRCS) $(RABINHDRS)
 	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
+$(BSDIFFOBJS): $(BSDIFFSRCS) $(BSDIFFHDRS)
+	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
 $(MAINOBJS): $(MAINSRCS) $(MAINHDRS)
 	$(COMPILE) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
-$(PROG): $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(RABINOBJS)
-	$(LINK) -o $@ $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(RABINOBJS) $(LDLIBS)
+$(PROG): $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(RABINOBJS) $(BSDIFFOBJS)
+	$(LINK) -o $@ $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(RABINOBJS) $(BSDIFFOBJS) $(LDLIBS)
 
 clean:
-	$(RM) $(PROG) $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(RABINOBJS) $(BAKFILES)
+	$(RM) $(PROG) $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(RABINOBJS) $(BSDIFFOBJS) $(BAKFILES)
 
