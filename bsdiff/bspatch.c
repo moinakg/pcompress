@@ -54,62 +54,63 @@ valini32(u_char *buf)
 bsize_t
 get_bsdiff_sz(u_char *pbuf) {
 	bsize_t newsize;
-	bsize_t ctrllen, lzdatalen, datalen, lzextralen, extralen;
-	int sz, hdrsz, rv;
+	bsize_t lzctrllen, ctrllen, lzdatalen, datalen, lzextralen, extralen;
+	int hdrsz, rv;
 
-	sz = sizeof (bsize_t);
-	hdrsz = sz*6;
+	hdrsz = 4*7;
 
-	ctrllen = valin(pbuf);
-	lzdatalen = valin(pbuf+sz);
-	datalen = valin(pbuf+sz*2);
-	lzextralen = valin(pbuf+sz*3);
-	extralen = valin(pbuf+sz*4);
-	newsize = valin(pbuf+sz*5);
-	return (ctrllen + lzdatalen + lzextralen + hdrsz);
+	lzctrllen = valini32(pbuf);
+	ctrllen = valini32(pbuf+4);
+	lzdatalen = valini32(pbuf+4*2);
+	datalen = valini32(pbuf+4*3);
+	lzextralen = valini32(pbuf+4*4);
+	extralen = valini32(pbuf+4*5);
+	newsize = valini32(pbuf+4*6);
+	return (lzctrllen + lzdatalen + lzextralen + hdrsz);
 }
 
 int
 bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new, bsize_t *_newsize)
 {
 	bsize_t newsize;
-	bsize_t ctrllen, lzdatalen, datalen, lzextralen, extralen;
+	bsize_t lzctrllen, ctrllen, lzdatalen, datalen, lzextralen, extralen;
 	u_char buf[8];
-	u_char *diffdata, *extradata;
+	u_char *diffdata, *extradata, *ctrldata;
 	bsize_t oldpos,newpos;
 	bsize_t ctrl[3];
 	bsize_t lenread;
 	bsize_t i;
 	bufio_t cpf, dpf, epf;
-	int sz, hdrsz, rv;
+	int hdrsz, rv;
 	unsigned int len;
 
 	/*
 	File format:
-		0	8	length of ctrl block (X)
-		8	8	compressed length of diff block (Y)
-		16	8	actual length of diff block
-		24	8	compressed length of extra block (Z)
-		32	8	actual length of extra block
-		40	8	length of new file
-		48	X	control block
-		48+X	Y	lzfx(diff block)
-		48+X+Y	Z	lzfx(extra block)
+		0	4	compressed length of ctrl block (X)
+		4	4	actual length of ctrl block (X)
+		8	4	compressed length of diff block (Y)
+		12	4	actual length of diff block
+		16	4	compressed length of extra block (Z)
+		20	4	actual length of extra block
+		24	4	length of new file
+		28	X	ZRLE?(control block)
+		28+X	Y	ZRLE(diff block)
+		28+X+Y	Z	ZRLE(extra block)
 	with control block a set of triples (x,y,z) meaning "add x bytes
 	from oldfile to x bytes from the diff block; copy y bytes from the
 	extra block; seek forwards in oldfile by z bytes".
 	*/
-	sz = sizeof (bsize_t);
-	hdrsz = sz*6;
+	hdrsz = 4*7;
 	rv = 1;
 
 	/* Read lengths from header first. */
-	ctrllen = valin(pbuf);
-	lzdatalen = valin(pbuf+sz);
-	datalen = valin(pbuf+sz*2);
-	lzextralen = valin(pbuf+sz*3);
-	extralen = valin(pbuf+sz*4);
-	newsize = valin(pbuf+sz*5);
+	lzctrllen = valini32(pbuf);
+	ctrllen = valini32(pbuf+4);
+	lzdatalen = valini32(pbuf+4*2);
+	datalen = valini32(pbuf+4*3);
+	lzextralen = valini32(pbuf+4*4);
+	extralen = valini32(pbuf+4*5);
+	newsize = valini32(pbuf+4*6);
 
 	if((ctrllen<0) || (lzdatalen<0) || (newsize<0) || (lzextralen<0)) {
 		fprintf(stderr, "1: Corrupt patch\n");
@@ -122,18 +123,38 @@ bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new, bsize_t *_newsi
 	*_newsize = newsize;
 
 	/* Allocate buffers. */
-	diffdata = malloc(datalen);
-	extradata = malloc(extralen);
+	diffdata = slab_alloc(NULL, datalen);
+	extradata = slab_alloc(NULL, extralen);
 	if (diffdata == NULL || extradata == NULL) {
 		fprintf(stderr, "bspatch: Out of memory.\n");
-		if (diffdata) free(diffdata);
-		if (extradata) free(extradata);
+		if (diffdata) slab_free(NULL, diffdata);
+		if (extradata) slab_free(NULL, extradata);
 		return (0);
 	}
 
-	/* Decompress diffdata and extradata. */
+	/* Decompress ctrldata, diffdata and extradata. */
+	if (lzctrllen < ctrllen) {
+		/* Ctrl data will be RLE-d if RLE size is less. */
+		ctrldata = slab_alloc(NULL, ctrllen);
+		if (ctrldata == NULL) {
+			fprintf(stderr, "bspatch: Out of memory.\n");
+			slab_free(NULL, diffdata);
+			slab_free(NULL, extradata);
+			return (0);
+		}
+		len = ctrllen;
+		if (zero_rle_decode(pbuf + hdrsz, lzctrllen, ctrldata, &len) == -1 ||
+		    len != ctrllen) {
+			fprintf(stderr, "bspatch: Failed to decompress control data.\n");
+			rv = 0;
+			goto out;
+		}
+	} else {
+		ctrldata = pbuf + hdrsz;
+	}
+
 	len = datalen;
-	if (zero_rle_decode(pbuf + hdrsz + ctrllen, lzdatalen, diffdata, &len) == -1 ||
+	if (zero_rle_decode(pbuf + hdrsz + lzctrllen, lzdatalen, diffdata, &len) == -1 ||
 	    len != datalen) {
 		fprintf(stderr, "bspatch: Failed to decompress diff data.\n");
 		rv = 0;
@@ -142,14 +163,14 @@ bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new, bsize_t *_newsi
 	datalen = len;
 
 	len = extralen;
-	if (zero_rle_decode(pbuf + hdrsz + ctrllen + lzdatalen, lzextralen, extradata, &len) == -1 ||
+	if (zero_rle_decode(pbuf + hdrsz + lzctrllen + lzdatalen, lzextralen, extradata, &len) == -1 ||
 	    len != extralen) {
 		fprintf(stderr, "bspatch: Failed to decompress extra data.\n");
 		rv = 0;
 		goto out;
 	}
 	extralen = len;
-	BUFOPEN(&cpf, pbuf + hdrsz, ctrllen);
+	BUFOPEN(&cpf, ctrldata, ctrllen);
 	BUFOPEN(&dpf, diffdata, datalen);
 	BUFOPEN(&epf, extradata, extralen);
 
@@ -211,8 +232,10 @@ bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new, bsize_t *_newsi
 	};
 
 out:
-	free(diffdata);
-	free(extradata);
+	if (lzctrllen < ctrllen)
+		slab_free(NULL, ctrldata);
+	slab_free(NULL, diffdata);
+	slab_free(NULL, extradata);
 
 	return (rv);
 }

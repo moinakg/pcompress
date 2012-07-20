@@ -345,7 +345,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		*rabin_pos = last_offset;
 		return (0);
 	}
-
+printf("Original size: %lld\n", *size);
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
 		uint64_t prev_cksum;
@@ -538,8 +538,11 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 				if (rabin_index[blk] & GET_SIMILARITY_FLAG) {
 					old = buf1 + ctx->blocks[j].offset;
 					new = buf1 + ctx->blocks[blk].cksum_n_offset;
+					matchlen = ctx->real_chunksize - *size;
+
 					bsz = bsdiff(old, ctx->blocks[j].length, new,
-					    ctx->blocks[blk].new_length, ctx->cbuf + pos1, 0, 0);
+					    ctx->blocks[blk].new_length, ctx->cbuf + pos1,
+					    buf1 + *size, matchlen);
 					if (bsz == 0) {
 						memcpy(ctx->cbuf + pos1, new, ctx->blocks[blk].new_length);
 						rabin_index[blk] = htonl(ctx->blocks[blk].new_length);
@@ -572,6 +575,7 @@ cont:
 			entries[2] = htonll(pos1 - rabin_index_sz - RABIN_HDR_SIZE);
 			*size = pos1;
 			ctx->valid = 1;
+printf("Deduped size: %lld\n", *size);
 
 			/*
 			 * Remaining header entries: size of compressed index and size of

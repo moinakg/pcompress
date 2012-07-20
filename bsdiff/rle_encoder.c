@@ -59,7 +59,7 @@ zero_rle_encode(const void *const ibuf, const unsigned int ilen,
 					cnt = 0;
 					pos4 = pos1;
 					state = 1;
-					// Lookahead if have ate least 4 consecutive zeroes
+					// Lookahead if there are at least 4 consecutive zeroes
 					for (;pos4<ilen && ib[pos4] == 0; pos4++) cnt++;
 					if (cnt >= 4) break;
 				}

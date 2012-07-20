@@ -226,7 +226,7 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 	bsize_t overlap,Ss,lens;
 	bsize_t i, rv;
 	bsize_t dblen,eblen;
-	u_char *db,*eb;
+	u_char *db,*eb, *cb;
 	u_char buf[sizeof (bsize_t)];
 	u_char header[48];
 	unsigned int sz, hdrsz, ulen;
@@ -252,29 +252,31 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 	BUFOPEN(&pf, diff, newsize);
 
 	/* Header is
-		0	8	length of ctrl block
-		8	8	compressed length of diff block
-		16	8	actual length of diff block
-		24	8	compressed length of extra block
-		32	8	actual length of extra block
-		40	8	length of new file */
+		0	4	compressed length of ctrl block
+		4	4	actual length of ctrl block
+		8	4	compressed length of diff block
+		12	4	actual length of diff block
+		16	4	compressed length of extra block
+		20	4	actual length of extra block
+		24	4	length of new file */
 	/* File is
-		0	32	Header
-		32	??	ctrl block
+		0	28	Header
+		28	??	ctrl block
 		??	??	diff block
 		??	??	extra block */
-	valout(0, header);
-	valout(0, header + sz);
-	valout(0, header + sz*2);
-	valout(0, header + sz*3);
-	valout(0, header + sz*4);
-	valout(newsize, header + sz*5);
-	if (BUFWRITE(&pf, header, sz*6) != sz*6) {
+	valouti32(0, header);
+	valouti32(0, header + 4);
+	valouti32(0, header + 4*2);
+	valouti32(0, header + 4*3);
+	valouti32(0, header + 4*4);
+	valouti32(0, header + 4*5);
+	valouti32(newsize, header + 4*6);
+	if (BUFWRITE(&pf, header, 4*7) != 4*7) {
 		fprintf(stderr, "bsdiff: Write to compressed buffer failed.\n");
 		rv = 0;
 		goto out;
 	}
-	hdrsz = sz*6;
+	hdrsz = 4*7;
 
 	/* Compute the differences, writing ctrl as we go */
 	scan=0;len=0;
@@ -356,9 +358,36 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 		goto out;
 	}
 
-	/* Compute size of ctrl data */
+	/* Comput uncompressed size of the ctrl data. */
 	len = BUFTELL(&pf);
-	valout(len-hdrsz, header);
+	valouti32(len-hdrsz, header+4);
+	ulen = len-hdrsz;
+
+	/* If our data can fit in the scratch area use it other alloc. */
+	if (ulen > scratchsize) {
+		cb = slab_alloc(NULL, ulen);
+	} else {
+		cb = scratch;
+	}
+
+	/*
+	 * Attempt to RLE the ctrl data. If RLE succeeds and produces a smaller
+	 * data then retain it.
+	 */
+	BUFSEEK(&pf, hdrsz, SEEK_SET);
+	rv = zero_rle_encode(BUFPTR(&pf), ulen, cb, &ulen);
+	if (rv == 0 && ulen < len-hdrsz) {
+		BUFWRITE(&pf, cb, ulen);
+	} else {
+		BUFSEEK(&pf, len, SEEK_SET);
+	}
+	if (len-hdrsz > scratchsize) {
+		slab_free(NULL, cb);
+	}
+
+	/* Compute compressed size of ctrl data */
+	len = BUFTELL(&pf);
+	valouti32(len-hdrsz, header);
 	rv = len;
 
 	/* Write diff data */
@@ -370,8 +399,8 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 	}
 	/* Output size of diff data */
 	len = ulen;
-	valout(len, header + sz);
-	valout(dblen, header + sz*2);
+	valouti32(len, header + 4*2);
+	valouti32(dblen, header + 4*3);
 	rv += len;
 	BUFSEEK(&pf, len, SEEK_CUR);
 
@@ -384,8 +413,8 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 	}
 	/* Output size of extra data */
 	len = ulen;
-	valout(len, header + sz*3);
-	valout(eblen, header + sz*4);
+	valouti32(len, header + 4*4);
+	valouti32(eblen, header + 4*5);
 	rv += len;
 
 	/* Seek to the beginning, re-write the header.*/
