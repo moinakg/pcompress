@@ -345,7 +345,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		*rabin_pos = last_offset;
 		return (0);
 	}
-printf("Original size: %lld\n", *size);
+
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
 		uint64_t prev_cksum;
@@ -575,7 +575,6 @@ cont:
 			entries[2] = htonll(pos1 - rabin_index_sz - RABIN_HDR_SIZE);
 			*size = pos1;
 			ctx->valid = 1;
-printf("Deduped size: %lld\n", *size);
 
 			/*
 			 * Remaining header entries: size of compressed index and size of
