@@ -216,10 +216,16 @@ redo:
 				goto cont;
 			}
 
+			rv = 0;
 			cmpbuf = cseg + RABIN_HDR_SIZE;
 			ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE;
-			rv = lzma_decompress(cmpbuf, rabin_index_sz_cmp, ubuf, &rabin_index_sz,
-			    tdat->rctx->level, 0, tdat->rctx->lzma_data);
+			if (rabin_index_sz >= 90) {
+				/* Index should be at least 90 bytes to have been compressed. */
+				rv = lzma_decompress(cmpbuf, rabin_index_sz_cmp, ubuf,
+				    &rabin_index_sz, tdat->rctx->level, 0, tdat->rctx->lzma_data);
+			} else {
+				memcpy(ubuf, cmpbuf, rabin_index_sz);
+			}
 		} else {
 			rv = tdat->decompress(cseg, tdat->len_cmp, tdat->uncompressed_chunk,
 			    &_chunksize, tdat->level, HDR, tdat->data);
@@ -630,10 +636,16 @@ redo:
 		index_size_cmp = rabin_index_sz;
 		memcpy(compressed_chunk, tdat->uncompressed_chunk, RABIN_HDR_SIZE);
 
-		/* Compress index. */
-		rv = lzma_compress(tdat->uncompressed_chunk + RABIN_HDR_SIZE,
-		    rabin_index_sz, compressed_chunk + RABIN_HDR_SIZE, &index_size_cmp,
-		    tdat->rctx->level, 0, tdat->rctx->lzma_data);
+		rv = 0;
+		if (rabin_index_sz >= 90) {
+			/* Compress index if it is at least 90 bytes. */
+			rv = lzma_compress(tdat->uncompressed_chunk + RABIN_HDR_SIZE,
+			    rabin_index_sz, compressed_chunk + RABIN_HDR_SIZE,
+			    &index_size_cmp, tdat->rctx->level, 0, tdat->rctx->lzma_data);
+		} else {
+			memcpy(compressed_chunk + RABIN_HDR_SIZE,
+			    tdat->uncompressed_chunk + RABIN_HDR_SIZE, rabin_index_sz);
+		}
 
 		index_size_cmp += RABIN_HDR_SIZE;
 		rabin_index_sz += RABIN_HDR_SIZE;

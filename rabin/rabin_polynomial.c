@@ -424,7 +424,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 
 				if (blk > 0 && ctx->blocks[blk].refcount == 0 &&
 				    ctx->blocks[blk].cksum_n_offset == prev_cksum) {
-					ssize_t sz1, sz2;
 					ctx->blocks[blk].index = prev_index;
 					ctx->blocks[blk].similar = SIMILAR_PARTIAL;
 					(ctx->blocks[prev_blk].refcount)++;

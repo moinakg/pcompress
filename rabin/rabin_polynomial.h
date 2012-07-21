@@ -124,9 +124,9 @@
 // Mask to extract value from a rabin index entry
 #define	RABIN_INDEX_VALUE (0x3FFFFFFFUL)
 
-// Tolerance for partial similarity check. We expect 80% similarity for
-// delta compression. See: http://www.armedia.com/wp/SimilarityIndex.pdf
-#define	SIMILARITY_TOLERANCE (0.2f)
+/*
+ * Types of block similarity.
+ */
 #define	SIMILAR_EXACT 1
 #define	SIMILAR_PARTIAL 2
 
