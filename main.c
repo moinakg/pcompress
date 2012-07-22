@@ -1185,6 +1185,14 @@ init_algo(const char *algo, int bail)
 		_stats_func = ppmd_stats;
 		rv = 0;
 
+	} else if (memcmp(algorithm, "lzfx", 4) == 0) {
+		_compress_func = lz_fx_compress;
+		_decompress_func = lz_fx_decompress;
+		_init_func = lz_fx_init;
+		_deinit_func = NULL;
+		_stats_func = lz_fx_stats;
+		rv = 0;
+
 	/* adapt2 and adapt ordering of the checks matter here. */
 	} else if (memcmp(algorithm, "adapt2", 6) == 0) {
 		_compress_func = adapt_compress;

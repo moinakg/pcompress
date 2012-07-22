@@ -235,7 +235,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 	uint32_t length;
 	uint64_t cur_roll_checksum, cur_sketch;
 	uint64_t *fplist;
-	uint32_t len1, fpos;
+	uint32_t len1, fpos[2];
 
 	if (rabin_pos == NULL) {
 		/*
@@ -245,7 +245,8 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		fplist_sz = 8 * ctx->rabin_poly_avg_block_size;
 		fplist = (uint64_t *)(ctx->cbuf + ctx->real_chunksize - fplist_sz);
 		memset(fplist, 0, fplist_sz);
-		fpos = 0;
+		fpos[0] = 0;
+		fpos[1] = 0;
 		len1 = 0;
 	}
 	length = offset;
@@ -321,17 +322,22 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		 * http://www.armedia.com/wp/SimilarityIndex.pdf
 		 */
 		len1++;
-		j = cur_roll_checksum & ctx->rabin_avg_block_mask;
-		fplist[j] += cur_roll_checksum;
-		if (fplist[j] > fplist[fpos]) fpos = j;
+		fpos[1] = cur_roll_checksum & ctx->rabin_avg_block_mask;
+		fplist[fpos[1]] += cur_roll_checksum;
+
+		/*
+		 * Perform the following statement without branching:
+		 * if (fplist[fpos[1]] > fplist[fpos[0]]) fpos[0] = fpos[1];
+		 */
+		fpos[0] = fpos[(fplist[fpos[1]] > fplist[fpos[0]])];
 		if (len1 == SKETCH_BASIC_BLOCK_SZ) {
 			/*
 			 * Compute the super sketch value by summing all the representative
 			 * fingerprints of the block.
 			 */
-			cur_sketch += fplist[fpos];
+			cur_sketch += fplist[fpos[0]];
 			memset(fplist, 0, fplist_sz);
-			fpos = 0;
+			fpos[0] = 0;
 			len1 = 0;
 		}
 		/*
@@ -354,7 +360,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			ctx->blocks[blknum].similar = 0;
 			ctx->blocks[blknum].cksum_n_offset = cur_sketch;
 			memset(fplist, 0, fplist_sz);
-			fpos = 0;
+			fpos[0] = 0;
 			len1 = 0;
 			cur_sketch = 0;
 			blknum++;
