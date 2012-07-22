@@ -260,9 +260,36 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 	 * If rabin_pos is non-zero then we are being asked to scan for the last rabin boundary
 	 * in the chunk. We start scanning at chunk end - max rabin block size. We avoid doing
 	 * a full chunk scan.
+	 * 
+	 * !!!NOTE!!!: Code duplication below for performance.
 	 */
 	if (rabin_pos) {
 		offset = *size - RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
+		for (i=offset; i<*size; i++) {
+			char cur_byte = buf1[i];
+			uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
+
+			ctx->current_window_data[ctx->window_pos] = cur_byte;
+			cur_roll_checksum = (cur_roll_checksum << 1) + cur_byte;
+			cur_roll_checksum -= (pushed_out << RAB_POLYNOMIAL_WIN_SIZE);
+
+			ctx->window_pos = (ctx->window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
+			length++;
+			if (length < ctx->rabin_poly_min_block_size) continue;
+
+			// If we hit our special value or reached the max block size update block offset
+			if ((cur_roll_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
+			length >= rabin_polynomial_max_block_size) {
+				last_offset = i+1;
+				length = 0;
+				j = 0;
+			}
+		}
+
+		if (last_offset < *size) {
+			*rabin_pos = last_offset;
+		}
+		return (0);
 	}
 	if (*size < ctx->rabin_poly_avg_block_size) return;
 	for (i=offset; i<*size; i++) {
@@ -293,21 +320,19 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		 * variant of some approaches detailed in:
 		 * http://www.armedia.com/wp/SimilarityIndex.pdf
 		 */
-		if (rabin_pos == NULL) {
-			len1++;
-			j = cur_roll_checksum & ctx->rabin_avg_block_mask;
-			fplist[j] += cur_roll_checksum;
-			if (fplist[j] > fplist[fpos]) fpos = j;
-			if (len1 == SKETCH_BASIC_BLOCK_SZ) {
-				/*
-				 * Compute the super sketch value by summing all the representative
-				 * fingerprints of the block.
-				 */
-				cur_sketch += fplist[fpos];
-				memset(fplist, 0, fplist_sz);
-				fpos = 0;
-				len1 = 0;
-			}
+		len1++;
+		j = cur_roll_checksum & ctx->rabin_avg_block_mask;
+		fplist[j] += cur_roll_checksum;
+		if (fplist[j] > fplist[fpos]) fpos = j;
+		if (len1 == SKETCH_BASIC_BLOCK_SZ) {
+			/*
+			 * Compute the super sketch value by summing all the representative
+			 * fingerprints of the block.
+			 */
+			cur_sketch += fplist[fpos];
+			memset(fplist, 0, fplist_sz);
+			fpos = 0;
+			len1 = 0;
 		}
 		/*
 		 * Window pos has to rotate from 0 .. RAB_POLYNOMIAL_WIN_SIZE-1
@@ -322,28 +347,21 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		// If we hit our special value or reached the max block size update block offset
 		if ((cur_roll_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
 		    length >= rabin_polynomial_max_block_size) {
-			if (rabin_pos == NULL) {
-				ctx->blocks[blknum].offset = last_offset;
-				ctx->blocks[blknum].index = blknum; // Need to store for sorting
-				ctx->blocks[blknum].length = length;
-				ctx->blocks[blknum].refcount = 0;
-				ctx->blocks[blknum].similar = 0;
-				ctx->blocks[blknum].cksum_n_offset = cur_sketch;
-				memset(fplist, 0, fplist_sz);
-				fpos = 0;
-				len1 = 0;
-				cur_sketch = 0;
-				blknum++;
-			}
+			ctx->blocks[blknum].offset = last_offset;
+			ctx->blocks[blknum].index = blknum; // Need to store for sorting
+			ctx->blocks[blknum].length = length;
+			ctx->blocks[blknum].refcount = 0;
+			ctx->blocks[blknum].similar = 0;
+			ctx->blocks[blknum].cksum_n_offset = cur_sketch;
+			memset(fplist, 0, fplist_sz);
+			fpos = 0;
+			len1 = 0;
+			cur_sketch = 0;
+			blknum++;
 			last_offset = i+1;
 			length = 0;
 			j = 0;
 		}
-	}
-
-	if (rabin_pos && last_offset < *size) {
-		*rabin_pos = last_offset;
-		return (0);
 	}
 
 	// If we found at least a few chunks, perform dedup.
