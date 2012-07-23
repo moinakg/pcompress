@@ -442,8 +442,11 @@ start_decompress(const char *filename, const char *to_filename)
 		sem_init(&(tdat->start_sem), 0, 0);
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
-		if (_init_func)
-			_init_func(&(tdat->data), &(tdat->level), chunksize);
+		if (_init_func) {
+			if (_init_func(&(tdat->data), &(tdat->level), chunksize) != 0) {
+				UNCOMP_BAIL;
+			}
+		}
 		if (enable_rabin_scan)
 			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize,
 			    algo, enable_delta_encode);
@@ -918,8 +921,11 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		sem_init(&(tdat->start_sem), 0, 0);
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
-		if (_init_func)
-			_init_func(&(tdat->data), &(tdat->level), chunksize);
+		if (_init_func) {
+			if (_init_func(&(tdat->data), &(tdat->level), chunksize) != 0) {
+				COMP_BAIL;
+			}
+		}
 		if (enable_rabin_scan)
 			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize,
 			    algo, enable_delta_encode);
@@ -1189,7 +1195,7 @@ init_algo(const char *algo, int bail)
 		_compress_func = lz_fx_compress;
 		_decompress_func = lz_fx_decompress;
 		_init_func = lz_fx_init;
-		_deinit_func = NULL;
+		_deinit_func = lz_fx_deinit;
 		_stats_func = lz_fx_stats;
 		rv = 0;
 

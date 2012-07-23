@@ -24,6 +24,8 @@
 #ifndef __ALLOCATOR_H__
 #define __ALLOCATOR_H__
 
+#include <sys/types.h>
+
 void slab_init();
 void slab_cleanup(int quiet);
 void *slab_alloc(void *p, size_t size);

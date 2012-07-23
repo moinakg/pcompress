@@ -72,15 +72,15 @@ extern "C" {
 #define LZFX_VERSION_MINOR      1
 #define LZFX_VERSION_STRING     "0.1"
 
-/* Hashtable size (2**LZFX_HLOG entries) */
-#ifndef LZFX_HLOG
-# define LZFX_HLOG 16
-#endif
+#define LZFX_HTAB_SIZE(x) (1 << x)
 
 /* Predefined errors. */
 #define LZFX_ESIZE      -1      /* Output buffer too small */
 #define LZFX_ECORRUPT   -2      /* Invalid data for decompression */
 #define LZFX_EARGS      -3      /* Arguments invalid (NULL) */
+#define LZFX_ENOMEM     -4      /* Out of memory when allocating hashtable */
+
+typedef unsigned char u8;
 
 /*  Buffer-to buffer compression.
 
@@ -92,7 +92,8 @@ extern "C" {
     value is returned and olen is not modified.
 */
 int lzfx_compress(const void* ibuf, unsigned int ilen,
-                        void* obuf, unsigned int *olen);
+                        void* obuf, unsigned int *olen,
+                        unsigned int htab_bits);
 
 /*  Buffer-to-buffer decompression.
 

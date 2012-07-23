@@ -28,6 +28,11 @@
 #include <utils.h>
 #include <pcompress.h>
 #include <lzfx.h>
+#include <allocator.h>
+
+struct lzfx_params {
+	uint32_t htab_bits;
+};
 
 void
 lz_fx_stats(int show)
@@ -37,11 +42,33 @@ lz_fx_stats(int show)
 int
 lz_fx_init(void **data, int *level, ssize_t chunksize)
 {
-	if (*level > 9) *level = 9;
+	struct lzfx_params *lzdat;
+	int lev;
+
 	if (chunksize > UINT_MAX) {
 		fprintf(stderr, "Chunk size too big for LZFX.\n");
 		return (1);
 	}
+	lzdat = slab_alloc(NULL, sizeof (struct lzfx_params));
+
+	lev = *level;
+	if (lev > 5) lev = 5;
+	lzdat->htab_bits = 16 + (lev-1);
+	*data = lzdat;
+
+	if (*level > 9) *level = 9;
+	return (0);
+}
+
+int
+lz_fx_deinit(void **data)
+{
+	struct lzfx_params *lzdat = (struct lzfx_params *)(*data);
+	
+	if (lzdat) {
+		slab_free(NULL, lzdat);
+	}
+	*data = NULL;
 	return (0);
 }
 
@@ -58,6 +85,9 @@ lz_fx_err(int err)
 	    case LZFX_EARGS:
 		fprintf(stderr, "LZFX: Invalid arguments.\n");
 		break;
+	    case LZFX_ENOMEM:
+		fprintf(stderr, "LZFX: Out of memory when allocating hashtable.\n");
+		break;
 	    default:
 		fprintf(stderr, "LZFX: Unknown error code: %d\n", err);
 	}
@@ -68,10 +98,11 @@ lz_fx_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 	       int level, uchar_t chdr, void *data)
 {
 	int rv;
+	struct lzfx_params *lzdat = (struct lzfx_params *)data;
 	unsigned int _srclen = srclen;
 	unsigned int _dstlen = *dstlen;
 
-	rv = lzfx_compress(src, _srclen, dst, &_dstlen);
+	rv = lzfx_compress(src, _srclen, dst, &_dstlen, lzdat->htab_bits);
 	if (rv == -1) {
 		lz_fx_err(rv);
 		return (-1);

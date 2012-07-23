@@ -111,12 +111,20 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 	 */
 	ctx = (rabin_context_t *)slab_alloc(NULL, sizeof (rabin_context_t));
 	ctx->rabin_poly_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
+
 	if (((memcmp(algo, "lzma", 4) == 0 || memcmp(algo, "adapt", 5) == 0) &&
 	      chunksize <= LZMA_WINDOW_MAX) || delta_flag) {
-		ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE;
-		ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK;
-		ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE;
-		ctx->rabin_break_patt = RAB_POLYNOMIAL_CONST;
+		if (memcmp(algo, "lzfx", 4) == 0 || memcmp(algo, "lz4", 3) == 0) {
+			ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE2;
+			ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK2;
+			ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE2;
+			ctx->rabin_break_patt = 0;
+		} else {
+			ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE;
+			ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK;
+			ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE;
+			ctx->rabin_break_patt = RAB_POLYNOMIAL_CONST;
+		}
 	} else {
 		ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE2;
 		ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK2;

@@ -92,6 +92,7 @@ extern int lz_fx_init(void **data, int *level, ssize_t chunksize);
 extern int adapt_deinit(void **data);
 extern int lzma_deinit(void **data);
 extern int ppmd_deinit(void **data);
+extern int lz_fx_deinit(void **data);
 
 extern void adapt_stats(int show);
 extern void ppmd_stats(int show);
