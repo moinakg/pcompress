@@ -96,6 +96,8 @@ usage(void)
 	    "1) To compress a file:\n"
 	    "   %s -c <algorithm> [-l <compress level>] [-s <chunk size>] <file>\n"
 	    "   Where <algorithm> can be the folowing:\n"
+	    "   lzfx   - Very fast and small algorithm based on LZF.\n"
+	    "   lz4    - Ultra fast, high-throughput algorithm reaching RAM B/W at level1.\n"
 	    "   zlib   - The base Zlib format compression (not Gzip).\n"
 	    "   lzma   - The LZMA (Lempel-Ziv Markov) algorithm from 7Zip.\n"
 	    "   bzip2  - Bzip2 Algorithm from libbzip2.\n"
