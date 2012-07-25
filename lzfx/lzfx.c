@@ -50,9 +50,6 @@
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
  *
- * This is a somewhat modified bsdiff implementation. It has been modified
- * to do buffer to buffer diffing instead of file to file and also use
- * a custom RLE encoding rather than Bzip2 on the diff output.
  */
 
 #include "lzfx.h"

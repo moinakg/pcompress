@@ -72,7 +72,7 @@ lz_fx_deinit(void **data)
 	return (0);
 }
 
-void
+static void
 lz_fx_err(int err)
 {
 	switch (err) {

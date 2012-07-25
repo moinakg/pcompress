@@ -23,7 +23,8 @@
 
 PROG= pcompress
 MAINSRCS = main.c utils.c allocator.c zlib_compress.c bzip2_compress.c \
-	lzma_compress.c ppmd_compress.c adaptive_compress.c lzfx_compress.c
+	lzma_compress.c ppmd_compress.c adaptive_compress.c lzfx_compress.c \
+	lz4_compress.c
 MAINHDRS = allocator.h  pcompress.h  utils.h
 MAINOBJS = $(MAINSRCS:.c=.o)
 
@@ -44,6 +45,10 @@ LZFXSRCS = lzfx/lzfx.c
 LZFXHDRS = lzfx/lzfx.h
 LZFXOBJS = $(LZFXSRCS:.c=.o)
 
+LZ4SRCS = lz4/lz4.c lz4/lz4hc.c
+LZ4HDRS = lz4/lz4.h lz4/lz4hc.h
+LZ4OBJS = $(LZ4SRCS:.c=.o)
+
 PPMDSRCS = lzma/Ppmd8.c lzma/Ppmd8Enc.c lzma/Ppmd8Dec.c
 PPMDHDRS = lzma/Ppmd.h lzma/Ppmd8.h
 PPMDOBJS = $(PPMDSRCS:.c=.o)
@@ -52,10 +57,10 @@ CRCSRCS = lzma/crc64_fast.c lzma/crc64_table.c
 CRCHDRS = lzma/crc64_table_le.h lzma/crc64_table_be.h lzma/crc_macros.h
 CRCOBJS = $(CRCSRCS:.c=.o)
 
-BAKFILES = *~ lzma/*~ lzfx/*~ rabin/*~ bsdiff/*~
+BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~
 
 RM = rm -f
-CPPFLAGS = -I. -I./lzma -I./lzfx -I./rabin -I./bsdiff -D_7ZIP_ST -DNODEFAULT_PROPS \
+CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -D_7ZIP_ST -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32
 VEC_FLAGS = -ftree-vectorize
 LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
@@ -97,16 +102,21 @@ $(BSDIFFOBJS): $(BSDIFFSRCS) $(BSDIFFHDRS)
 	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(LZFXOBJS): $(LZFXSRCS) $(LZFXHDRS)
-	$(COMPILE) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
+$(LZ4OBJS): $(LZ4SRCS) $(LZ4HDRS)
+	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(MAINOBJS): $(MAINSRCS) $(MAINHDRS)
 	$(COMPILE) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
-$(PROG): $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(CRCOBJS) $(RABINOBJS) $(BSDIFFOBJS)
+$(PROG): $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) \
+$(CRCOBJS) $(RABINOBJS) $(BSDIFFOBJS)
 	$(LINK) -o $@ $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) \
-		$(LZFXOBJS) $(RABINOBJS) $(BSDIFFOBJS) $(LDLIBS)
+		$(LZFXOBJS) $(LZ4OBJS) $(RABINOBJS) $(BSDIFFOBJS) \
+		$(LDLIBS)
 
 clean:
-	$(RM) $(PROG) $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(LZFXOBJS) \
+	$(RM) $(PROG) $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(LZFXOBJS) $(LZ4OBJS) \
 	$(RABINOBJS) $(BSDIFFOBJS) $(BAKFILES)
 
