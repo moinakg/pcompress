@@ -29,6 +29,11 @@
 #include <pcompress.h>
 #include <allocator.h>
 
+/*
+ * Max buffer size allowed for a single zlib compress/decompress call.
+ */
+#define	SINGLE_CALL_MAX (2147483648UL)
+
 static void *
 slab_alloc_ui(void *p, unsigned int items, unsigned int size) {
 	void *ptr;
@@ -58,7 +63,7 @@ void zerr(int ret)
 		perror(" ");
 		break;
 	    case Z_STREAM_ERROR:
-		fprintf(stderr, "Zlib: Invalid compression level\n");
+		fprintf(stderr, "Zlib: Invalid stream structure\n");
 		break;
 	    case Z_DATA_ERROR:
 		fprintf(stderr, "Zlib: Invalid or incomplete deflate data\n");
@@ -68,6 +73,12 @@ void zerr(int ret)
 		break;
 	    case Z_VERSION_ERROR:
 		fprintf(stderr, "Zlib: Version mismatch!\n");
+		break;
+	    case Z_BUF_ERROR:
+		fprintf(stderr, "Zlib: Buffer error decompression failed.\n");
+		break;
+	    case Z_NEED_DICT:
+		fprintf(stderr, "Zlib: Need present dictionary.\n");
 		break;
 	    default:
 		fprintf(stderr, "Zlib: Unknown error code: %d\n", ret);
@@ -79,12 +90,12 @@ zlib_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 	      int level, uchar_t chdr, void *data)
 {
 	z_stream zs;
-	int ret;
-
-	zs.next_in = src;
-	zs.avail_in = srclen;
-	zs.next_out = dst;
-	zs.avail_out = *dstlen;
+	int ret, ending;
+	unsigned int slen, dlen;
+	size_t _srclen = srclen;
+	size_t _dstlen = *dstlen;
+	uchar_t *dst1 = dst;
+	uchar_t *src1 = src;
 
 	zs.zalloc = slab_alloc_ui;
 	zs.zfree = slab_free;
@@ -96,16 +107,49 @@ zlib_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 		return (-1);
 	}
 
-	ret = deflate(&zs, Z_FINISH);
-	if (ret != Z_STREAM_END) {
-		deflateEnd(&zs);
-		if (ret == Z_OK)
-			zerr(Z_BUF_ERROR);
-		else
-			zerr(ret);
-		return (-1);
+	ending = 0;
+	while (_srclen > 0) {
+		if (_srclen > SINGLE_CALL_MAX) {
+			slen = SINGLE_CALL_MAX;
+		} else {
+			slen = _srclen;
+			ending = 1;
+		}
+		if (_dstlen > SINGLE_CALL_MAX) {
+			dlen = SINGLE_CALL_MAX;
+		} else {
+			dlen = _dstlen;
+		}
+
+		zs.next_in = src1;
+		zs.avail_in = slen;
+		zs.next_out = dst1;
+		zs.avail_out = dlen;
+		if (!ending) {
+			ret = deflate(&zs, Z_NO_FLUSH);
+			if (ret != Z_OK) {
+				deflateEnd(&zs);
+				zerr(ret);
+				return (-1);
+			}
+		} else {
+			ret = deflate(&zs, Z_FINISH);
+			if (ret != Z_STREAM_END) {
+				deflateEnd(&zs);
+				if (ret == Z_OK)
+					zerr(Z_BUF_ERROR);
+				else
+					zerr(ret);
+				return (-1);
+			}
+		}
+		dst1 += (dlen - zs.avail_out);
+		_dstlen -= (dlen - zs.avail_out);
+		src1 += slen;
+		_srclen -= slen;
 	}
-	*dstlen = zs.total_out;
+
+	*dstlen = *dstlen - _dstlen;
 	ret = deflateEnd(&zs);
 	if (ret != Z_OK) {
 		zerr(ret);
@@ -120,12 +164,11 @@ zlib_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 {
 	z_stream zs;
 	int err;
-
-	bzero(&zs, sizeof (zs));
-	zs.next_in = (unsigned char *)src;
-	zs.avail_in = srclen;
-	zs.next_out = dst;
-	zs.avail_out = *dstlen;
+	unsigned int slen, dlen;
+	size_t _srclen = srclen;
+	size_t _dstlen = *dstlen;
+	uchar_t *dst1 = dst;
+	uchar_t *src1 = src;
 
 	zs.zalloc = slab_alloc_ui;
 	zs.zfree = slab_free;
@@ -136,16 +179,45 @@ zlib_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 		return (-1);
 	}
 
-	if ((err = inflate(&zs, Z_FINISH)) != Z_STREAM_END) {
-		inflateEnd(&zs);
-		if (err == Z_OK)
-			zerr(Z_BUF_ERROR);
-		else
+	while (_srclen > 0) {
+		if (_srclen > SINGLE_CALL_MAX) {
+			slen = SINGLE_CALL_MAX;
+		} else {
+			slen = _srclen;
+		}
+		if (_dstlen > SINGLE_CALL_MAX) {
+			dlen = SINGLE_CALL_MAX;
+		} else {
+			dlen = _dstlen;
+		}
+
+		zs.next_in = src1;
+		zs.avail_in = slen;
+		zs.next_out = dst1;
+		zs.avail_out = dlen;
+
+		err = inflate(&zs, Z_NO_FLUSH);
+		if (err != Z_OK && err != Z_STREAM_END) {
 			zerr(err);
-		return (-1);
+			return (-1);
+		}
+
+		dst1 += (dlen - zs.avail_out);
+		_dstlen -= (dlen - zs.avail_out);
+		src1 += (slen - zs.avail_in);
+		_srclen -= (slen - zs.avail_in);
+
+		if (err == Z_STREAM_END) {
+			if (_srclen > 0) {
+				zerr(Z_DATA_ERROR);
+				return (-1);
+			} else {
+				break;
+			}
+		}
 	}
 
-	*dstlen = zs.total_out;
+	*dstlen = _dstlen;
 	inflateEnd(&zs);
 	return (0);
 }

@@ -159,7 +159,7 @@ bzip2_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 		 int level, uchar_t chdr, void *data)
 {
 	bz_stream bzs;
-	int ret, ending;
+	int ret;
 	unsigned int slen, dlen;
 	size_t _srclen = srclen;
 	size_t _dstlen = *dstlen;
@@ -181,7 +181,6 @@ bzip2_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 			slen = SINGLE_CALL_MAX;
 		} else {
 			slen = _srclen;
-			ending = 1;
 		}
 		if (_dstlen > SINGLE_CALL_MAX) {
 			dlen = SINGLE_CALL_MAX;
