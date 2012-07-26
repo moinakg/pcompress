@@ -29,6 +29,11 @@
 #include <pcompress.h>
 #include <allocator.h>
 
+/*
+ * Max buffer size allowed for a single bzip2 compress/decompress call.
+ */
+#define	SINGLE_CALL_MAX (2147483648UL)
+
 static void *
 slab_alloc_i(void *p, int items, int size) {
 	void *ptr;
@@ -85,8 +90,12 @@ bzip2_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 	       int level, uchar_t chdr, void *data)
 {
 	bz_stream bzs;
-	int ret;
-	unsigned int _dstlen;
+	int ret, ending;
+	unsigned int slen, dlen;
+	size_t _srclen = srclen;
+	size_t _dstlen = *dstlen;
+	uchar_t *dst1 = dst;
+	uchar_t *src1 = src;
 
 	bzs.bzalloc = slab_alloc_i;
 	bzs.bzfree = slab_free;
@@ -98,24 +107,49 @@ bzip2_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 		return (-1);
 	}
 
-	bzs.next_in = src;
-	bzs.avail_in = srclen;
-	bzs.next_out = dst;
-	bzs.avail_out = *dstlen;
+	ending = 0;
+	while (_srclen > 0) {
+		if (_srclen > SINGLE_CALL_MAX) {
+			slen = SINGLE_CALL_MAX;
+		} else {
+			slen = _srclen;
+			ending = 1;
+		}
+		if (_dstlen > SINGLE_CALL_MAX) {
+			dlen = SINGLE_CALL_MAX;
+		} else {
+			dlen = _dstlen;
+		}
 
-	ret = BZ2_bzCompress(&bzs, BZ_FINISH);
-	if (ret == BZ_FINISH_OK) {
-		BZ2_bzCompressEnd(&bzs);
-		return (-1);
-	}
-	if (ret != BZ_STREAM_END) {
-		BZ2_bzCompressEnd(&bzs);
-		bzerr(ret);
-		return (-1);
+		bzs.next_in = src1;
+		bzs.avail_in = slen;
+		bzs.next_out = dst1;
+		bzs.avail_out = dlen;
+		if (!ending) {
+			ret = BZ2_bzCompress(&bzs, BZ_RUN);
+			if (ret != BZ_RUN_OK) {
+				BZ2_bzCompressEnd(&bzs);
+				return (-1);
+			}
+		} else {
+			ret = BZ2_bzCompress(&bzs, BZ_FINISH);
+			if (ret == BZ_FINISH_OK) {
+				BZ2_bzCompressEnd(&bzs);
+				return (-1);
+			}
+			if (ret != BZ_STREAM_END) {
+				BZ2_bzCompressEnd(&bzs);
+				return (-1);
+			}
+		}
+		dst1 += (dlen - bzs.avail_out);
+		_dstlen -= (dlen - bzs.avail_out);
+		src1 += slen;
+		_srclen -= slen;
 	}
 
 	/* normal termination */
-	*dstlen -= bzs.avail_out;
+	*dstlen = *dstlen - _dstlen;
 	BZ2_bzCompressEnd(&bzs);
 	return (0);
 }
@@ -125,7 +159,12 @@ bzip2_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 		 int level, uchar_t chdr, void *data)
 {
 	bz_stream bzs;
-	int ret;
+	int ret, ending;
+	unsigned int slen, dlen;
+	size_t _srclen = srclen;
+	size_t _dstlen = *dstlen;
+	uchar_t *dst1 = dst;
+	uchar_t *src1 = src;
 
 	bzs.bzalloc = slab_alloc_i;
 	bzs.bzfree = slab_free;
@@ -137,25 +176,38 @@ bzip2_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 		return (-1);
 	}
 
-	bzs.next_in = (uchar_t *)src;
-	bzs.avail_in = srclen;
-	bzs.next_out = dst;
-	bzs.avail_out = *dstlen;
+	while (_srclen > 0) {
+		if (_srclen > SINGLE_CALL_MAX) {
+			slen = SINGLE_CALL_MAX;
+		} else {
+			slen = _srclen;
+			ending = 1;
+		}
+		if (_dstlen > SINGLE_CALL_MAX) {
+			dlen = SINGLE_CALL_MAX;
+		} else {
+			dlen = _dstlen;
+		}
 
-	ret = BZ2_bzDecompress(&bzs);
-	if (ret == BZ_FINISH_OK) {
-		BZ2_bzDecompressEnd(&bzs);
-		bzerr(ret);
-		return (-1);
-	}
-	if (ret != BZ_STREAM_END) {
-		BZ2_bzDecompressEnd(&bzs);
-		bzerr(ret);
-		return (-1);
+		bzs.next_in = src1;
+		bzs.avail_in = slen;
+		bzs.next_out = dst1;
+		bzs.avail_out = dlen;
+
+		ret = BZ2_bzDecompress(&bzs);
+		if (ret != BZ_OK && ret != BZ_STREAM_END) {
+			BZ2_bzDecompressEnd(&bzs);
+			bzerr(ret);
+			return (-1);
+		}
+		dst1 += (dlen - bzs.avail_out);
+		_dstlen -= (dlen - bzs.avail_out);
+		src1 += (slen - bzs.avail_in);
+		_srclen -= (slen - bzs.avail_in);
 	}
 
 	/* normal termination */
-	*dstlen -= bzs.avail_out;
+	*dstlen = _dstlen;
 	BZ2_bzDecompressEnd(&bzs);
 	return (0);
 }
