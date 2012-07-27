@@ -39,6 +39,7 @@ extern "C" {
 #define	MIN_CHUNK	2048
 #define	VERSION		2
 #define	FLAG_DEDUP	1
+#define	UTILITY_VERSION	0.5
 
 #define	COMPRESSED	1
 #define	UNCOMPRESSED	0

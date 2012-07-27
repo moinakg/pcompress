@@ -93,6 +93,7 @@ static void
 usage(void)
 {
 	fprintf(stderr,
+	    "\nPcompress Version %f\n\n"
 	    "Usage:\n"
 	    "1) To compress a file:\n"
 	    "   %s -c <algorithm> [-l <compress level>] [-s <chunk size>] <file>\n"
@@ -127,7 +128,7 @@ usage(void)
 	    "6) Number of threads can optionally be specified: -t <1 - 256 count>\n"
 	    "7) Pass '-M' to display memory allocator statistics\n"
 	    "8) Pass '-C' to display compression statistics\n\n",
-	    exec_name, exec_name, exec_name, exec_name, exec_name, exec_name);
+	    UTILITY_VERSION, exec_name, exec_name, exec_name, exec_name, exec_name, exec_name);
 }
 
 void
