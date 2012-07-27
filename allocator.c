@@ -96,7 +96,7 @@ static struct bufentry **htable;
 static pthread_mutex_t *hbucket_locks;
 static pthread_mutex_t htable_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t slab_table_lock = PTHREAD_MUTEX_INITIALIZER;
-static int inited = 0;
+static int inited = 0, bypass = 0;
 
 static uint64_t total_allocs, oversize_allocs, hash_collisions, hash_entries;
 
@@ -123,6 +123,12 @@ slab_init()
 	int i;
 	size_t slab_sz;
 	int nprocs;
+
+	/* Check bypass env variable. */
+	if (getenv("ALLOCATOR_BYPASS") != NULL) {
+		bypass = 1;
+		return;
+	}
 
 	/* Initialize first NUM_POW2 power of 2 slots. */
 	slab_sz = SLAB_START_SZ;
@@ -177,6 +183,7 @@ slab_cleanup(int quiet)
 	uint64_t nonfreed_oversize;
 
 	if (!inited) return;
+	if (bypass) return;
 
 	if (!quiet) {
 		fprintf(stderr, "Slab Allocation Stats\n");
@@ -276,6 +283,7 @@ void *
 slab_calloc(void *p, size_t items, size_t size) {
 	void *ptr;
 
+	if (bypass) return(calloc(items, size));
 	ptr = slab_alloc(p, items * size);
 	memset(ptr, 0, items * size);
 	return (ptr);
@@ -338,6 +346,7 @@ slab_cache_add(size_t size)
 {
 	uint32_t sindx;
 	struct slabentry *slab;
+	if (bypass) return (0);
 	if (try_dynamic_slab(size)) return (0); /* Already added. */
 
 	/* Locate the hash slot for the size. */
@@ -375,6 +384,7 @@ slab_alloc(void *p, size_t size)
 	void *ptr;
 	struct slabentry *slab;
 
+	if (bypass) return (malloc(size));
 	ATOMIC_ADD(total_allocs, 1);
 	slab = NULL;
 
@@ -444,6 +454,7 @@ slab_free(void *p, void *address)
 	uint32_t hindx;
 
 	if (!address) return;
+	if (bypass) { free(address); return; }
 	hindx = hash6432shift((uint64_t)(address)) & (HTABLE_SZ - 1);
 
 	pthread_mutex_lock(&hbucket_locks[hindx]);

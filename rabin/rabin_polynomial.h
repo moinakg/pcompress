@@ -168,5 +168,6 @@ extern void rabin_parse_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *rabin_i
 extern void rabin_update_hdr(uchar_t *buf, ssize_t rabin_index_sz_cmp,
 			     ssize_t rabin_data_sz_cmp);
 extern void reset_rabin_context(rabin_context_t *ctx);
+extern uint32_t rabin_buf_extra(uint64_t chunksize);
 
-#endif /* _RABIN_POLY_H_ */
+#endif /* _RABIN_0POLY_H_ */

@@ -43,6 +43,14 @@ slab_alloc_ui(void *p, unsigned int items, unsigned int size) {
 	return (ptr);
 }
 
+uint32_t
+zlib_buf_extra(ssize_t buflen)
+{
+	if (buflen > SINGLE_CALL_MAX)
+		buflen = SINGLE_CALL_MAX;
+	return (compressBound(buflen) - buflen);
+}
+
 int
 zlib_init(void **data, int *level, ssize_t chunksize)
 {

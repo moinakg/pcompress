@@ -45,6 +45,7 @@
 #include <pcompress.h>
 #include <allocator.h>
 #include <rabin_polynomial.h>
+#include <zlib.h>
 
 /* Needed for CLzmaEncprops. */
 #include <LzmaEnc.h>
@@ -788,7 +789,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	rabin_context_t *rctx;
 
 	/*
-	 * Compressed buffer size must include zlib scratch space and
+	 * Compressed buffer size must include zlib/dedup scratch space and
 	 * chunk header space.
 	 * See http://www.zlib.net/manual.html#compress2
 	 * 
@@ -799,18 +800,22 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 * See start_decompress() routine for details of chunk header.
 	 * We also keep extra 8-byte space for the last chunk's size.
 	 */
-	compressed_chunksize = chunksize + (chunksize >> 6) +
-	    sizeof (chunksize) + sizeof (uint64_t) + sizeof (chunksize);
-	err = 0;
+	compressed_chunksize = chunksize + sizeof (chunksize) +
+	    sizeof (uint64_t) + sizeof (chunksize) + zlib_buf_extra(chunksize);
+
 	flags = 0;
+	if (enable_rabin_scan) {
+		flags |= FLAG_DEDUP;
+		/* Additional scratch space for dedup arrays. */
+		compressed_chunksize += (rabin_buf_extra(chunksize) -
+					(compressed_chunksize - chunksize));
+	}
+
+	err = 0;
 	thread = 0;
 	slab_cache_add(chunksize);
 	slab_cache_add(compressed_chunksize + CHDR_SZ);
 	slab_cache_add(sizeof (struct cmp_data));
-
-	if (enable_rabin_scan) {
-		flags |= FLAG_DEDUP;
-	}
 
 	/* A host of sanity checks. */
 	if (!pipe_mode) {

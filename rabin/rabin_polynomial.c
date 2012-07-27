@@ -81,6 +81,12 @@ extern int bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new,
 
 uint32_t rabin_polynomial_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
 
+uint32_t
+rabin_buf_extra(uint64_t chunksize)
+{
+	return ((chunksize / RAB_POLYNOMIAL_MIN_BLOCK_SIZE2) * sizeof (uint32_t));
+}
+
 /*
  * Initialize the algorithm with the default params.
  */
