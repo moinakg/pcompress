@@ -80,3 +80,4 @@ of 1GB. Allow pcompress to detect the number of CPU cores and use as many thread
 
     pcompress -c lzma -l14 -s1g file.tar
 
+
