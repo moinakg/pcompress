@@ -67,7 +67,6 @@
 #define	SLAB_START_POW2	8 /* 2 ^ SLAB_START_POW2 = SLAB_START. */
 
 #define	HTABLE_SZ	8192
-#define	TWOM		(2UL * 1024UL * 1024UL)
 #define	ONEM		(1UL * 1024UL * 1024UL)
 
 static const unsigned int bv[] = {
@@ -125,7 +124,8 @@ slab_init()
 		slab_sz *= 2;
 	}
 
-	/* At this point slab_sz is 1M. So linear slots start at 1M. */
+	/* Linear slots start at 1M. */
+	slab_sz = ONEM;
 	for (i = NUM_POW2; i < SLAB_POS_HASH; i++) {
 		slabheads[i].avail = NULL;
 		slabheads[i].next = NULL;
@@ -382,9 +382,10 @@ slab_alloc(void *p, size_t size)
 			/* Next slots are in intervals of 1M. */
 			div = size / ONEM;
 			if (size % ONEM) div++;
-			if (div < NUM_LINEAR) slab = &slabheads[div + NUM_POW2];
+			if (div < NUM_LINEAR) slab = &slabheads[div + NUM_POW2 - 1];
 		}
 	}
+
 	if (!slab) {
 		struct bufentry *buf = (struct bufentry *)malloc(sizeof (struct bufentry));
 		uint32_t hindx;
