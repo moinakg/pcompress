@@ -61,6 +61,11 @@ __FBSDID("$FreeBSD: src/usr.bin/bsdiff/bsdiff/bsdiff.c,v 1.1 2005/08/06 01:59:05
 #include <unistd.h>
 #include <allocator.h>
 #include <utils.h>
+
+#ifdef __USE_SSE_INTRIN__
+#include <emmintrin.h>
+#endif
+
 #include "bscommon.h"
 
 #define MIN(x,y) (((x)<(y)) ? (x) : (y))
@@ -131,7 +136,28 @@ static void qsufsort(bsize_t *I,bsize_t *V,u_char *old,bsize_t oldsize)
 	bsize_t buckets[256];
 	bsize_t i,h,len;
 
+#ifdef __USE_SSE_INTRIN__
+	if (((bsize_t)buckets & (16 - 1)) == 0) { // 16-byte aligned ?
+		int iters;
+		uchar_t *pos;
+
+		iters = (256 * sizeof (bsize_t)) / (16 * 4);
+		__m128i zero = _mm_setzero_si128 ();
+		pos = (uchar_t *)buckets;
+
+		for (i=0; i<iters; i++) {
+			_mm_store_si128((__m128i *)pos, zero);
+			_mm_store_si128((__m128i *)(pos+16), zero);
+			_mm_store_si128((__m128i *)(pos+32), zero);
+			_mm_store_si128((__m128i *)(pos+48), zero);
+			pos += 64;
+		}
+	} else {
+#endif
 	for(i=0;i<256;i++) buckets[i]=0;
+#ifdef __USE_SSE_INTRIN__
+	}
+#endif
 	for(i=0;i<oldsize;i++) buckets[old[i]]++;
 	for(i=1;i<256;i++) buckets[i]+=buckets[i-1];
 	for(i=255;i>0;i--) buckets[i]=buckets[i-1];

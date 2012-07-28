@@ -136,8 +136,7 @@ typedef struct {
 	unsigned int index;
 	unsigned int length;
 	unsigned int new_length;
-	unsigned short refcount;
-	short similar;
+	unsigned char ref, similar;
 } rabin_blockentry_t;
 
 typedef struct {

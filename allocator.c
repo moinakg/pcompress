@@ -100,23 +100,6 @@ static int inited = 0, bypass = 0;
 
 static uint64_t total_allocs, oversize_allocs, hash_collisions, hash_entries;
 
-/*
- * Hash function for 64Bit pointers that generates a 32Bit hash value.
- * Taken from Thomas Wang's Integer hashing paper:
- * http://www.cris.com/~Ttwang/tech/inthash.htm
- */
-uint32_t
-hash6432shift(uint64_t key)
-{
-	key = (~key) + (key << 18); // key = (key << 18) - key - 1;
-	key = key ^ (key >> 31);
-	key = key * 21; // key = (key + (key << 2)) + (key << 4);
-	key = key ^ (key >> 11);
-	key = key + (key << 6);
-	key = key ^ (key >> 22);
-	return (uint32_t) key;
-}
-
 void
 slab_init()
 {

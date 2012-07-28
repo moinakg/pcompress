@@ -151,7 +151,7 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 	ctx->blocks = NULL;
 	if (real_chunksize > 0) {
 		ctx->blocks = (rabin_blockentry_t *)slab_alloc(NULL,
-			blknum * ctx->rabin_poly_min_block_size);
+			blknum * sizeof (rabin_blockentry_t));
 	}
 	if(ctx == NULL || current_window_data == NULL || (ctx->blocks == NULL && real_chunksize > 0)) {
 		fprintf(stderr,
@@ -370,7 +370,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			ctx->blocks[blknum].offset = last_offset;
 			ctx->blocks[blknum].index = blknum; // Need to store for sorting
 			ctx->blocks[blknum].length = length;
-			ctx->blocks[blknum].refcount = 0;
+			ctx->blocks[blknum].ref = 0;
 			ctx->blocks[blknum].similar = 0;
 			ctx->blocks[blknum].cksum_n_offset = cur_sketch;
 			memset(fplist, 0, fplist_sz);
@@ -399,7 +399,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			ctx->blocks[blknum].offset = last_offset;
 			ctx->blocks[blknum].index = blknum;
 			ctx->blocks[blknum].length = *size - last_offset;
-			ctx->blocks[blknum].refcount = 0;
+			ctx->blocks[blknum].ref = 0;
 			ctx->blocks[blknum].similar = 0;
 			ctx->blocks[blknum].cksum_n_offset = cur_sketch;
 			blknum++;
@@ -445,7 +445,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			    memcmp(prev_offset, buf1 + ctx->blocks[blk].offset, prev_length) == 0) {
 				ctx->blocks[blk].similar = SIMILAR_EXACT;
 				ctx->blocks[blk].index = prev_index;
-				(ctx->blocks[prev_blk].refcount)++;
+				ctx->blocks[prev_blk].ref = 1;
 				matchlen += prev_length;
 				continue;
 			}
@@ -460,11 +460,11 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			for (blk = 0; blk < blknum; blk++) {
 				if (ctx->blocks[blk].similar) continue;
 
-				if (blk > 0 && ctx->blocks[blk].refcount == 0 &&
+				if (blk > 0 && ctx->blocks[blk].ref == 0 &&
 				    ctx->blocks[blk].cksum_n_offset == prev_cksum) {
 					ctx->blocks[blk].index = prev_index;
 					ctx->blocks[blk].similar = SIMILAR_PARTIAL;
-					(ctx->blocks[prev_blk].refcount)++;
+					ctx->blocks[prev_blk].ref = 1;
 					matchlen += prev_length/2;
 					continue;
 				}
@@ -502,7 +502,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 				 * size.
 				 */
 				if (prev_index == 0) {
-					if (be->refcount == 0) {
+					if (be->ref == 0) {
 						prev_index = pos;
 						prev_length = be->length;
 					}
@@ -511,7 +511,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 					trans[blk] = pos;
 					pos++;
 				} else {
-					if (be->refcount > 0) {
+					if (be->ref > 0) {
 						prev_index = 0;
 						prev_length = 0;
 						rabin_index[pos] = be->length;

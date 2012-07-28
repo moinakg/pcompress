@@ -22,7 +22,7 @@ maximum parallelism. It also bundles a simple slab allocator to speed
 repeated allocation of similar chunks. It can work in pipe mode, reading
 from stdin and writing to stdout. It also provides some adaptive compression
 modes in which multiple algorithms are tried per chunk to determine the best
-one for the given chunk. Finally it support 14 compression levels to allow
+one for the given chunk. Finally it supports 14 compression levels to allow
 for ultra compression modes in some algorithms.
 
 Usage
@@ -58,7 +58,8 @@ Usage
 
     Attempt Rabin fingerprinting based deduplication on chunks:
        pcompress -D ...
-       pcompress -D -r ... - Do NOT split chunks at a rabin boundary. Default is to split.
+       pcompress -D -r ... - Do NOT split chunks at a rabin boundary. Default
+                             is to split.
 
     Perform Delta Encoding in addition to Exact Dedup:
        pcompress -E ... - This also implies '-D'.
@@ -66,6 +67,13 @@ Usage
     Number of threads can optionally be specified: -t <1 - 256 count>
     Pass '-M' to display memory allocator statistics
     Pass '-C' to display compression statistics
+
+Environment Variables
+=====================
+
+Set ALLOCATOR_BYPASS=1 in the environment to avoid using the the built-in
+allocator. Due to the the way it rounds up an allocation request to the nearest
+slab the built-in allocator can allocate extra unused memory.
 
 Examples
 ========
@@ -80,4 +88,41 @@ of 1GB. Allow pcompress to detect the number of CPU cores and use as many thread
 
     pcompress -c lzma -l14 -s1g file.tar
 
+Compression Algorithms
+======================
 
+LZFX	- Ultra Fast, average compression. This algorithm is the fastest overall.
+	  Levels: 1 - 5
+LZ4	- Very Fast, better compression than LZFX.
+	  Levels: 1 - 3
+Zlib	- Fast, better compression.
+	  Levels: 1 - 9
+Bzip2	- Slow, much better compression than Zlib.
+	  Levels: 1 - 9
+LZMA	- Very slow. Extreme compression.
+	  Levels: 1 - 14
+PPMD	- Slow. Extreme compression for Text, average compression for binary.
+	  Levels: 1 - 14.
+
+Adapt	- Very slow synthetic mode. Both Bzip2 and PPMD are tried per chunk and
+	  better result selected.
+	  Levels: 1 - 14
+Adapt2	- Ultra slow synthetic mode. Both LZMA and PPMD are tried per chunk and
+	  better result selected. Can give best compression ration when splitting
+	  file into multiple chunks.
+	  Levels: 1 - 14
+
+It is possible for a single chunk to span the entire file if enough RAM is
+available. However for adaptive modes to be effective for large files, especially
+multi-file archives splitting into chunks is required so that best compression
+algorithm can be selected for textual and binary portions.
+
+Caveats
+=======
+This utility can gobble up RAM depending on compression algorithm,
+compression level, and dedupe being enabled. Larger chunk sizes can give
+better compression ratio but at the same time use more RAM.
+
+In some cases for files less than a gigabyte. Using Delta Compression in addition
+to exact Dedupe can have a slight negative impact on LZMA compression ratio
+especially when using the large-window ultra compression levels above 12.

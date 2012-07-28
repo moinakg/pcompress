@@ -102,6 +102,7 @@ extern void err_exit(int show_errno, const char *format, ...);
 extern const char *get_execname(const char *);
 extern int parse_numeric(ssize_t *val, const char *str);
 extern char *bytes_to_size(uint64_t bytes);
+extern uint32_t hash6432shift(uint64_t key);
 extern ssize_t Read(int fd, void *buf, size_t count);
 extern ssize_t Read_Adjusted(int fd, uchar_t *buf, size_t count,
 	ssize_t *rabin_count, void *ctx);
