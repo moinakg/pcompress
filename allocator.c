@@ -51,20 +51,20 @@
 #ifndef DEBUG_NO_SLAB
 /*
  * Number of slabs:
- * 256 bytes to 1M in power of 2 steps: 13
+ * 64 bytes to 1M in power of 2 steps: 15
  * 1M to 128M in linear steps of 1M: 128
  * 200 dynamic slab slots: 200
  *
  * By doing this we try to get reasonable memory usage while not
  * sacrificing performance.
  */
-#define	NUM_POW2	13
+#define	NUM_POW2	15
 #define NUM_LINEAR	128
 #define NUM_SLAB_HASH	200 /* Dynamic slabs hashtable size. */
 #define	NUM_SLABS	(NUM_POW2 + NUM_LINEAR + NUM_SLAB_HASH)
 #define SLAB_POS_HASH	(NUM_POW2 + NUM_LINEAR)
-#define	SLAB_START_SZ	256 /* Starting slab size in Bytes. */
-#define	SLAB_START_POW2	8 /* 2 ^ SLAB_START_POW2 = SLAB_START. */
+#define	SLAB_START_SZ	64 /* Starting slab size in Bytes. */
+#define	SLAB_START_POW2	6 /* 2 ^ SLAB_START_POW2 = SLAB_START. */
 
 #define	HTABLE_SZ	8192
 #define	ONEM		(1UL * 1024UL * 1024UL)
@@ -376,7 +376,7 @@ slab_alloc(void *p, size_t size)
 
 	if (!slab) {
 		if (size <= ONEM) {
-			/* First eleven slots are power of 2 sizes upto 1M. */
+			/* First fifteen slots are power of 2 sizes upto 1M. */
 			slab = &slabheads[find_slot(size)];
 		} else {
 			/* Next slots are in intervals of 1M. */

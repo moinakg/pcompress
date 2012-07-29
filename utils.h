@@ -102,7 +102,6 @@ extern void err_exit(int show_errno, const char *format, ...);
 extern const char *get_execname(const char *);
 extern int parse_numeric(ssize_t *val, const char *str);
 extern char *bytes_to_size(uint64_t bytes);
-extern uint32_t hash6432shift(uint64_t key);
 extern ssize_t Read(int fd, void *buf, size_t count);
 extern ssize_t Read_Adjusted(int fd, uchar_t *buf, size_t count,
 	ssize_t *rabin_count, void *ctx);
@@ -133,6 +132,25 @@ roundup_pow_two(unsigned int v) {
 	v++;
 	return (v);
 }
+
+/*
+ * Hash function for 64Bit pointers/numbers that generates
+ * a 32Bit hash value.
+ * Taken from Thomas Wang's Integer hashing paper:
+ * http://www.cris.com/~Ttwang/tech/inthash.htm
+ */
+static uint32_t
+hash6432shift(uint64_t key)
+{
+	key = (~key) + (key << 18); // key = (key << 18) - key - 1;
+	key = key ^ (key >> 31);
+	key = key * 21; // key = (key + (key << 2)) + (key << 4);
+	key = key ^ (key >> 11);
+	key = key + (key << 6);
+	key = key ^ (key >> 22);
+	return (uint32_t) key;
+}
+
 
 #ifdef	__cplusplus
 }
