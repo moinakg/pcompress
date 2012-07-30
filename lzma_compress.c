@@ -64,26 +64,38 @@ lzma_init(void **data, int *level, ssize_t chunksize)
 			 * compression.
 			 */
 			p->dictSize = LZMA_DEFAULT_DICT;
+
 		} else {
 			/*
 			 * Let LZMA determine best dict size.
 			 */
 			p->dictSize = 0;
 		}
-		/* Determine the fast bytes value. */
+
+		/* Determine the fast bytes value and also adjust dict size further. */
 		if (*level < 7) {
 			p->fb = 32;
 
 		} else if (*level < 10) {
 			p->fb = 64;
 
-		} else if (*level < 13) {
+		} else if (*level == 11) {
 			p->fb = 64;
 			p->mc = 128;
 
-		} else {
+		} else if (*level == 12) {
 			p->fb = 128;
 			p->mc = 256;
+
+		} else if (*level == 13) {
+			p->fb = 64;
+			p->mc = 128;
+			p->dictSize = (1 << 27);
+
+		} else if (*level == 14) {
+			p->fb = 128;
+			p->mc = 256;
+			p->dictSize = (1 << 28);
 		}
 		if (*level > 9) *level = 9;
 		p->level = *level;
