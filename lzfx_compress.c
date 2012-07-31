@@ -103,8 +103,9 @@ lz_fx_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 	unsigned int _dstlen = *dstlen;
 
 	rv = lzfx_compress(src, _srclen, dst, &_dstlen, lzdat->htab_bits);
-	if (rv == -1) {
-		lz_fx_err(rv);
+	if (rv != 0) {
+		if (rv != LZFX_ESIZE)
+			lz_fx_err(rv);
 		return (-1);
 	}
 	*dstlen = _dstlen;
@@ -121,7 +122,7 @@ lz_fx_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 	unsigned int _dstlen = *dstlen;
 
 	rv = lzfx_decompress(src, _srclen, dst, &_dstlen);
-	if (rv == -1) {
+	if (rv != 0) {
 		lz_fx_err(rv);
 		return (-1);
 	}

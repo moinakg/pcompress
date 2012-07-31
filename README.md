@@ -99,18 +99,31 @@ Zlib	- Fast, better compression.
 	  Levels: 1 - 9
 Bzip2	- Slow, much better compression than Zlib.
 	  Levels: 1 - 9
+
 LZMA	- Very slow. Extreme compression.
 	  Levels: 1 - 14
+          Till level 9 it is standard LZMA parameters. Levels 10 - 12 use
+          more memory and higher match iterations so are slower. Levels
+          13 and 14 use larger dictionaries upto 256MB and really suck up
+          RAM. Use these levels only if you have at the minimum 4GB RAM on
+          your system.
+
 PPMD	- Slow. Extreme compression for Text, average compression for binary.
+          This also requires lots of RAM similar to LZMA.
 	  Levels: 1 - 14.
 
 Adapt	- Very slow synthetic mode. Both Bzip2 and PPMD are tried per chunk and
 	  better result selected.
 	  Levels: 1 - 14
 Adapt2	- Ultra slow synthetic mode. Both LZMA and PPMD are tried per chunk and
-	  better result selected. Can give best compression ration when splitting
+	  better result selected. Can give best compression ratio when splitting
 	  file into multiple chunks.
 	  Levels: 1 - 14
+          Since both LZMA and PPMD are used together memory requirements are
+          quite extensive especially if you are also using extreme levels above
+          10. For example with 64MB chunk, Level 14, 2 threads and with or without
+          dedupe, it uses upto 3.5GB physical RAM. So minimum requirement is 6GB
+          RAM *and* at least 4GB physical swap.
 
 It is possible for a single chunk to span the entire file if enough RAM is
 available. However for adaptive modes to be effective for large files, especially
@@ -119,10 +132,14 @@ algorithm can be selected for textual and binary portions.
 
 Caveats
 =======
-This utility can gobble up RAM depending on compression algorithm,
+This utility is not meant for resource constrained environments. Minimum memory
+usage (RES/RSS) with barely meaningful settings is around 10MB. This occurs when
+using the minimal LZFX compression algorithm at level 2 with a 1MB chunk size and
+running 2 threads.
+Normally this utility requires lots of RAM depending on compression algorithm,
 compression level, and dedupe being enabled. Larger chunk sizes can give
 better compression ratio but at the same time use more RAM.
 
 In some cases for files less than a gigabyte. Using Delta Compression in addition
 to exact Dedupe can have a slight negative impact on LZMA compression ratio
-especially when using the large-window ultra compression levels above 12.
+especially when using the large-window ultra compression levels above 10.

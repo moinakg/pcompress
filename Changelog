@@ -1,0 +1,8 @@
+== Changes since 0.5 Alpha release ==
+Further improve LZMA compression parameters to utilize all the 14 levels.
+Tweak some Rabin parmeters for better reduction with zlib and Bzip2.
+Increase the small size slabs a bit.
+Fix slab sizing.
+Fix buffer size computation when allocating Rabin block array.
+Reduce memory usage of Rabin block array.
+Add an SSE optimization for bsdiff.

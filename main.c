@@ -890,7 +890,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	if (nprocs > 1) fprintf(stderr, "s");
 	fprintf(stderr, "\n");
 
-	dary = (struct cmp_data **)slab_alloc(NULL, sizeof (struct cmp_data *) * nprocs);
+	dary = (struct cmp_data **)slab_calloc(NULL, nprocs, sizeof (struct cmp_data *));
 	if (enable_rabin_scan)
 		cread_buf = (uchar_t *)slab_alloc(NULL, compressed_chunksize + CHDR_SZ);
 	else
@@ -1101,7 +1101,10 @@ comp_done:
 	if (err) {
 		if (compfd != -1 && !pipe_mode)
 			unlink(tmpfile1);
-		fprintf(stderr, "Error compressing file: %s\n", filename);
+		if (filename)
+			fprintf(stderr, "Error compressing file: %s\n", filename);
+		else
+			fprintf(stderr, "Error compressing\n");
 	} else {
 		/*
 		* Write a trailer of zero chunk length.
@@ -1133,6 +1136,7 @@ comp_done:
 	}
 	if (dary != NULL) {
 		for (i = 0; i < nprocs; i++) {
+			if (!dary[i]) continue;
 			slab_free(NULL, dary[i]->uncompressed_chunk);
 			slab_free(NULL, dary[i]->cmp_seg);
 			if (enable_rabin_scan) {
