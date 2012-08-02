@@ -1,4 +1,7 @@
-== Changes since 0.5 Alpha release ==
+== 0.6 Alpha bugfix release ==
+Fix crash when algo init function returns error.
+Fix LZFX error handling.
+More updates to README.
 Further improve LZMA compression parameters to utilize all the 14 levels.
 Tweak some Rabin parmeters for better reduction with zlib and Bzip2.
 Increase the small size slabs a bit.
