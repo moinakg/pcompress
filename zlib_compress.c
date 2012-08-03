@@ -225,7 +225,7 @@ zlib_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 		}
 	}
 
-	*dstlen = _dstlen;
+	*dstlen = *dstlen - _dstlen;
 	inflateEnd(&zs);
 	return (0);
 }

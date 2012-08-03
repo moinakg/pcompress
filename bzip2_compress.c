@@ -206,7 +206,7 @@ bzip2_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 	}
 
 	/* normal termination */
-	*dstlen = _dstlen;
+	*dstlen = *dstlen - _dstlen;
 	BZ2_bzDecompressEnd(&bzs);
 	return (0);
 }

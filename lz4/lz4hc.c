@@ -102,6 +102,9 @@
 //**************************************
 #include <stdlib.h>   // calloc, free
 #include <string.h>   // memset, memcpy
+#ifdef __USE_SSE_INTRIN__
+#include <emmintrin.h>
+#endif
 #include "lz4hc.h"
 
 #define ALLOCATOR(s) calloc(1,s)
@@ -358,6 +361,17 @@ inline static int LZ4HC_InsertAndFindBestMatch (LZ4HC_Data_Structure* hc4, const
 			const BYTE* reft = ref+MINMATCH;
 			const BYTE* ipt = ip+MINMATCH;
 
+#ifdef __USE_SSE_INTRIN__
+			while (ipt<matchlimit-15) {
+				int mask;
+				__m128i span1 = _mm_loadu_si128((__m128i *)(reft));
+				__m128i span2 = _mm_loadu_si128((__m128i *)(ipt));
+				mask = _mm_movemask_epi8(_mm_cmpeq_epi8(span1, span2)) ^ 0xffff;
+				if (!mask) { ipt+=16; reft+=16; continue; }
+				ipt += __builtin_ctz(mask);
+				goto _endCount;
+			}
+#endif
 			while (ipt<matchlimit-(STEPSIZE-1))
 			{
 				UARCH diff = AARCH(reft) ^ AARCH(ipt);
@@ -402,6 +416,17 @@ inline static int LZ4HC_InsertAndGetWiderMatch (LZ4HC_Data_Structure* hc4, const
 			const BYTE* ipt = ip+MINMATCH;
 			const BYTE* startt = ip;
 
+#ifdef __USE_SSE_INTRIN__
+			while (ipt<matchlimit-15) {
+				int mask;
+				__m128i span1 = _mm_loadu_si128((__m128i *)(reft));
+				__m128i span2 = _mm_loadu_si128((__m128i *)(ipt));
+				mask = _mm_movemask_epi8(_mm_cmpeq_epi8(span1, span2)) ^ 0xffff;
+				if (!mask) { ipt+=16; reft+=16; continue; }
+				ipt += __builtin_ctz(mask);
+				goto _endCount;
+			}
+#endif
 			while (ipt<matchlimit-(STEPSIZE-1))
 			{
 				UARCH diff = AARCH(reft) ^ AARCH(ipt);

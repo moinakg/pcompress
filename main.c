@@ -149,7 +149,7 @@ show_compression_stats(uint64_t chunksize)
 /*
  * This routine is called in multiple threads. Calls the decompression handler
  * as encoded in the file header. For adaptive mode the handler adapt_decompress()
- * in turns looks at the chunk header and call the actualy decompression
+ * in turns looks at the chunk header and calls the actual decompression
  * routine.
  */
 static void *

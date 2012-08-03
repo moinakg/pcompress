@@ -85,7 +85,6 @@ lz4_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 
 	if (lzdat->level == 1) {
 		rv = LZ4_compress(src, dst, _srclen);
-
 	} else if (lzdat->level == 2) {
 		rv = LZ4_compress(src, dst, _srclen);
 		if (rv == 0) {
@@ -127,15 +126,14 @@ lz4_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 
 		sz1 = ntohl(*((int *)src));
 		rv = LZ4_uncompress(src + sizeof (int), dst, sz1);
-		if (rv == 0) {
+		if (rv != sz1) {
 			return (-1);
 		}
 		memcpy(src, dst, sz1);
 		rv = LZ4_uncompress(src, dst, _dstlen);
 	}
-	if (rv == 0) {
+	if (rv != srclen) {
 		return (-1);
 	}
-	*dstlen = rv;
 	return (0);
 }
