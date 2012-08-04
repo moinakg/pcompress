@@ -56,6 +56,7 @@ extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
 extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, size_t size,
 	uint64_t crc, uint64_t *cnt);
 extern uint32_t zlib_buf_extra(ssize_t buflen);
+extern int lz4_buf_extra(ssize_t buflen);
 
 extern int zlib_compress(void *src, size_t srclen, void *dst,
 	size_t *destlen, int level, uchar_t chdr, void *data);

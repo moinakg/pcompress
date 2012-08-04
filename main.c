@@ -398,8 +398,20 @@ start_decompress(const char *filename, const char *to_filename)
 		goto uncomp_done;
 	}
 
-	compressed_chunksize = chunksize + (chunksize >> 6) + sizeof (uint64_t)
-	    + sizeof (chunksize);
+	compressed_chunksize = chunksize + sizeof (chunksize) +
+	    sizeof (uint64_t) + sizeof (chunksize) + zlib_buf_extra(chunksize);
+
+	/*
+	 * Adjust for LZ4 overflow size if LZ4 was selected.
+	 * TODO: A more generic way to handle this for various algos. I'm too
+	 * lazy to do this at present.
+	 */
+	if (strncmp(algo, "lz4", 3) == 0) {
+		if (chunksize + lz4_buf_extra(chunksize) > compressed_chunksize) {
+			compressed_chunksize += (chunksize + lz4_buf_extra(chunksize) -
+			    compressed_chunksize);
+		}
+	}
 
 	if (flags & FLAG_DEDUP) {
 		enable_rabin_scan = 1;
@@ -803,6 +815,18 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 */
 	compressed_chunksize = chunksize + sizeof (chunksize) +
 	    sizeof (uint64_t) + sizeof (chunksize) + zlib_buf_extra(chunksize);
+
+	/*
+	 * Adjust for LZ4 overflow size if LZ4 was selected.
+	 * TODO: A more generic way to handle this for various algos. I'm too
+	 * lazy to do this at present.
+	 */
+	if (strncmp(algo, "lz4", 3) == 0) {
+		if (chunksize + lz4_buf_extra(chunksize) > compressed_chunksize) {
+			compressed_chunksize += (chunksize + lz4_buf_extra(chunksize) -
+			    compressed_chunksize);
+		}
+	}
 
 	flags = 0;
 	if (enable_rabin_scan) {
