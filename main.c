@@ -195,47 +195,51 @@ redo:
 		_chunksize = ntohll(*((ssize_t *)rseg));
 	}
 
-	if (HDR & COMPRESSED) {
-		if (enable_rabin_scan && (HDR & CHUNK_FLAG_DEDUP)) {
-			uchar_t *cmpbuf, *ubuf;
+	if (enable_rabin_scan && (HDR & CHUNK_FLAG_DEDUP)) {
+		uchar_t *cmpbuf, *ubuf;
 
-			/* Extract various sizes from rabin header. */
-			rabin_parse_hdr(cseg, &blknum, &rabin_index_sz, &rabin_data_sz,
-					&rabin_index_sz_cmp, &rabin_data_sz_cmp, &_chunksize);
-			memcpy(tdat->uncompressed_chunk, cseg, RABIN_HDR_SIZE);
+		/* Extract various sizes from rabin header. */
+		rabin_parse_hdr(cseg, &blknum, &rabin_index_sz, &rabin_data_sz,
+				&rabin_index_sz_cmp, &rabin_data_sz_cmp, &_chunksize);
+		memcpy(tdat->uncompressed_chunk, cseg, RABIN_HDR_SIZE);
 
-			/*
-			 * Uncompress the data chunk first and then uncompress the index.
-			 * The uncompress routines can use extra bytes at the end for temporary
-			 * state/dictionary info. Since data chunk directly follows index
-			 * uncompressing index first corrupts the data.
-			 */
-			cmpbuf = cseg + RABIN_HDR_SIZE + rabin_index_sz_cmp;
-			ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE + rabin_index_sz;
+		/*
+		 * Uncompress the data chunk first and then uncompress the index.
+		 * The uncompress routines can use extra bytes at the end for temporary
+		 * state/dictionary info. Since data chunk directly follows index
+		 * uncompressing index first corrupts the data.
+		 */
+		cmpbuf = cseg + RABIN_HDR_SIZE + rabin_index_sz_cmp;
+		ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE + rabin_index_sz;
+		if (HDR & COMPRESSED) {
 			rv = tdat->decompress(cmpbuf, rabin_data_sz_cmp, ubuf, &_chunksize,
-			    tdat->level, HDR, tdat->data);
+			tdat->level, HDR, tdat->data);
 			if (rv == -1) {
 				tdat->len_cmp = 0;
 				fprintf(stderr, "ERROR: Chunk %d, decompression failed.\n", tdat->id);
 				goto cont;
 			}
-
-			rv = 0;
-			cmpbuf = cseg + RABIN_HDR_SIZE;
-			ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE;
-			if (rabin_index_sz >= 90) {
-				/* Index should be at least 90 bytes to have been compressed. */
-				rv = lzma_decompress(cmpbuf, rabin_index_sz_cmp, ubuf,
-				    &rabin_index_sz, tdat->rctx->level, 0, tdat->rctx->lzma_data);
-			} else {
-				memcpy(ubuf, cmpbuf, rabin_index_sz);
-			}
 		} else {
-			rv = tdat->decompress(cseg, tdat->len_cmp, tdat->uncompressed_chunk,
-			    &_chunksize, tdat->level, HDR, tdat->data);
+			memcpy(ubuf, cmpbuf, _chunksize);
+		}
+
+		rv = 0;
+		cmpbuf = cseg + RABIN_HDR_SIZE;
+		ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE;
+		if (rabin_index_sz >= 90) {
+			/* Index should be at least 90 bytes to have been compressed. */
+			rv = lzma_decompress(cmpbuf, rabin_index_sz_cmp, ubuf,
+			    &rabin_index_sz, tdat->rctx->level, 0, tdat->rctx->lzma_data);
+		} else {
+			memcpy(ubuf, cmpbuf, rabin_index_sz);
 		}
 	} else {
-		memcpy(cseg + CHDR_SZ, tdat->uncompressed_chunk, _chunksize);
+		if (HDR & COMPRESSED) {
+			rv = tdat->decompress(cseg, tdat->len_cmp, tdat->uncompressed_chunk,
+			&_chunksize, tdat->level, HDR, tdat->data);
+		} else {
+			memcpy(tdat->uncompressed_chunk, cseg, _chunksize);
+		}
 	}
 	tdat->len_cmp = _chunksize;
 
@@ -609,6 +613,7 @@ perform_compress(void *dat) {
 	typeof (tdat->chunksize) _chunksize, len_cmp, rabin_index_sz, index_size_cmp;
 	int type, rv;
 	uchar_t *compressed_chunk;
+	ssize_t rbytes;
 
 redo:
 	sem_wait(&tdat->start_sem);
@@ -619,18 +624,20 @@ redo:
 	}
 
 	compressed_chunk = tdat->compressed_chunk + CHDR_SZ;
+	rbytes = tdat->rbytes;
 	/* Perform Dedup if enabled. */
 	if (enable_rabin_scan) {
 		rabin_context_t *rctx;
-		ssize_t rbytes;
 
 		/*
-		 * Compute checksum of original uncompressed chunk.
+		 * Compute checksum of original uncompressed chunk. When doing dedup
+		 * cmp_seg hold original data instead of uncompressed_chunk. We dedup
+		 * into uncompressed_chunk so that compress transforms uncompressed_chunk
+		 * back into cmp_seg. Avoids an extra memcpy().
 		 */
 		tdat->crc64 = lzma_crc64(tdat->cmp_seg, tdat->rbytes, 0);
 
 		rctx = tdat->rctx;
-		rbytes = tdat->rbytes;
 		reset_rabin_context(tdat->rctx);
 		rctx->cbuf = tdat->uncompressed_chunk;
 		rabin_index_sz = rabin_dedup(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0, NULL);
@@ -653,7 +660,6 @@ redo:
 	if (enable_rabin_scan && tdat->rctx->valid) {
 		_chunksize = tdat->rbytes - rabin_index_sz - RABIN_HDR_SIZE;
 		index_size_cmp = rabin_index_sz;
-		memcpy(compressed_chunk, tdat->uncompressed_chunk, RABIN_HDR_SIZE);
 
 		rv = 0;
 		if (rabin_index_sz >= 90) {
@@ -669,16 +675,31 @@ redo:
 		index_size_cmp += RABIN_HDR_SIZE;
 		rabin_index_sz += RABIN_HDR_SIZE;
 		if (rv == 0) {
+			memcpy(compressed_chunk, tdat->uncompressed_chunk, RABIN_HDR_SIZE);
 			/* Compress data chunk. */
 			rv = tdat->compress(tdat->uncompressed_chunk + rabin_index_sz,
 			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
 		            tdat->level, 0, tdat->data);
+
+			/* Can't compress data just retain as-is. */
+			if (rv < 0)
+				memcpy(compressed_chunk + index_size_cmp,
+				    tdat->uncompressed_chunk + rabin_index_sz, _chunksize);
 			/* Now update rabin header with the compressed sizes. */
 			rabin_update_hdr(compressed_chunk, index_size_cmp - RABIN_HDR_SIZE,
 					 _chunksize);
+		} else {
+			/* If rabin index compression fails, we just drop down to plain
+			 * compression and avoid dedup. Should be pretty rare case.
+			 */
+			tdat->rctx->valid = 0;
+			memcpy(tdat->uncompressed_chunk, tdat->cmp_seg, rbytes);
+			tdat->rbytes = rbytes;
+			goto plain_compress;
 		}
 		_chunksize += index_size_cmp;
 	} else {
+plain_compress:
 		_chunksize = tdat->rbytes;
 		rv = tdat->compress(tdat->uncompressed_chunk, tdat->rbytes,
 		    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data);
@@ -690,8 +711,9 @@ redo:
 	 * chunk will be left uncompressed.
 	 */
 	tdat->len_cmp = _chunksize;
-	if (_chunksize >= tdat->chunksize || rv < 0) {
-		memcpy(compressed_chunk, tdat->uncompressed_chunk, tdat->rbytes);
+	if (_chunksize >= rbytes || rv < 0) {
+		if (!enable_rabin_scan || !tdat->rctx->valid)
+			memcpy(compressed_chunk, tdat->uncompressed_chunk, tdat->rbytes);
 		type = UNCOMPRESSED;
 		tdat->len_cmp = tdat->rbytes;
 	} else {
@@ -866,8 +888,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		 * Adjust chunk size for small files. We then get an archive with
 		 * a single chunk for the entire file.
 		 */
-		if (sbuf.st_size < chunksize) {
+		if (sbuf.st_size <= chunksize) {
 			chunksize = sbuf.st_size;
+			enable_rabin_split = 0; // Do not split for whole files.
 			nthreads = 1;
 		} else {
 			if (nthreads == 0 || nthreads > sbuf.st_size / chunksize) {
@@ -1241,6 +1264,14 @@ init_algo(const char *algo, int bail)
 		_init_func = lz4_init;
 		_deinit_func = lz4_deinit;
 		_stats_func = lz4_stats;
+		rv = 0;
+
+	} else if (memcmp(algorithm, "none", 4) == 0) {
+		_compress_func = none_compress;
+		_decompress_func = none_decompress;
+		_init_func = none_init;
+		_deinit_func = none_deinit;
+		_stats_func = none_stats;
 		rv = 0;
 
 	/* adapt2 and adapt ordering of the checks matter here. */

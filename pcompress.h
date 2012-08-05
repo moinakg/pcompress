@@ -72,6 +72,8 @@ extern int lz_fx_compress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
 extern int lz4_compress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
+extern int none_compress(void *src, size_t srclen, void *dst,
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 
 extern int zlib_decompress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
@@ -87,6 +89,8 @@ extern int lz_fx_decompress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
 extern int lz4_decompress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
+extern int none_decompress(void *src, size_t srclen, void *dst,
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 
 extern int adapt_init(void **data, int *level, ssize_t chunksize);
 extern int adapt2_init(void **data, int *level, ssize_t chunksize);
@@ -96,12 +100,14 @@ extern int bzip2_init(void **data, int *level, ssize_t chunksize);
 extern int zlib_init(void **data, int *level, ssize_t chunksize);
 extern int lz_fx_init(void **data, int *level, ssize_t chunksize);
 extern int lz4_init(void **data, int *level, ssize_t chunksize);
+extern int none_init(void **data, int *level, ssize_t chunksize);
 
 extern int adapt_deinit(void **data);
 extern int lzma_deinit(void **data);
 extern int ppmd_deinit(void **data);
 extern int lz_fx_deinit(void **data);
 extern int lz4_deinit(void **data);
+extern int none_deinit(void **data);
 
 extern void adapt_stats(int show);
 extern void ppmd_stats(int show);
@@ -110,6 +116,7 @@ extern void bzip2_stats(int show);
 extern void zlib_stats(int show);
 extern void lz_fx_stats(int show);
 extern void lz4_stats(int show);
+extern void none_stats(int show);
 
 /*
  * Per-thread data structure for compression and decompression threads.
