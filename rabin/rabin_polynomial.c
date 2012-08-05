@@ -233,10 +233,10 @@ cmpblks(const void *a, const void *b)
 			return (-1);
 		} else if (a1->length == b1->length) {
 			return (0);
-		} else if (a1->length > b1->length) {
+		} else {
 			return (1);
 		}
-	} else if (a1->cksum_n_offset > b1->cksum_n_offset) {
+	} else {
 		return (1);
 	}
 }
