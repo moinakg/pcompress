@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <stdio.h>
 #include <strings.h>
+#include <string.h>
 #include <limits.h>
 #include <utils.h>
 #include <pcompress.h>

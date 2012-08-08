@@ -102,6 +102,7 @@ extern int lz_fx_init(void **data, int *level, ssize_t chunksize);
 extern int lz4_init(void **data, int *level, ssize_t chunksize);
 extern int none_init(void **data, int *level, ssize_t chunksize);
 
+extern int zlib_deinit(void **data);
 extern int adapt_deinit(void **data);
 extern int lzma_deinit(void **data);
 extern int ppmd_deinit(void **data);

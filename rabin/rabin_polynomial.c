@@ -118,31 +118,26 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 	ctx = (rabin_context_t *)slab_alloc(NULL, sizeof (rabin_context_t));
 	ctx->rabin_poly_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
 
+	ctx->rabin_break_patt = 0;
 	if (((memcmp(algo, "lzma", 4) == 0 || memcmp(algo, "adapt", 5) == 0) &&
 	      chunksize <= LZMA_WINDOW_MAX) || delta_flag) {
 		if (memcmp(algo, "lzfx", 4) == 0 || memcmp(algo, "lz4", 3) == 0 ||
-		    memcmp(algo, "zlib", 4) == 0) {
+		    memcmp(algo, "zlib", 4) == 0 || memcmp(algo, "none", 4) == 0) {
 			ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE2;
 			ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK2;
 			ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE2;
-			ctx->rabin_break_patt = 0;
 		} else {
 			ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE;
 			ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK;
 			ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE;
-			if (memcmp(algo, "bzip2", 5) == 0) {
-				ctx->rabin_break_patt = 0;
-			} else {
-				ctx->rabin_break_patt = RAB_POLYNOMIAL_CONST;
-			}
 		}
 	} else {
 		ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE2;
 		ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK2;
 		ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE2;
-		ctx->rabin_break_patt = 0;
 	}
 
+	ctx->fp_mask = ctx->rabin_avg_block_mask | ctx->rabin_poly_avg_block_size;
 	blknum = chunksize / ctx->rabin_poly_min_block_size;
 	if (chunksize % ctx->rabin_poly_min_block_size)
 		blknum++;
@@ -311,9 +306,11 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		}
 		return (0);
 	}
+
 	if (*size < ctx->rabin_poly_avg_block_size) return;
 	for (i=offset; i<*size; i++) {
-		char cur_byte = buf1[i];
+		uint32_t *splits;
+		uchar_t cur_byte = buf1[i];
 		uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
 		ctx->current_window_data[ctx->window_pos] = cur_byte;
 		/*
@@ -342,7 +339,14 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		 */
 		len1++;
 		fpos[1] = cur_roll_checksum & ctx->rabin_avg_block_mask;
-		fplist[fpos[1]] += cur_roll_checksum;
+		splits = (uint32_t *)(&fplist[fpos[1]]);
+#if BYTE_ORDER == BIG_ENDIAN
+		splits[0]++;
+		splits[0] += cur_roll_checksum & ctx->fp_mask;
+#else
+		splits[1]++;
+		splits[0] += cur_roll_checksum & ctx->fp_mask;
+#endif
 
 		/*
 		 * Perform the following statement without branching:
@@ -466,7 +470,9 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 				if (ctx->blocks[blk].similar) continue;
 
 				if (blk > 0 && ctx->blocks[blk].ref == 0 &&
-				    ctx->blocks[blk].cksum_n_offset == prev_cksum) {
+				    ctx->blocks[blk].cksum_n_offset == prev_cksum &&
+				    ctx->blocks[blk].length - prev_length < 512
+				) {
 					ctx->blocks[blk].index = prev_index;
 					ctx->blocks[blk].similar = SIMILAR_PARTIAL;
 					ctx->blocks[prev_blk].ref = 1;

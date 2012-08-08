@@ -64,6 +64,8 @@ CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -D_7ZIP_ST -DNODEF
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32
 VEC_FLAGS = -ftree-vectorize
 LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
+GEN_OPT = -O3
+RABIN_OPT = -O2
 LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm
 
 ifdef DEBUG
@@ -76,8 +78,8 @@ CPPFLAGS += -DDEBUG_NO_SLAB
 endif
 else
 LINK = g++ -m64 -pthread -msse3
-COMPILE = gcc -m64 -O3 -msse3 -c
-COMPILE_cpp = g++ -m64 -O3 -msse3 -c
+COMPILE = gcc -m64 -msse3 -c
+COMPILE_cpp = g++ -m64 -msse3 -c
 CPPFLAGS += -DNDEBUG
 ifdef DEBUG_NO_SLAB
 CPPFLAGS += -DDEBUG_NO_SLAB
@@ -87,28 +89,28 @@ endif
 all: $(PROG)
 
 $(LZMAOBJS): $(LZMASRCS) $(LZMAHDRS)
-	$(COMPILE) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(GEN_OPT) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(CRCOBJS): $(CRCSRCS) $(CRCHDRS)
-	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(PPMDOBJS): $(PPMDSRCS) $(PPMDHDRS)
-	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(RABINOBJS): $(RABINSRCS) $(RABINHDRS)
-	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(RABIN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(BSDIFFOBJS): $(BSDIFFSRCS) $(BSDIFFHDRS)
-	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(LZFXOBJS): $(LZFXSRCS) $(LZFXHDRS)
-	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(LZ4OBJS): $(LZ4SRCS) $(LZ4HDRS)
-	$(COMPILE) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(MAINOBJS): $(MAINSRCS) $(MAINHDRS)
-	$(COMPILE) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(GEN_OPT) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(PROG): $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) \
 $(CRCOBJS) $(RABINOBJS) $(BSDIFFOBJS)

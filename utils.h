@@ -151,7 +151,6 @@ hash6432shift(uint64_t key)
 	return (uint32_t) key;
 }
 
-
 #ifdef	__cplusplus
 }
 #endif

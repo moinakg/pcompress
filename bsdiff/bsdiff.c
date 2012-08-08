@@ -379,17 +379,17 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 			lastoffset=pos-scan;
 		}
 	}
-	if (eblen > newsize/2) {
+	if (eblen > (newsize/2 + newsize/5)) {
 		rv = 0;
 		goto out;
 	}
 
-	/* Comput uncompressed size of the ctrl data. */
+	/* Compute uncompressed size of the ctrl data. */
 	len = BUFTELL(&pf);
 	valouti32(len-hdrsz, header+4);
 	ulen = len-hdrsz;
 
-	/* If our data can fit in the scratch area use it other alloc. */
+	/* If our data can fit in the scratch area use it otherwise alloc. */
 	if (ulen > scratchsize) {
 		cb = slab_alloc(NULL, ulen);
 	} else {

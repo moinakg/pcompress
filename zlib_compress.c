@@ -34,6 +34,8 @@
  */
 #define	SINGLE_CALL_MAX (2147483648UL)
 
+static void zerr(int ret);
+
 static void *
 slab_alloc_ui(void *p, unsigned int items, unsigned int size) {
 	void *ptr;
@@ -54,13 +56,36 @@ zlib_buf_extra(ssize_t buflen)
 int
 zlib_init(void **data, int *level, ssize_t chunksize)
 {
+	z_stream *zs;
+	int ret;
+
+	zs = slab_alloc(NULL, sizeof (z_stream));
+	zs->zalloc = slab_alloc_ui;
+	zs->zfree = slab_free;
+	zs->opaque = NULL;
+
 	if (*level > 9) *level = 9;
+	ret = deflateInit(zs, *level);
+	if (ret != Z_OK) {
+		zerr(ret);
+		return (-1);
+	}
+
+	*data = zs;
 	return (0);
 }
 
 void
 zlib_stats(int show)
 {
+}
+
+int
+zlib_deinit(void **data)
+{
+	if (*data) {
+		slab_free(NULL, *data);
+	}
 }
 
 static
@@ -97,23 +122,13 @@ int
 zlib_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 	      int level, uchar_t chdr, void *data)
 {
-	z_stream zs;
 	int ret, ending;
 	unsigned int slen, dlen;
 	size_t _srclen = srclen;
 	size_t _dstlen = *dstlen;
 	uchar_t *dst1 = dst;
 	uchar_t *src1 = src;
-
-	zs.zalloc = slab_alloc_ui;
-	zs.zfree = slab_free;
-	zs.opaque = NULL;
-
-	ret = deflateInit(&zs, level);
-	if (ret != Z_OK) {
-		zerr(ret);
-		return (-1);
-	}
+	z_stream *zs = (z_stream *)data;
 
 	ending = 0;
 	while (_srclen > 0) {
@@ -129,21 +144,21 @@ zlib_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 			dlen = _dstlen;
 		}
 
-		zs.next_in = src1;
-		zs.avail_in = slen;
-		zs.next_out = dst1;
-		zs.avail_out = dlen;
+		zs->next_in = src1;
+		zs->avail_in = slen;
+		zs->next_out = dst1;
+		zs->avail_out = dlen;
 		if (!ending) {
-			ret = deflate(&zs, Z_NO_FLUSH);
+			ret = deflate(zs, Z_NO_FLUSH);
 			if (ret != Z_OK) {
-				deflateEnd(&zs);
+				deflateReset(zs);
 				zerr(ret);
 				return (-1);
 			}
 		} else {
-			ret = deflate(&zs, Z_FINISH);
+			ret = deflate(zs, Z_FINISH);
 			if (ret != Z_STREAM_END) {
-				deflateEnd(&zs);
+				deflateReset(zs);
 				if (ret == Z_OK)
 					zerr(Z_BUF_ERROR);
 				else
@@ -151,14 +166,14 @@ zlib_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 				return (-1);
 			}
 		}
-		dst1 += (dlen - zs.avail_out);
-		_dstlen -= (dlen - zs.avail_out);
+		dst1 += (dlen - zs->avail_out);
+		_dstlen -= (dlen - zs->avail_out);
 		src1 += slen;
 		_srclen -= slen;
 	}
 
 	*dstlen = *dstlen - _dstlen;
-	ret = deflateEnd(&zs);
+	ret = deflateReset(zs);
 	if (ret != Z_OK) {
 		zerr(ret);
 		return (-1);

@@ -590,7 +590,7 @@ uncomp_done:
 			slab_free(NULL, dary[i]->uncompressed_chunk);
 			slab_free(NULL, dary[i]->compressed_chunk);
 			if (_deinit_func)
-				_deinit_func(&(tdat->data));
+				_deinit_func(&(dary[i]->data));
 			if (enable_rabin_scan) {
 				destroy_rabin_context(dary[i]->rctx);
 			}
@@ -1222,7 +1222,7 @@ init_algo(const char *algo, int bail)
 		_compress_func = zlib_compress;
 		_decompress_func = zlib_decompress;
 		_init_func = zlib_init;
-		_deinit_func = NULL;
+		_deinit_func = zlib_deinit;
 		_stats_func = zlib_stats;
 		rv = 0;
 
