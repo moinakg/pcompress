@@ -64,19 +64,22 @@ CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -D_7ZIP_ST -DNODEF
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32
 VEC_FLAGS = -ftree-vectorize
 LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
-GEN_OPT = -O3
-RABIN_OPT = -O2
 LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm
 
 ifdef DEBUG
 LINK = g++ -m64 -pthread -msse3
-COMPILE = gcc -m64 -O -g -msse3 -c
-COMPILE_cpp = g++ -m64 -O -g -msse3 -c
+COMPILE = gcc -m64 -g -msse3 -c
+COMPILE_cpp = g++ -m64 -g -msse3 -c
 VEC_FLAGS = 
+LOOP_OPTFLAGS = 
+GEN_OPT = -O
+RABIN_OPT = -O
 ifdef DEBUG_NO_SLAB
 CPPFLAGS += -DDEBUG_NO_SLAB
 endif
 else
+GEN_OPT = -O3
+RABIN_OPT = -O2
 LINK = g++ -m64 -pthread -msse3
 COMPILE = gcc -m64 -msse3 -c
 COMPILE_cpp = g++ -m64 -msse3 -c

@@ -297,7 +297,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			length >= rabin_polynomial_max_block_size) {
 				last_offset = i+1;
 				length = 0;
-				j = 0;
 			}
 		}
 
@@ -342,7 +341,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		splits = (uint32_t *)(&fplist[fpos[1]]);
 #if BYTE_ORDER == BIG_ENDIAN
 		splits[0]++;
-		splits[0] += cur_roll_checksum & ctx->fp_mask;
+		splits[1] += cur_roll_checksum & ctx->fp_mask;
 #else
 		splits[1]++;
 		splits[0] += cur_roll_checksum & ctx->fp_mask;
@@ -362,6 +361,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			memset(fplist, 0, fplist_sz);
 			fpos[0] = 0;
 			len1 = 0;
+			j++;
 		}
 		/*
 		 * Window pos has to rotate from 0 .. RAB_POLYNOMIAL_WIN_SIZE-1
@@ -382,6 +382,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			ctx->blocks[blknum].ref = 0;
 			ctx->blocks[blknum].similar = 0;
 			ctx->blocks[blknum].cksum_n_offset = cur_sketch;
+			ctx->blocks[blknum].mean_n_length = cur_sketch / j;
 			memset(fplist, 0, fplist_sz);
 			fpos[0] = 0;
 			len1 = 0;
@@ -466,23 +467,33 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		}
 
 		if (ctx->delta_flag) {
+			uint64_t prev_mean;
+			prev_mean = 0;
+			prev_cksum = 0;
+			prev_length = 0;
+
 			for (blk = 0; blk < blknum; blk++) {
 				if (ctx->blocks[blk].similar) continue;
 
+				/*
+				 * Compare blocks for similarity.
+				 * Note: Block list by now is sorted by length as well.
+				 */
 				if (blk > 0 && ctx->blocks[blk].ref == 0 &&
 				    ctx->blocks[blk].cksum_n_offset == prev_cksum &&
-				    ctx->blocks[blk].length - prev_length < 512
+				    ctx->blocks[blk].length - prev_length < 512 &&
+				    ctx->blocks[blk].mean_n_length == prev_mean
 				) {
 					ctx->blocks[blk].index = prev_index;
 					ctx->blocks[blk].similar = SIMILAR_PARTIAL;
 					ctx->blocks[prev_blk].ref = 1;
-					matchlen += prev_length/2;
+					matchlen += (prev_length>>1);
 					continue;
 				}
-				prev_offset = buf1 + ctx->blocks[blk].offset;
 				prev_cksum = ctx->blocks[blk].cksum_n_offset;
 				prev_length = ctx->blocks[blk].length;
 				prev_index = ctx->blocks[blk].index;
+				prev_mean = ctx->blocks[blk].mean_n_length;
 				prev_blk = blk;
 			}
 		}
@@ -547,7 +558,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 				prev_index = 0;
 				prev_length = 0;
 				ctx->blocks[pos].cksum_n_offset = be->offset;
-				ctx->blocks[pos].new_length = be->length;
+				ctx->blocks[pos].mean_n_length = be->length;
 				trans[blk] = pos;
 
 				if (be->similar == SIMILAR_EXACT) {
@@ -589,12 +600,12 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 					matchlen = ctx->real_chunksize - *size;
 
 					bsz = bsdiff(old, ctx->blocks[j].length, new,
-					    ctx->blocks[blk].new_length, ctx->cbuf + pos1,
+					    ctx->blocks[blk].mean_n_length, ctx->cbuf + pos1,
 					    buf1 + *size, matchlen);
 					if (bsz == 0) {
-						memcpy(ctx->cbuf + pos1, new, ctx->blocks[blk].new_length);
-						rabin_index[blk] = htonl(ctx->blocks[blk].new_length);
-						pos1 += ctx->blocks[blk].new_length;
+						memcpy(ctx->cbuf + pos1, new, ctx->blocks[blk].mean_n_length);
+						rabin_index[blk] = htonl(ctx->blocks[blk].mean_n_length);
+						pos1 += ctx->blocks[blk].mean_n_length;
 					} else {
 						rabin_index[blk] = htonl(trans[i] |
 						    RABIN_INDEX_FLAG | SET_SIMILARITY_FLAG);

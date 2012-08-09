@@ -47,7 +47,7 @@ zero_rle_encode(const void *const ibuf, const unsigned int ilen,
 			*((unsigned short *)(ob + pos2)) = htons(count);
 			pos2 += 2;
 		} else {
-			unsigned int pos3, pos4, cnt, state;
+			unsigned int pos3, pos4, state;
 			pos3 = pos2;
 			pos2 += 2;
 			if (pos2 > *olen) break;
@@ -56,12 +56,12 @@ zero_rle_encode(const void *const ibuf, const unsigned int ilen,
 			for (;pos1<ilen && pos2<*olen && count<COUNT_MAX;) {
 				if (ib[pos1] != 0) state = 0;
 				if (ib[pos1] == 0 && !state) {
-					cnt = 0;
-					pos4 = pos1;
 					state = 1;
 					// Lookahead if there are at least 4 consecutive zeroes
-					for (;pos4<ilen && ib[pos4] == 0; pos4++) cnt++;
-					if (cnt >= 4) break;
+					if (ilen > 3) {
+						pos4 = *((unsigned int *)(ib+pos1));
+						if (!pos4) break;
+					}
 				}
 				ob[pos2++] = ib[pos1++];
 				count++;

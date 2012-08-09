@@ -133,9 +133,9 @@
 typedef struct {
 	ssize_t offset;
 	uint64_t cksum_n_offset; // Dual purpose variable
+	uint64_t mean_n_length;  // Dual purpose variable
 	unsigned int index;
 	unsigned int length;
-	unsigned int new_length;
 	unsigned char ref, similar;
 } rabin_blockentry_t;
 
