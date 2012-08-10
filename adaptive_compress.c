@@ -197,17 +197,17 @@ adapt_decompress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
-	uchar_t HDR;
+	uchar_t cmp_flags;
 
-	HDR = chdr;
+	cmp_flags = (chdr>>4) & CHDR_ALGO_MASK;
 
-	if (HDR & (COMPRESS_LZMA << 4)) {
+	if (cmp_flags == COMPRESS_LZMA) {
 		return (lzma_decompress(src, srclen, dst, dstlen, level, chdr, adat->lzma_data));
 
-	} else if (HDR & (COMPRESS_BZIP2 << 4)) {
+	} else if (cmp_flags == COMPRESS_BZIP2) {
 		return (bzip2_decompress(src, srclen, dst, dstlen, level, chdr, NULL));
 
-	} else if (HDR & (COMPRESS_PPMD << 4)) {
+	} else if (cmp_flags == COMPRESS_PPMD) {
 		return (ppmd_decompress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data));
 
 	} else {

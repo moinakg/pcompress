@@ -467,11 +467,15 @@ start_decompress(const char *filename, const char *to_filename)
 				UNCOMP_BAIL;
 			}
 		}
-		if (enable_rabin_scan)
+		if (enable_rabin_scan) {
 			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize,
 			    algo, enable_delta_encode);
-		else
+			if (tdat->rctx == NULL) {
+				UNCOMP_BAIL;
+			}
+		} else {
 			tdat->rctx = NULL;
+		}
 		if (pthread_create(&(tdat->thr), NULL, perform_decompress,
 		    (void *)tdat) != 0) {
 			perror("Error in thread creation: ");
@@ -981,11 +985,15 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 				COMP_BAIL;
 			}
 		}
-		if (enable_rabin_scan)
+		if (enable_rabin_scan) {
 			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize,
 			    algo, enable_delta_encode);
-		else
+			if (tdat->rctx == NULL) {
+				COMP_BAIL;
+			}
+		} else {
 			tdat->rctx = NULL;
+		}
 
 		if (pthread_create(&(tdat->thr), NULL, perform_compress,
 		    (void *)tdat) != 0) {

@@ -39,18 +39,23 @@ extern "C" {
 #define	MIN_CHUNK	2048
 #define	VERSION		2
 #define	FLAG_DEDUP	1
-#define	UTILITY_VERSION	0.5
+#define	UTILITY_VERSION	0.6
 
 #define	COMPRESSED	1
 #define	UNCOMPRESSED	0
 #define	CHSIZE_MASK	0x80
 #define	BZIP2_A_NUM	16
 #define	LZMA_A_NUM	32
+#define	CHUNK_FLAG_DEDUP	2
+#define	COMP_EXTN	".pz"
+
+/*
+ * lower 3 bits in higher nibble indicate compression algorithm.
+ */
 #define	COMPRESS_LZMA	1
 #define	COMPRESS_BZIP2	2
 #define	COMPRESS_PPMD	3
-#define	CHUNK_FLAG_DEDUP	2
-#define	COMP_EXTN	".pz"
+#define	CHDR_ALGO_MASK	7
 
 extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
 extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, size_t size,

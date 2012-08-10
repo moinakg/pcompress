@@ -105,7 +105,7 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 	}
 
 	if (chunksize < RAB_MIN_CHUNK_SIZE) {
-		fprintf(stderr, "Minimum chunk size for Dedup must be %l bytes\n",
+		fprintf(stderr, "Minimum chunk size for Dedup must be %llu bytes\n",
 		    RAB_MIN_CHUNK_SIZE);
 		return (NULL);
 	}
