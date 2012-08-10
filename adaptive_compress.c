@@ -87,8 +87,8 @@ adapt_init(void **data, int *level, ssize_t chunksize)
 	if (!adat) {
 		adat = (struct adapt_data *)slab_alloc(NULL, sizeof (struct adapt_data));
 		adat->adapt_mode = 1;
-		adat->ppmd_data = NULL;
-		rv = lzma_init(&(adat->lzma_data), level, chunksize);
+		rv = ppmd_init(&(adat->ppmd_data), level, chunksize);
+		adat->lzma_data = NULL;
 		*data = adat;
 		if (*level > 9) *level = 9;
 	}
@@ -109,10 +109,10 @@ adapt2_init(void **data, int *level, ssize_t chunksize)
 		adat->adapt_mode = 2;
 		adat->ppmd_data = NULL;
 		lv = *level;
-		rv = lzma_init(&(adat->lzma_data), &lv, chunksize);
+		rv = ppmd_init(&(adat->ppmd_data), &lv, chunksize);
 		lv = *level;
 		if (rv == 0)
-			ppmd_init(&(adat->ppmd_data), &lv, chunksize);
+			rv = lzma_init(&(adat->lzma_data), &lv, chunksize);
 		*data = adat;
 		if (*level > 9) *level = 9;
 	}
@@ -126,9 +126,9 @@ adapt_deinit(void **data)
 	int rv;
 
 	if (adat) {
-		rv = lzma_deinit(&(adat->lzma_data));
-		if (adat->ppmd_data)
-			rv += ppmd_deinit(&(adat->ppmd_data));
+		rv = ppmd_deinit(&(adat->ppmd_data));
+		if (adat->lzma_data)
+			rv += lzma_deinit(&(adat->lzma_data));
 		slab_free(NULL, adat);
 		*data = NULL;
 	}
