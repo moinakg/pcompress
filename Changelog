@@ -1,4 +1,26 @@
-== 0.6 Alpha bugfix release ==
+== 0.6 Beta release ==
+Bump version to 0.6
+Fix handling of compression flags in adaptive mode
+Fix error handling when chunk size is too small for dedupe
+Fix initialization of adaptive modes.
+Compute and compare Mean sketch cksum to improve similarity comparison
+Fix optflags settings in Makefile
+Small optimization in zero RLE encoder to avoid scanning during lookahead
+Some minor fixes
+Bias fingerprint value with occurrence counts for a better sketch
+Fix latent bug when calling algo deinit in decompression code
+Reduce diff threshold for slightly greater delta encoding
+Limit similar buffer size difference for less wasted diffing
+Change zlib compression wrapper to use faster deflateReset mechanism
+Reduce optimization level for Dedupe code, it goes faster
+Fix handling of incompressible chunks.
+Fix handling of various dedup failures.
+Add NULL compression option for dedup only compression.
+Remove unneeded checks in qsort comparator.
+Fix buffer sizing for LZ4.
+Fix exit condition checks in LZ4 decompression wrapper.
+Fix buffer size calculation when decompressing LZ4, Zlib and Bzip2 compressed chunks.
+Slight SSE optimization in LZ4HC.
 Fix crash when algo init function returns error.
 Fix LZFX error handling.
 More updates to README.
