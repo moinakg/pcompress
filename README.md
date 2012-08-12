@@ -109,7 +109,8 @@ LZMA	- Very slow. Extreme compression.
           your system.
 
 PPMD	- Slow. Extreme compression for Text, average compression for binary.
-          This also requires lots of RAM similar to LZMA.
+          In addition PPMD decompression time is also high for large chunks.
+          This requires lots of RAM similar to LZMA.
 	  Levels: 1 - 14.
 
 Adapt	- Very slow synthetic mode. Both Bzip2 and PPMD are tried per chunk and

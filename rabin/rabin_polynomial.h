@@ -129,6 +129,8 @@
  */
 #define	SIMILAR_EXACT 1
 #define	SIMILAR_PARTIAL 2
+#define	DELTA_FUZZY 1
+#define	DELTA_LESS_FUZZY 2
 
 typedef struct {
 	ssize_t offset;
