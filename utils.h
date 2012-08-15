@@ -26,6 +26,7 @@
 
 #include <arpa/nameser_compat.h>
 #include <sys/types.h>
+#include <stdint.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -35,11 +36,7 @@ extern "C" {
 #define	DATA_BINARY	2
 
 #if !defined(sun) && !defined(__sun)
-#define ulong_t u_long
 #define uchar_t u_char
-#define uint8_t u_char
-#define uint64_t u_int64_t
-#define uint32_t u_int32_t
 #endif
 
 #if ULONG_MAX == 4294967295UL
@@ -97,6 +94,12 @@ typedef ssize_t bsize_t;
 #endif
 
 #define ISP2(x) ((x != 0) && ((x & (~x + 1)) == x))
+
+#ifdef	DEBUG_STATS
+#define	DEBUG_STAT_EN(...) __VA_ARGS__;
+#else
+#define	DEBUG_STAT_EN(...)
+#endif
 
 extern void err_exit(int show_errno, const char *format, ...);
 extern const char *get_execname(const char *);

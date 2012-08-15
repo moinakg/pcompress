@@ -132,6 +132,12 @@
 #define	DELTA_FUZZY 1
 #define	DELTA_LESS_FUZZY 2
 
+/*
+ * Irreducible polynomial for Rabin modulus. This value is from the
+ * Low Bandwidth Filesystem.
+ */
+#define	FP_POLY  0xbfe6b8a5bf378d83ULL
+
 typedef struct {
 	ssize_t offset;
 	uint64_t cksum_n_offset; // Dual purpose variable

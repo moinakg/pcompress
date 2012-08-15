@@ -74,9 +74,6 @@ VEC_FLAGS =
 LOOP_OPTFLAGS = 
 GEN_OPT = -O
 RABIN_OPT = -O
-ifdef DEBUG_NO_SLAB
-CPPFLAGS += -DDEBUG_NO_SLAB
-endif
 else
 GEN_OPT = -O3
 RABIN_OPT = -O2
@@ -84,9 +81,14 @@ LINK = g++ -m64 -pthread -msse3
 COMPILE = gcc -m64 -msse3 -c
 COMPILE_cpp = g++ -m64 -msse3 -c
 CPPFLAGS += -DNDEBUG
+endif
+
 ifdef DEBUG_NO_SLAB
 CPPFLAGS += -DDEBUG_NO_SLAB
 endif
+
+ifdef DEBUG_STATS
+CPPFLAGS += -DDEBUG_STATS
 endif
 
 all: $(PROG)

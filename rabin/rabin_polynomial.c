@@ -64,6 +64,7 @@
 #include <string.h>
 #include <allocator.h>
 #include <utils.h>
+#include <pthread.h>
 
 #include "rabin_polynomial.h"
 
@@ -81,6 +82,10 @@ extern int bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new,
 
 uint32_t rabin_polynomial_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
 
+static pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
+uint64_t ir[256];
+static int inited = 0;
+
 uint32_t
 rabin_buf_extra(uint64_t chunksize)
 {
@@ -95,6 +100,31 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 	rabin_context_t *ctx;
 	unsigned char *current_window_data;
 	uint32_t blknum;
+
+	/*
+	 * Pre-compute a table of irreducible polynomial evaluations for each
+	 * possible byte value.
+	 */
+	pthread_mutex_lock(&init_lock);
+	if (!inited) {
+		int i;
+		int term;
+		uint64_t val;
+
+		for (blknum = 0; blknum < 256; blknum++) {
+			term = 1;
+			val = 0;
+			for (i=0; i<RAB_POLYNOMIAL_WIN_SIZE; i++) {
+				if (term & FP_POLY) {
+					val = (val << 1) + blknum;
+				}
+				term <<= 1;
+			}
+			ir[blknum] = val;
+		}
+		inited = 1;
+	}
+	pthread_mutex_unlock(&init_lock);
 
 	/*
 	 * Rabin window size must be power of 2 for optimization.
@@ -249,10 +279,10 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 	uint32_t blknum;
 	char *buf1 = (char *)buf;
 	uint32_t length;
-	uint64_t cur_roll_checksum, cur_sketch;
+	uint64_t cur_roll_checksum, cur_pos_checksum, cur_sketch;
 	uint64_t *fplist;
 	uint32_t len1, fpos[2], cur_sketch2;
-	uint32_t *charcounts;
+	uint32_t *charcounts, byts;
 
 	if (rabin_pos == NULL) {
 		/*
@@ -292,13 +322,14 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			ctx->current_window_data[ctx->window_pos] = cur_byte;
 			cur_roll_checksum = (cur_roll_checksum << 1) + cur_byte;
 			cur_roll_checksum -= (pushed_out << RAB_POLYNOMIAL_WIN_SIZE);
+			cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
 
 			ctx->window_pos = (ctx->window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
 			length++;
 			if (length < ctx->rabin_poly_min_block_size) continue;
 
 			// If we hit our special value or reached the max block size update block offset
-			if ((cur_roll_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
+			if ((cur_pos_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
 			length >= rabin_polynomial_max_block_size) {
 				last_offset = i+1;
 				length = 0;
@@ -326,6 +357,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		 */
 		cur_roll_checksum = (cur_roll_checksum << 1) + cur_byte;
 		cur_roll_checksum -= (pushed_out << RAB_POLYNOMIAL_WIN_SIZE);
+		cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
 
 		/*
 		 * Compute a super sketch value of the block. We store a sum of relative
@@ -345,14 +377,14 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		 * http://www.armedia.com/wp/SimilarityIndex.pdf
 		 */
 		len1++;
-		fpos[1] = cur_roll_checksum & ctx->rabin_avg_block_mask;
+		fpos[1] = cur_pos_checksum & ctx->rabin_avg_block_mask;
 		splits = (uint32_t *)(&fplist[fpos[1]]);
 #if BYTE_ORDER == BIG_ENDIAN
 		splits[0]++;
-		splits[1] += cur_roll_checksum & ctx->fp_mask;
+		splits[1] += cur_pos_checksum & ctx->fp_mask;
 #else
 		splits[1]++;
-		splits[0] += cur_roll_checksum & ctx->fp_mask;
+		splits[0] += cur_pos_checksum & ctx->fp_mask;
 #endif
 		charcounts[cur_byte]++;
 
@@ -387,7 +419,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			if (ctx->delta_flag == DELTA_LESS_FUZZY) {
 				cur_sketch2 += ((p1 << 8) | p2);
 			} else {
-				cur_sketch2 = p2;
+				cur_sketch2 += p2;
 			}
 			len1 = 0;
 			j++;
@@ -400,11 +432,10 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		 */
 		ctx->window_pos = (ctx->window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
 		length++;
-
 		if (length < ctx->rabin_poly_min_block_size) continue;
 
 		// If we hit our special value or reached the max block size update block offset
-		if ((cur_roll_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
+		if ((cur_pos_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
 		    length >= rabin_polynomial_max_block_size) {
 			ctx->blocks[blknum].offset = last_offset;
 			ctx->blocks[blknum].index = blknum; // Need to store for sorting
@@ -413,7 +444,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			ctx->blocks[blknum].similar = 0;
 
 			// Accumulate the 2 sketch values into a combined similarity checksum
-			ctx->blocks[blknum].cksum_n_offset = cur_sketch + cur_sketch2 / j;
+			ctx->blocks[blknum].cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
 			ctx->blocks[blknum].mean_n_length = cur_sketch / j;
 			memset(fplist, 0, fplist_sz);
 			fpos[0] = 0;
@@ -427,6 +458,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		}
 	}
 
+	DEBUG_STAT_EN(printf("Original size: %lld, blknum: %u\n", *size, blknum));
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
 		uint64_t prev_cksum;
@@ -436,6 +468,9 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		char *tmp, *prev_offset;
 		uint32_t *blkarr, *trans, *rabin_index, prev_index, prev_blk;
 		ssize_t rabin_index_sz;
+		DEBUG_STAT_EN(uint32_t delta_calls, delta_fails);
+		DEBUG_STAT_EN(delta_calls = 0);
+		DEBUG_STAT_EN(delta_fails = 0);
 
 		// Insert the last left-over trailing bytes, if any, into a block.
 		if (last_offset < *size) {
@@ -445,8 +480,8 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			ctx->blocks[blknum].ref = 0;
 			ctx->blocks[blknum].similar = 0;
 			j = (j > 0 ? j:1);
-			ctx->blocks[blknum].cksum_n_offset = cur_sketch;
-			ctx->blocks[blknum].mean_n_length = cur_sketch / j + cur_sketch2 / j;
+			ctx->blocks[blknum].cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
+			ctx->blocks[blknum].mean_n_length = cur_sketch / j;
 			blknum++;
 			last_offset = *size;
 		}
@@ -633,11 +668,13 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 					old = buf1 + ctx->blocks[j].offset;
 					new = buf1 + ctx->blocks[blk].cksum_n_offset;
 					matchlen = ctx->real_chunksize - *size;
+					DEBUG_STAT_EN(delta_calls++);
 
 					bsz = bsdiff(old, ctx->blocks[j].length, new,
 					    ctx->blocks[blk].mean_n_length, ctx->cbuf + pos1,
 					    buf1 + *size, matchlen);
 					if (bsz == 0) {
+						DEBUG_STAT_EN(delta_fails++);
 						memcpy(ctx->cbuf + pos1, new, ctx->blocks[blk].mean_n_length);
 						rabin_index[blk] = htonl(ctx->blocks[blk].mean_n_length);
 						pos1 += ctx->blocks[blk].mean_n_length;
@@ -669,6 +706,8 @@ cont:
 			entries[2] = htonll(pos1 - rabin_index_sz - RABIN_HDR_SIZE);
 			*size = pos1;
 			ctx->valid = 1;
+			DEBUG_STAT_EN(printf("Deduped size: %lld, blknum: %u, delta_calls: %u, delta_fails: %u\n",
+					     *size, blknum, delta_calls, delta_fails));
 
 			/*
 			 * Remaining header entries: size of compressed index and size of
