@@ -65,8 +65,18 @@
 #include <allocator.h>
 #include <utils.h>
 #include <pthread.h>
+#include <arpa/nameser_compat.h>
+#include <crc_macros.h>
 
 #include "rabin_polynomial.h"
+
+#if BYTE_ORDER == BIG_ENDIAN
+#	define A1(x) ((x) >> 56)
+#else
+#	define A1 A
+#endif
+
+extern const uint64_t lzma_crc64_table[4][256];
 
 extern int lzma_init(void **data, int *level, ssize_t chunksize);
 extern int lzma_compress(void *src, size_t srclen, void *dst,
@@ -79,8 +89,6 @@ extern int bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 extern bsize_t get_bsdiff_sz(u_char *pbuf);
 extern int bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new,
 	bsize_t *_newsize);
-
-uint32_t rabin_polynomial_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
 
 static pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
 uint64_t ir[256];
@@ -99,7 +107,7 @@ rabin_context_t *
 create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *algo, int delta_flag) {
 	rabin_context_t *ctx;
 	unsigned char *current_window_data;
-	uint32_t blknum;
+	uint32_t i;
 
 	/*
 	 * Pre-compute a table of irreducible polynomial evaluations for each
@@ -107,20 +115,19 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 	 */
 	pthread_mutex_lock(&init_lock);
 	if (!inited) {
-		int i;
-		int term;
+		int term, j;
 		uint64_t val;
 
-		for (blknum = 0; blknum < 256; blknum++) {
+		for (j = 0; j < 256; j++) {
 			term = 1;
 			val = 0;
 			for (i=0; i<RAB_POLYNOMIAL_WIN_SIZE; i++) {
 				if (term & FP_POLY) {
-					val = (val << 1) + blknum;
+					val = (val << 1) + j;
 				}
 				term <<= 1;
 			}
-			ir[blknum] = val;
+			ir[j] = val;
 		}
 		inited = 1;
 	}
@@ -171,11 +178,11 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 	}
 
 	ctx->fp_mask = ctx->rabin_avg_block_mask | ctx->rabin_poly_avg_block_size;
-	blknum = chunksize / ctx->rabin_poly_min_block_size;
+	ctx->blknum = chunksize / ctx->rabin_poly_min_block_size;
 	if (chunksize % ctx->rabin_poly_min_block_size)
-		blknum++;
+		ctx->blknum++;
 
-	if (blknum > RABIN_MAX_BLOCKS) {
+	if (ctx->blknum > RABIN_MAX_BLOCKS) {
 		fprintf(stderr, "Chunk size too large for dedup.\n");
 		destroy_rabin_context(ctx);
 		return (NULL);
@@ -183,8 +190,8 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 	current_window_data = slab_alloc(NULL, RAB_POLYNOMIAL_WIN_SIZE);
 	ctx->blocks = NULL;
 	if (real_chunksize > 0) {
-		ctx->blocks = (rabin_blockentry_t *)slab_alloc(NULL,
-			blknum * sizeof (rabin_blockentry_t));
+		ctx->blocks = (rabin_blockentry_t **)slab_calloc(NULL,
+			ctx->blknum, sizeof (rabin_blockentry_t *));
 	}
 	if(ctx == NULL || current_window_data == NULL || (ctx->blocks == NULL && real_chunksize > 0)) {
 		fprintf(stderr,
@@ -232,8 +239,14 @@ void
 destroy_rabin_context(rabin_context_t *ctx)
 {
 	if (ctx) {
+		uint32_t i;
 		if (ctx->current_window_data) slab_free(NULL, ctx->current_window_data);
-		if (ctx->blocks) slab_free(NULL, ctx->blocks);
+		if (ctx->blocks) {
+			for (i=0; i<ctx->blknum && ctx->blocks[i] != NULL; i++) {
+				slab_free(NULL, ctx->blocks[i]);
+			}
+			slab_free(NULL, ctx->blocks);
+		}
 		if (ctx->lzma_data) lzma_deinit(&(ctx->lzma_data));
 		slab_free(NULL, ctx);
 	}
@@ -245,8 +258,8 @@ destroy_rabin_context(rabin_context_t *ctx)
 static int
 cmpblks(const void *a, const void *b)
 {
-	rabin_blockentry_t *a1 = (rabin_blockentry_t *)a;
-	rabin_blockentry_t *b1 = (rabin_blockentry_t *)b;
+	rabin_blockentry_t *a1 = *((rabin_blockentry_t **)a);
+	rabin_blockentry_t *b1 = *((rabin_blockentry_t **)b);
 
 	if (a1->cksum_n_offset < b1->cksum_n_offset) {
 		return (-1);
@@ -283,6 +296,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 	uint64_t *fplist;
 	uint32_t len1, fpos[2], cur_sketch2;
 	uint32_t *charcounts, byts;
+	uint64_t crc;
 
 	if (rabin_pos == NULL) {
 		/*
@@ -305,6 +319,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 	j = 0;
 	cur_sketch = 0;
 	cur_sketch2 = 0;
+	crc = 0;
 
 	/* 
 	 * If rabin_pos is non-zero then we are being asked to scan for the last rabin boundary
@@ -314,7 +329,8 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 	 * !!!NOTE!!!: Code duplication below for performance.
 	 */
 	if (rabin_pos) {
-		offset = *size - RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
+		offset = *size - ctx->rabin_poly_max_block_size;
+		length = 0;
 		for (i=offset; i<*size; i++) {
 			uchar_t cur_byte = buf1[i];
 			uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
@@ -328,10 +344,9 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			length++;
 			if (length < ctx->rabin_poly_min_block_size) continue;
 
-			// If we hit our special value or reached the max block size update block offset
-			if ((cur_pos_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
-			length >= rabin_polynomial_max_block_size) {
-				last_offset = i+1;
+			// If we hit our special value update block offset
+			if ((cur_pos_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt) {
+				last_offset = i;
 				length = 0;
 			}
 		}
@@ -358,6 +373,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		cur_roll_checksum = (cur_roll_checksum << 1) + cur_byte;
 		cur_roll_checksum -= (pushed_out << RAB_POLYNOMIAL_WIN_SIZE);
 		cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
+		crc = lzma_crc64_table[0][cur_byte ^ A1(crc)] ^ S8(crc);
 
 		/*
 		 * Compute a super sketch value of the block. We store a sum of relative
@@ -436,16 +452,19 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 
 		// If we hit our special value or reached the max block size update block offset
 		if ((cur_pos_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
-		    length >= rabin_polynomial_max_block_size) {
-			ctx->blocks[blknum].offset = last_offset;
-			ctx->blocks[blknum].index = blknum; // Need to store for sorting
-			ctx->blocks[blknum].length = length;
-			ctx->blocks[blknum].ref = 0;
-			ctx->blocks[blknum].similar = 0;
+		    length >= ctx->rabin_poly_max_block_size) {
+			if (ctx->blocks[blknum] == 0)
+				ctx->blocks[blknum] = (rabin_blockentry_t *)slab_alloc(NULL, sizeof (rabin_blockentry_t));
+			ctx->blocks[blknum]->offset = last_offset;
+			ctx->blocks[blknum]->index = blknum; // Need to store for sorting
+			ctx->blocks[blknum]->length = length;
+			ctx->blocks[blknum]->ref = 0;
+			ctx->blocks[blknum]->similar = 0;
+			ctx->blocks[blknum]->crc = crc;
 
 			// Accumulate the 2 sketch values into a combined similarity checksum
-			ctx->blocks[blknum].cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
-			ctx->blocks[blknum].mean_n_length = cur_sketch / j;
+			ctx->blocks[blknum]->cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
+			ctx->blocks[blknum]->mean_n_length = cur_sketch / j;
 			memset(fplist, 0, fplist_sz);
 			fpos[0] = 0;
 			len1 = 0;
@@ -455,48 +474,50 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			length = 0;
 			j = 0;
 			cur_sketch2 = 0;
+			crc = 0;
 		}
 	}
 
 	DEBUG_STAT_EN(printf("Original size: %lld, blknum: %u\n", *size, blknum));
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
-		uint64_t prev_cksum;
-		uint32_t blk, prev_length;
+		uint32_t blk, prev_index, prev_length;
 		ssize_t pos, matchlen, pos1;
 		int valid = 1;
-		char *tmp, *prev_offset;
-		uint32_t *blkarr, *trans, *rabin_index, prev_index, prev_blk;
+		char *tmp;
+		uint32_t *blkarr, *trans, *rabin_index;
 		ssize_t rabin_index_sz;
+		rabin_blockentry_t *prev;
 		DEBUG_STAT_EN(uint32_t delta_calls, delta_fails);
 		DEBUG_STAT_EN(delta_calls = 0);
 		DEBUG_STAT_EN(delta_fails = 0);
 
 		// Insert the last left-over trailing bytes, if any, into a block.
 		if (last_offset < *size) {
-			ctx->blocks[blknum].offset = last_offset;
-			ctx->blocks[blknum].index = blknum;
-			ctx->blocks[blknum].length = *size - last_offset;
-			ctx->blocks[blknum].ref = 0;
-			ctx->blocks[blknum].similar = 0;
+			if (ctx->blocks[blknum] == 0)
+				ctx->blocks[blknum] = (rabin_blockentry_t *)slab_alloc(NULL, sizeof (rabin_blockentry_t));
+			ctx->blocks[blknum]->offset = last_offset;
+			ctx->blocks[blknum]->index = blknum;
+			ctx->blocks[blknum]->length = *size - last_offset;
+			ctx->blocks[blknum]->ref = 0;
+			ctx->blocks[blknum]->similar = 0;
+
 			j = (j > 0 ? j:1);
-			ctx->blocks[blknum].cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
-			ctx->blocks[blknum].mean_n_length = cur_sketch / j;
+			ctx->blocks[blknum]->cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
+			ctx->blocks[blknum]->mean_n_length = cur_sketch / j;
+			ctx->blocks[blknum]->crc = crc;
 			blknum++;
 			last_offset = *size;
 		}
 
 		rabin_index_sz = (ssize_t)blknum * RABIN_ENTRY_SIZE;
-		prev_cksum = 0;
-		prev_length = 0;
-		prev_offset = 0;
 
 		/*
 		 * Now sort the block array based on checksums. This will bring virtually 
 		 * all similar block entries together. Effectiveness depends on how strong
 		 * our checksum is. We are using a maximal super-sketch value.
 		 */
-		qsort(ctx->blocks, blknum, sizeof (rabin_blockentry_t), cmpblks);
+		qsort(ctx->blocks, blknum, sizeof (rabin_blockentry_t *), cmpblks);
 		rabin_index = (uint32_t *)(ctx->cbuf + RABIN_HDR_SIZE);
 
 		/*
@@ -518,53 +539,44 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		 * blocks. This helps in non-duplicate block merging later.
 		 */
 		for (blk = 0; blk < blknum; blk++) {
-			blkarr[ctx->blocks[blk].index] = blk;
+			blkarr[ctx->blocks[blk]->index] = blk;
 
-			if (blk > 0 && ctx->blocks[blk].cksum_n_offset == prev_cksum &&
-			    ctx->blocks[blk].length == prev_length &&
-			    memcmp(prev_offset, buf1 + ctx->blocks[blk].offset, prev_length) == 0) {
-				ctx->blocks[blk].similar = SIMILAR_EXACT;
-				ctx->blocks[blk].index = prev_index;
-				ctx->blocks[prev_blk].ref = 1;
-				matchlen += prev_length;
+			if (blk > 0 && ctx->blocks[blk]->cksum_n_offset == prev->cksum_n_offset &&
+			    ctx->blocks[blk]->length == prev->length &&
+			    ctx->blocks[blk]->crc == prev->crc &&
+			    memcmp(buf1 + prev->offset, buf1 + ctx->blocks[blk]->offset,
+				prev->length) == 0)
+			{
+				ctx->blocks[blk]->similar = SIMILAR_EXACT;
+				ctx->blocks[blk]->index = prev->index;
+				prev->ref = 1;
+				matchlen += prev->length;
 				continue;
 			}
-			prev_offset = buf1 + ctx->blocks[blk].offset;
-			prev_cksum = ctx->blocks[blk].cksum_n_offset;
-			prev_length = ctx->blocks[blk].length;
-			prev_index = ctx->blocks[blk].index;
-			prev_blk = blk;
+			prev = ctx->blocks[blk];
 		}
 
+		prev = NULL;
 		if (ctx->delta_flag) {
-			uint64_t prev_mean;
-			prev_mean = 0;
-			prev_cksum = 0;
-			prev_length = 0;
-
 			for (blk = 0; blk < blknum; blk++) {
-				if (ctx->blocks[blk].similar) continue;
+				if (ctx->blocks[blk]->similar) continue;
 
 				/*
 				 * Compare blocks for similarity.
 				 * Note: Block list by now is sorted by length as well.
 				 */
-				if (blk > 0 && ctx->blocks[blk].ref == 0 &&
-				    ctx->blocks[blk].cksum_n_offset == prev_cksum &&
-				    ctx->blocks[blk].length - prev_length < 512 &&
-				    ctx->blocks[blk].mean_n_length == prev_mean
+				if (prev != NULL && ctx->blocks[blk]->ref == 0 &&
+				    ctx->blocks[blk]->cksum_n_offset == prev->cksum_n_offset &&
+				    ctx->blocks[blk]->length - prev->length < 512 &&
+				    ctx->blocks[blk]->mean_n_length == prev->mean_n_length
 				) {
-					ctx->blocks[blk].index = prev_index;
-					ctx->blocks[blk].similar = SIMILAR_PARTIAL;
-					ctx->blocks[prev_blk].ref = 1;
-					matchlen += (prev_length>>1);
+					ctx->blocks[blk]->index = prev->index;
+					ctx->blocks[blk]->similar = SIMILAR_PARTIAL;
+					prev->ref = 1;
+					matchlen += (prev->length>>1);
 					continue;
 				}
-				prev_cksum = ctx->blocks[blk].cksum_n_offset;
-				prev_length = ctx->blocks[blk].length;
-				prev_index = ctx->blocks[blk].index;
-				prev_mean = ctx->blocks[blk].mean_n_length;
-				prev_blk = blk;
+				prev = ctx->blocks[blk];
 			}
 		}
 		if (matchlen < rabin_index_sz) {
@@ -585,7 +597,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		for (blk = 0; blk < blknum; blk++) {
 			rabin_blockentry_t *be;
 
-			be = &(ctx->blocks[blkarr[blk]]);
+			be = ctx->blocks[blkarr[blk]];
 			if (be->similar == 0) {
 				/*
 				 * Update Index entry with the length. Also try to merge runs
@@ -599,7 +611,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 						prev_length = be->length;
 					}
 					rabin_index[pos] = be->length;
-					ctx->blocks[pos].cksum_n_offset = be->offset;
+					ctx->blocks[pos]->cksum_n_offset = be->offset;
 					trans[blk] = pos;
 					pos++;
 				} else {
@@ -607,7 +619,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 						prev_index = 0;
 						prev_length = 0;
 						rabin_index[pos] = be->length;
-						ctx->blocks[pos].cksum_n_offset = be->offset;
+						ctx->blocks[pos]->cksum_n_offset = be->offset;
 						trans[blk] = pos;
 						pos++;
 					} else {
@@ -618,7 +630,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 							prev_index = 0;
 							prev_length = 0;
 							rabin_index[pos] = be->length;
-							ctx->blocks[pos].cksum_n_offset = be->offset;
+							ctx->blocks[pos]->cksum_n_offset = be->offset;
 							trans[blk] = pos;
 							pos++;
 						}
@@ -627,8 +639,8 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			} else {
 				prev_index = 0;
 				prev_length = 0;
-				ctx->blocks[pos].cksum_n_offset = be->offset;
-				ctx->blocks[pos].mean_n_length = be->length;
+				ctx->blocks[pos]->cksum_n_offset = be->offset;
+				ctx->blocks[pos]->mean_n_length = be->length;
 				trans[blk] = pos;
 
 				if (be->similar == SIMILAR_EXACT) {
@@ -662,22 +674,22 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			}
 			if (rabin_index[blk] & RABIN_INDEX_FLAG) {
 				j = rabin_index[blk] & RABIN_INDEX_VALUE;
-				i = ctx->blocks[j].index;
+				i = ctx->blocks[j]->index;
 
 				if (rabin_index[blk] & GET_SIMILARITY_FLAG) {
-					old = buf1 + ctx->blocks[j].offset;
-					new = buf1 + ctx->blocks[blk].cksum_n_offset;
+					old = buf1 + ctx->blocks[j]->offset;
+					new = buf1 + ctx->blocks[blk]->cksum_n_offset;
 					matchlen = ctx->real_chunksize - *size;
 					DEBUG_STAT_EN(delta_calls++);
 
-					bsz = bsdiff(old, ctx->blocks[j].length, new,
-					    ctx->blocks[blk].mean_n_length, ctx->cbuf + pos1,
+					bsz = bsdiff(old, ctx->blocks[j]->length, new,
+					    ctx->blocks[blk]->mean_n_length, ctx->cbuf + pos1,
 					    buf1 + *size, matchlen);
 					if (bsz == 0) {
 						DEBUG_STAT_EN(delta_fails++);
-						memcpy(ctx->cbuf + pos1, new, ctx->blocks[blk].mean_n_length);
-						rabin_index[blk] = htonl(ctx->blocks[blk].mean_n_length);
-						pos1 += ctx->blocks[blk].mean_n_length;
+						memcpy(ctx->cbuf + pos1, new, ctx->blocks[blk]->mean_n_length);
+						rabin_index[blk] = htonl(ctx->blocks[blk]->mean_n_length);
+						pos1 += ctx->blocks[blk]->mean_n_length;
 					} else {
 						rabin_index[blk] = htonl(trans[i] |
 						    RABIN_INDEX_FLAG | SET_SIMILARITY_FLAG);
@@ -687,7 +699,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 					rabin_index[blk] = htonl(trans[i] | RABIN_INDEX_FLAG);
 				}
 			} else {
-				memcpy(ctx->cbuf + pos1, buf1 + ctx->blocks[blk].cksum_n_offset,
+				memcpy(ctx->cbuf + pos1, buf1 + ctx->blocks[blk]->cksum_n_offset,
 				    rabin_index[blk]);
 				pos1 += rabin_index[blk];
 				rabin_index[blk] = htonl(rabin_index[blk]);
@@ -708,7 +720,6 @@ cont:
 			ctx->valid = 1;
 			DEBUG_STAT_EN(printf("Deduped size: %lld, blknum: %u, delta_calls: %u, delta_fails: %u\n",
 					     *size, blknum, delta_calls, delta_fails));
-
 			/*
 			 * Remaining header entries: size of compressed index and size of
 			 * compressed data are inserted later via rabin_update_hdr, after actual compression!
@@ -765,26 +776,28 @@ rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
 	ctx->valid = 1;
 
 	for (blk = 0; blk < blknum; blk++) {
+		if (ctx->blocks[blk] == 0)
+			ctx->blocks[blk] = (rabin_blockentry_t *)slab_alloc(NULL, sizeof (rabin_blockentry_t));
 		len = ntohl(rabin_index[blk]);
 		if (len == 0) {
-			ctx->blocks[blk].length = 0;
-			ctx->blocks[blk].index = 0;
+			ctx->blocks[blk]->length = 0;
+			ctx->blocks[blk]->index = 0;
 
 		} else if (!(len & RABIN_INDEX_FLAG)) {
-			ctx->blocks[blk].length = len;
-			ctx->blocks[blk].offset = pos1;
+			ctx->blocks[blk]->length = len;
+			ctx->blocks[blk]->offset = pos1;
 			pos1 += len;
 		} else {
 			bsize_t blen;
 
-			ctx->blocks[blk].length = 0;
+			ctx->blocks[blk]->length = 0;
 			if (len & GET_SIMILARITY_FLAG) {
-				ctx->blocks[blk].offset = pos1;
-				ctx->blocks[blk].index = (len & RABIN_INDEX_VALUE) | SET_SIMILARITY_FLAG;
+				ctx->blocks[blk]->offset = pos1;
+				ctx->blocks[blk]->index = (len & RABIN_INDEX_VALUE) | SET_SIMILARITY_FLAG;
 				blen = get_bsdiff_sz(buf + pos1);
 				pos1 += blen;
 			} else {
-				ctx->blocks[blk].index = len & RABIN_INDEX_VALUE;
+				ctx->blocks[blk]->index = len & RABIN_INDEX_VALUE;
 			}
 		}
 	}
@@ -793,19 +806,19 @@ rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
 		int rv;
 		bsize_t newsz;
 
-		if (ctx->blocks[blk].length == 0 && ctx->blocks[blk].index == 0) continue;
-		if (ctx->blocks[blk].length > 0) {
-			len = ctx->blocks[blk].length;
-			pos1 = ctx->blocks[blk].offset;
+		if (ctx->blocks[blk]->length == 0 && ctx->blocks[blk]->index == 0) continue;
+		if (ctx->blocks[blk]->length > 0) {
+			len = ctx->blocks[blk]->length;
+			pos1 = ctx->blocks[blk]->offset;
 		} else {
-			oblk = ctx->blocks[blk].index;
+			oblk = ctx->blocks[blk]->index;
 
 			if (oblk & GET_SIMILARITY_FLAG) {
 				oblk = oblk & CLEAR_SIMILARITY_FLAG;
-				len = ctx->blocks[oblk].length;
-				pos1 = ctx->blocks[oblk].offset;
+				len = ctx->blocks[oblk]->length;
+				pos1 = ctx->blocks[oblk]->offset;
 				newsz = data_sz - sz;
-				rv = bspatch(buf + ctx->blocks[blk].offset, buf + pos1, len, pos2, &newsz);
+				rv = bspatch(buf + ctx->blocks[blk]->offset, buf + pos1, len, pos2, &newsz);
 				if (rv == 0) {
 					fprintf(stderr, "Failed to bspatch block.\n");
 					ctx->valid = 0;
@@ -820,8 +833,8 @@ rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
 				}
 				continue;
 			} else {
-				len = ctx->blocks[oblk].length;
-				pos1 = ctx->blocks[oblk].offset;
+				len = ctx->blocks[oblk]->length;
+				pos1 = ctx->blocks[oblk]->offset;
 			}
 		}
 		memcpy(pos2, buf + pos1, len);

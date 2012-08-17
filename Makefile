@@ -72,8 +72,8 @@ COMPILE = gcc -m64 -g -msse3 -c
 COMPILE_cpp = g++ -m64 -g -msse3 -c
 VEC_FLAGS = 
 LOOP_OPTFLAGS = 
-GEN_OPT = -O
-RABIN_OPT = -O
+GEN_OPT = -O -fno-omit-frame-pointer
+RABIN_OPT = -O -fno-omit-frame-pointer
 else
 GEN_OPT = -O3
 RABIN_OPT = -O2

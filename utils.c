@@ -217,7 +217,7 @@ Read_Adjusted(int fd, uchar_t *buf, size_t count, ssize_t *rabin_count, void *ct
         if (rcount > 0) {
                 rcount += *rabin_count;
 		if (rcount == count)
-			rabin_dedup(rctx, buf, &rcount, *rabin_count, rabin_count);
+			rabin_dedup(rctx, buf, &rcount, 0, rabin_count);
 		else
 			*rabin_count = 0;
         } else {

@@ -142,6 +142,7 @@ typedef struct {
 	ssize_t offset;
 	uint64_t cksum_n_offset; // Dual purpose variable
 	uint64_t mean_n_length;  // Dual purpose variable
+	uint64_t crc;
 	unsigned int index;
 	unsigned int length;
 	unsigned char ref, similar;
@@ -149,7 +150,8 @@ typedef struct {
 
 typedef struct {
 	unsigned char *current_window_data;
-	rabin_blockentry_t *blocks;
+	rabin_blockentry_t **blocks;
+	uint32_t blknum;
 	unsigned char *cbuf;
 	int window_pos;
 	uint32_t rabin_poly_max_block_size;
