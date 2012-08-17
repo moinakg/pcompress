@@ -264,18 +264,21 @@ cmpblks(const void *a, const void *b)
 	if (a1->cksum_n_offset < b1->cksum_n_offset) {
 		return (-1);
 	} else if (a1->cksum_n_offset == b1->cksum_n_offset) {
+		int l1 = a1->length;
+		int l2 = b1->length;
+
 		/*
 		 * If fingerprints match then compare lengths. Length match makes
 		 * for strong exact detection/ordering during sort while stopping
-		 * short of expensive memcmp().
+		 * short of expensive memcmp() during sorting.
+		 * 
+		 * Even though rabin_blockentry_t->length is unsigned we use signed
+		 * int here to avoid branches. In practice a rabin block size at
+		 * this point varies from 2K to 128K. The length is unsigned in
+		 * order to support non-duplicate block merging and large blocks
+		 * after this point.
 		 */
-		if (a1->length < b1->length) {
-			return (-1);
-		} else if (a1->length == b1->length) {
-			return (0);
-		} else {
-			return (1);
-		}
+		return (l1 - l2);
 	} else {
 		return (1);
 	}
