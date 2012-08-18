@@ -36,9 +36,10 @@ BSDIFFSRCS = bsdiff/bsdiff.c bsdiff/bspatch.c bsdiff/rle_encoder.c
 BSDIFFHDRS = bsdiff/bscommon.h utils.h allocator.h
 BSDIFFOBJS = $(BSDIFFSRCS:.c=.o)
 
-LZMASRCS = lzma/LzmaEnc.c lzma/LzFind.c lzma/LzmaDec.c
+LZMASRCS = lzma/LzmaEnc.c lzma/LzFind.c lzma/LzmaDec.c lzma/Threads.c lzma/LzFindMt.c
 LZMAHDRS = lzma/CpuArch.h lzma/LzFind.h lzma/LzmaEnc.h lzma/Types.h \
-	lzma/LzHash.h lzma/LzmaDec.h utils.h
+	lzma/LzHash.h lzma/LzmaDec.h utils.h lzma/LzFindMt.h lzma/Threads.h lzma/windows.h \
+	lzma/Common/MyWindows.h lzma/Common/MyGuidDef.h lzma/basetyps.h
 LZMAOBJS = $(LZMASRCS:.c=.o)
 
 LZFXSRCS = lzfx/lzfx.c
@@ -60,7 +61,7 @@ CRCOBJS = $(CRCSRCS:.c=.o)
 BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~
 
 RM = rm -f
-CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -D_7ZIP_ST -DNODEFAULT_PROPS \
+CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32
 VEC_FLAGS = -ftree-vectorize
 LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block

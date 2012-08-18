@@ -62,7 +62,7 @@ ppmd_stats(int show)
 }
 
 int
-ppmd_init(void **data, int *level, ssize_t chunksize)
+ppmd_init(void **data, int *level, int nthreads, ssize_t chunksize)
 {
 	CPpmd8 *_ppmd;
 

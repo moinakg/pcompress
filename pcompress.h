@@ -97,15 +97,18 @@ extern int lz4_decompress(void *src, size_t srclen, void *dst,
 extern int none_decompress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
 
-extern int adapt_init(void **data, int *level, ssize_t chunksize);
-extern int adapt2_init(void **data, int *level, ssize_t chunksize);
-extern int lzma_init(void **data, int *level, ssize_t chunksize);
-extern int ppmd_init(void **data, int *level, ssize_t chunksize);
-extern int bzip2_init(void **data, int *level, ssize_t chunksize);
-extern int zlib_init(void **data, int *level, ssize_t chunksize);
-extern int lz_fx_init(void **data, int *level, ssize_t chunksize);
-extern int lz4_init(void **data, int *level, ssize_t chunksize);
-extern int none_init(void **data, int *level, ssize_t chunksize);
+extern int adapt_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int adapt2_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int lzma_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int ppmd_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int bzip2_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int zlib_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int lz_fx_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int lz4_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int none_init(void **data, int *level, int nthreads, ssize_t chunksize);
+
+extern void lzma_props(algo_props_t *data, int level, ssize_t chunksize);
+extern void lz4_props(algo_props_t *data, int level, ssize_t chunksize);
 
 extern int zlib_deinit(void **data);
 extern int adapt_deinit(void **data);

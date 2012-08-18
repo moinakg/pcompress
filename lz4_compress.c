@@ -51,8 +51,15 @@ lz4_buf_extra(ssize_t buflen)
 	return (LZ4_compressBound(buflen) - buflen + sizeof(int));
 }
 
+void
+lz4_props(algo_props_t *data, int level, ssize_t chunksize) {
+	data->compress_mt_capable = 0;
+	data->decompress_mt_capable = 0;
+	data->buf_extra = lz4_buf_extra(chunksize);
+}
+
 int
-lz4_init(void **data, int *level, ssize_t chunksize)
+lz4_init(void **data, int *level, int nthreads, ssize_t chunksize)
 {
 	struct lz4_params *lzdat;
 	int lev;

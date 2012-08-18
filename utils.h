@@ -101,6 +101,20 @@ typedef ssize_t bsize_t;
 #define	DEBUG_STAT_EN(...)
 #endif
 
+typedef struct {
+	uint32_t buf_extra;
+	int compress_mt_capable;
+	int decompress_mt_capable;
+	int nthreads;
+	int c_max_threads;
+	int d_max_threads;
+} algo_props_t;
+
+typedef enum {
+	COMPRESS_THREADS = 1,
+	DECOMPRESS_THREADS
+} algo_threads_type_t;
+
 extern void err_exit(int show_errno, const char *format, ...);
 extern const char *get_execname(const char *);
 extern int parse_numeric(ssize_t *val, const char *str);
@@ -109,15 +123,18 @@ extern ssize_t Read(int fd, void *buf, size_t count);
 extern ssize_t Read_Adjusted(int fd, uchar_t *buf, size_t count,
 	ssize_t *rabin_count, void *ctx);
 extern ssize_t Write(int fd, const void *buf, size_t count);
+extern void set_threadcounts(algo_props_t *props, int *nthreads, int nprocs,
+	algo_threads_type_t typ);
 
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, size_t srclen, void *dst,
 	size_t *destlen, int level, uchar_t chdr, void *data);
 
 /* Pointer type for algo specific init/deinit/stats functions. */
-typedef int (*init_func_ptr)(void **data, int *level, ssize_t chunksize);
+typedef int (*init_func_ptr)(void **data, int *level, int nthreads, ssize_t chunksize);
 typedef int (*deinit_func_ptr)(void **data);
 typedef void (*stats_func_ptr)(int show);
+typedef void (*props_func_ptr)(algo_props_t *data, int level, ssize_t chunksize);
 
 
 /*
@@ -152,6 +169,17 @@ hash6432shift(uint64_t key)
 	key = key + (key << 6);
 	key = key ^ (key >> 22);
 	return (uint32_t) key;
+}
+
+static void
+init_algo_props(algo_props_t *props)
+{
+	props->buf_extra = 0;
+	props->compress_mt_capable = 0;
+	props->decompress_mt_capable = 0;
+	props->nthreads = 1;
+	props->c_max_threads = 1;
+	props->d_max_threads = 1;
 }
 
 #ifdef	__cplusplus

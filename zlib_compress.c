@@ -54,7 +54,7 @@ zlib_buf_extra(ssize_t buflen)
 }
 
 int
-zlib_init(void **data, int *level, ssize_t chunksize)
+zlib_init(void **data, int *level, int nthreads, ssize_t chunksize)
 {
 	z_stream *zs;
 	int ret;

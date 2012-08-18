@@ -244,3 +244,45 @@ Write(int fd, const void *buf, size_t count)
 	return (count - rem);
 }
 
+/*
+ * Thread sizing. We want a balanced combination of chunk threads and compression
+ * algorithm threads that best fit the available/allowed number of processors.
+ */
+void
+set_threadcounts(algo_props_t *props, int *nthreads, int nprocs, algo_threads_type_t typ) {
+	int mt_capable;
+
+	if (typ == COMPRESS_THREADS)
+		mt_capable = props->compress_mt_capable;
+	else
+		mt_capable = props->decompress_mt_capable;
+
+	if (mt_capable) {
+		int nthreads1, p_max;
+
+		if (nprocs == 3) {
+			props->nthreads = 1;
+			*nthreads = 3;
+			return;
+		}
+
+		if (typ == COMPRESS_THREADS)
+			p_max = props->c_max_threads;
+		else
+			p_max = props->d_max_threads;
+
+		nthreads1 = 1;
+		props->nthreads = 1;
+		while (nthreads1 < *nthreads || props->nthreads < p_max) {
+			if ((props->nthreads+1) * nthreads1 <= nprocs && props->nthreads < p_max) {
+				props->nthreads++;
+
+			} else if (props->nthreads * (nthreads1+1) <= nprocs && nthreads1 < *nthreads) {
+				nthreads1++;
+			} else {
+				break;
+			}
+		}
+		*nthreads = nthreads1;
+	}
+}

@@ -46,11 +46,19 @@ lzma_stats(int show)
 {
 }
 
+void
+lzma_props(algo_props_t *data, int level, ssize_t chunksize) {
+	data->compress_mt_capable = 1;
+	data->decompress_mt_capable = 0;
+	data->buf_extra = 0;
+	data->c_max_threads = 2;
+}
+
 /*
  * The two functions below are not thread-safe, by design.
  */
 int
-lzma_init(void **data, int *level, ssize_t chunksize)
+lzma_init(void **data, int *level, int nthreads, ssize_t chunksize)
 {
 	if (!p) {
 		p = (CLzmaEncProps *)slab_alloc(NULL, sizeof (CLzmaEncProps));
@@ -99,6 +107,7 @@ lzma_init(void **data, int *level, ssize_t chunksize)
 		}
 		if (*level > 9) *level = 9;
 		p->level = *level;
+		p->numThreads = nthreads;
 		LzmaEncProps_Normalize(p);
 		slab_cache_add(p->litprob_sz);
 	}

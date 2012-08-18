@@ -45,10 +45,6 @@
 #include <pcompress.h>
 #include <allocator.h>
 #include <rabin_polynomial.h>
-#include <zlib.h>
-
-/* Needed for CLzmaEncprops. */
-#include <LzmaEnc.h>
 
 /*
  * We use 5MB chunks by default.
@@ -71,6 +67,7 @@ static compress_func_ptr _decompress_func;
 static init_func_ptr _init_func;
 static deinit_func_ptr _deinit_func;
 static stats_func_ptr _stats_func;
+static props_func_ptr _props_func;
 
 static int main_cancel;
 static int adapt_mode = 0;
@@ -336,10 +333,12 @@ start_decompress(const char *filename, const char *to_filename)
 	ssize_t chunksize, compressed_chunksize;
 	struct cmp_data **dary, *tdat;
 	pthread_t writer_thr;
+	algo_props_t props;
 
 	err = 0;
 	flags = 0;
 	thread = 0;
+	init_algo_props(&props);
 
 	/*
 	 * Open files and do sanity checks.
@@ -405,14 +404,10 @@ start_decompress(const char *filename, const char *to_filename)
 	compressed_chunksize = chunksize + sizeof (chunksize) +
 	    sizeof (uint64_t) + sizeof (chunksize) + zlib_buf_extra(chunksize);
 
-	/*
-	 * Adjust for LZ4 overflow size if LZ4 was selected.
-	 * TODO: A more generic way to handle this for various algos. I'm too
-	 * lazy to do this at present.
-	 */
-	if (strncmp(algo, "lz4", 3) == 0) {
-		if (chunksize + lz4_buf_extra(chunksize) > compressed_chunksize) {
-			compressed_chunksize += (chunksize + lz4_buf_extra(chunksize) -
+	if (_props_func) {
+		_props_func(&props, level, chunksize);
+		if (chunksize + props.buf_extra > compressed_chunksize) {
+			compressed_chunksize += (chunksize + props.buf_extra - 
 			    compressed_chunksize);
 		}
 	}
@@ -424,8 +419,13 @@ start_decompress(const char *filename, const char *to_filename)
 	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
 	if (nthreads > 0 && nthreads < nprocs)
 		nprocs = nthreads;
+	else
+		nthreads = nprocs;
 
-	fprintf(stderr, "Scaling to %d threads\n", nprocs);
+	set_threadcounts(&props, &nthreads, nprocs, DECOMPRESS_THREADS);
+	fprintf(stderr, "Scaling to %d thread", nthreads * props.nthreads);
+	if (nprocs > 1) fprintf(stderr, "s");
+	fprintf(stderr, "\n");
 	slab_cache_add(compressed_chunksize + CHDR_SZ);
 	slab_cache_add(chunksize);
 	slab_cache_add(sizeof (struct cmp_data));
@@ -463,7 +463,7 @@ start_decompress(const char *filename, const char *to_filename)
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
 		if (_init_func) {
-			if (_init_func(&(tdat->data), &(tdat->level), chunksize) != 0) {
+			if (_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize) != 0) {
 				UNCOMP_BAIL;
 			}
 		}
@@ -826,6 +826,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	pthread_t writer_thr;
 	uchar_t *cread_buf, *pos;
 	rabin_context_t *rctx;
+	algo_props_t props;
 
 	/*
 	 * Compressed buffer size must include zlib/dedup scratch space and
@@ -841,15 +842,12 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 */
 	compressed_chunksize = chunksize + sizeof (chunksize) +
 	    sizeof (uint64_t) + sizeof (chunksize) + zlib_buf_extra(chunksize);
+	init_algo_props(&props);
 
-	/*
-	 * Adjust for LZ4 overflow size if LZ4 was selected.
-	 * TODO: A more generic way to handle this for various algos. I'm too
-	 * lazy to do this at present.
-	 */
-	if (strncmp(algo, "lz4", 3) == 0) {
-		if (chunksize + lz4_buf_extra(chunksize) > compressed_chunksize) {
-			compressed_chunksize += (chunksize + lz4_buf_extra(chunksize) -
+	if (_props_func) {
+		_props_func(&props, level, chunksize);
+		if (chunksize + props.buf_extra > compressed_chunksize) {
+			compressed_chunksize += (chunksize + props.buf_extra - 
 			    compressed_chunksize);
 		}
 	}
@@ -867,6 +865,12 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	slab_cache_add(chunksize);
 	slab_cache_add(compressed_chunksize + CHDR_SZ);
 	slab_cache_add(sizeof (struct cmp_data));
+
+	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+	if (nthreads > 0 && nthreads < nprocs)
+		nprocs = nthreads;
+	else
+		nthreads = nprocs;
 
 	/* A host of sanity checks. */
 	if (!pipe_mode) {
@@ -933,11 +937,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		}
 	}
 
-	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
-	if (nthreads > 0 && nthreads < nprocs)
-		nprocs = nthreads;
-
-	fprintf(stderr, "Scaling to %d thread", nprocs);
+	set_threadcounts(&props, &nthreads, nprocs, COMPRESS_THREADS);
+	fprintf(stderr, "Scaling to %d thread", nthreads * props.nthreads);
 	if (nprocs > 1) fprintf(stderr, "s");
 	fprintf(stderr, "\n");
 
@@ -981,7 +982,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
 		if (_init_func) {
-			if (_init_func(&(tdat->data), &(tdat->level), chunksize) != 0) {
+			if (_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize) != 0) {
 				COMP_BAIL;
 			}
 		}
@@ -1226,6 +1227,7 @@ init_algo(const char *algo, int bail)
 
 	/* Copy given string into known length buffer to avoid memcmp() overruns. */
 	strncpy(algorithm, algo, 8);
+	_props_func = NULL;
 	if (memcmp(algorithm, "zlib", 4) == 0) {
 		_compress_func = zlib_compress;
 		_decompress_func = zlib_decompress;
@@ -1240,6 +1242,7 @@ init_algo(const char *algo, int bail)
 		_init_func = lzma_init;
 		_deinit_func = lzma_deinit;
 		_stats_func = lzma_stats;
+		_props_func = lzma_props;
 		rv = 0;
 
 	} else if (memcmp(algorithm, "bzip2", 5) == 0) {
@@ -1272,6 +1275,7 @@ init_algo(const char *algo, int bail)
 		_init_func = lz4_init;
 		_deinit_func = lz4_deinit;
 		_stats_func = lz4_stats;
+		_props_func = lz4_props;
 		rv = 0;
 
 	} else if (memcmp(algorithm, "none", 4) == 0) {

@@ -53,9 +53,9 @@ extern int bzip2_decompress(void *src, size_t srclen, void *dst,
 extern int ppmd_decompress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
 
-extern int lzma_init(void **data, int *level, ssize_t chunksize);
+extern int lzma_init(void **data, int *level, int nthreads, ssize_t chunksize);
 extern int lzma_deinit(void **data);
-extern int ppmd_init(void **data, int *level, ssize_t chunksize);
+extern int ppmd_init(void **data, int *level, int nthreads, ssize_t chunksize);
 extern int ppmd_deinit(void **data);
 
 struct adapt_data {
@@ -79,7 +79,7 @@ adapt_stats(int show)
 }
 
 int
-adapt_init(void **data, int *level, ssize_t chunksize)
+adapt_init(void **data, int *level, int nthreads, ssize_t chunksize)
 {
 	struct adapt_data *adat = (struct adapt_data *)(*data);
 	int rv;
@@ -87,7 +87,7 @@ adapt_init(void **data, int *level, ssize_t chunksize)
 	if (!adat) {
 		adat = (struct adapt_data *)slab_alloc(NULL, sizeof (struct adapt_data));
 		adat->adapt_mode = 1;
-		rv = ppmd_init(&(adat->ppmd_data), level, chunksize);
+		rv = ppmd_init(&(adat->ppmd_data), level, nthreads, chunksize);
 		adat->lzma_data = NULL;
 		*data = adat;
 		if (*level > 9) *level = 9;
@@ -99,7 +99,7 @@ adapt_init(void **data, int *level, ssize_t chunksize)
 }
 
 int
-adapt2_init(void **data, int *level, ssize_t chunksize)
+adapt2_init(void **data, int *level, int nthreads, ssize_t chunksize)
 {
 	struct adapt_data *adat = (struct adapt_data *)(*data);
 	int rv, lv;
@@ -109,10 +109,10 @@ adapt2_init(void **data, int *level, ssize_t chunksize)
 		adat->adapt_mode = 2;
 		adat->ppmd_data = NULL;
 		lv = *level;
-		rv = ppmd_init(&(adat->ppmd_data), &lv, chunksize);
+		rv = ppmd_init(&(adat->ppmd_data), &lv, nthreads, chunksize);
 		lv = *level;
 		if (rv == 0)
-			rv = lzma_init(&(adat->lzma_data), &lv, chunksize);
+			rv = lzma_init(&(adat->lzma_data), &lv, nthreads, chunksize);
 		*data = adat;
 		if (*level > 9) *level = 9;
 	}
