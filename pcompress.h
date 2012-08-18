@@ -108,6 +108,7 @@ extern int lz4_init(void **data, int *level, int nthreads, ssize_t chunksize);
 extern int none_init(void **data, int *level, int nthreads, ssize_t chunksize);
 
 extern void lzma_props(algo_props_t *data, int level, ssize_t chunksize);
+extern void lzma_mt_props(algo_props_t *data, int level, ssize_t chunksize);
 extern void lz4_props(algo_props_t *data, int level, ssize_t chunksize);
 
 extern int zlib_deinit(void **data);

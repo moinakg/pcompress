@@ -35,6 +35,9 @@ Usage
        lz4    - Ultra fast, high-throughput algorithm reaching RAM B/W at level1.
        zlib   - The base Zlib format compression (not Gzip).
        lzma   - The LZMA (Lempel-Ziv Markov) algorithm from 7Zip.
+       lzmaMt - Multithreaded version of LZMA. This is a faster version but
+                uses more memory for the dictionary. Thread count is balanced
+                between chunk processing threads and algorithm threads.
        bzip2  - Bzip2 Algorithm from libbzip2.
        ppmd   - The PPMd algorithm excellent for textual data. PPMd requires
                 at least 64MB X CPUs more memory than the other modes.
@@ -44,6 +47,8 @@ Usage
        adapt2 - Adaptive mode which includes ppmd and lzma. This requires
                 more memory than adapt mode, is slower and potentially gives
                 the best compression.
+       none   - No compression. This is only meaningful with -D and -E so Dedupe
+                can be done for post-processing with an external utility.
        <chunk_size> - This can be in bytes or can use the following suffixes:
                 g - Gigabyte, m - Megabyte, k - Kilobyte.
                 Larger chunks produce better compression at the cost of memory.
@@ -73,7 +78,8 @@ Environment Variables
 
 Set ALLOCATOR_BYPASS=1 in the environment to avoid using the the built-in
 allocator. Due to the the way it rounds up an allocation request to the nearest
-slab the built-in allocator can allocate extra unused memory.
+slab the built-in allocator can allocate extra unused memory. In addition you
+may want to use a different allocator in your environment.
 
 Examples
 ========
@@ -123,8 +129,8 @@ Adapt2	- Ultra slow synthetic mode. Both LZMA and PPMD are tried per chunk and
           Since both LZMA and PPMD are used together memory requirements are
           quite extensive especially if you are also using extreme levels above
           10. For example with 64MB chunk, Level 14, 2 threads and with or without
-          dedupe, it uses upto 3.5GB physical RAM. So minimum requirement is 6GB
-          RAM *and* at least 4GB physical swap.
+          dedupe, it uses upto 3.5GB physical RAM and requires 6GB of virtual
+          memory space.
 
 It is possible for a single chunk to span the entire file if enough RAM is
 available. However for adaptive modes to be effective for large files, especially
