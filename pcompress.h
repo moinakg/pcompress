@@ -47,7 +47,11 @@ extern "C" {
 #define	BZIP2_A_NUM	16
 #define	LZMA_A_NUM	32
 #define	CHUNK_FLAG_DEDUP	2
+#define	CHUNK_FLAG_PREPROC	4
 #define	COMP_EXTN	".pz"
+
+#define	PREPROC_TYPE_LZP	1
+#define	PREPROC_COMPRESSED	128
 
 /*
  * lower 3 bits in higher nibble indicate compression algorithm.

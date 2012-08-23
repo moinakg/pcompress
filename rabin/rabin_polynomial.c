@@ -94,20 +94,46 @@ static pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
 uint64_t ir[256];
 static int inited = 0;
 
-uint32_t
-rabin_buf_extra(uint64_t chunksize)
+static uint32_t
+rabin_min_blksz(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta_flag)
 {
-	return ((chunksize / RAB_POLYNOMIAL_MIN_BLOCK_SIZE2) * sizeof (uint32_t));
+	uint32_t min_blk;
+
+	min_blk = 1 << (rab_blk_sz + RAB_BLK_MIN_BITS);
+	if (((memcmp(algo, "lzma", 4) == 0 || memcmp(algo, "adapt", 5) == 0) &&
+	      chunksize <= LZMA_WINDOW_MAX) || delta_flag) {
+		if (memcmp(algo, "lzfx", 4) == 0 || memcmp(algo, "lz4", 3) == 0 ||
+		    memcmp(algo, "zlib", 4) == 0 || memcmp(algo, "none", 4) == 0) {
+			min_blk = 1 << (rab_blk_sz + RAB_BLK_MIN_BITS - 1);
+		}
+	} else {
+		min_blk = 1 << (rab_blk_sz + RAB_BLK_MIN_BITS - 1);
+	}
+	return (min_blk);
+}
+
+uint32_t
+rabin_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta_flag)
+{
+	if (rab_blk_sz < 1 || rab_blk_sz > 5)
+		rab_blk_sz = RAB_BLK_DEFAULT;
+
+	return ((chunksize / rabin_min_blksz(chunksize, rab_blk_sz, algo, delta_flag))
+	    * sizeof (uint32_t));
 }
 
 /*
  * Initialize the algorithm with the default params.
  */
 rabin_context_t *
-create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *algo, int delta_flag) {
+create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz,
+    const char *algo, int delta_flag) {
 	rabin_context_t *ctx;
 	unsigned char *current_window_data;
 	uint32_t i;
+
+	if (rab_blk_sz < 1 || rab_blk_sz > 5)
+		rab_blk_sz = RAB_BLK_DEFAULT;
 
 	/*
 	 * Pre-compute a table of irreducible polynomial evaluations for each
@@ -157,28 +183,12 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, const char *al
 
 	ctx->rabin_break_patt = 0;
 	ctx->delta_flag = delta_flag;
-	if (((memcmp(algo, "lzma", 4) == 0 || memcmp(algo, "adapt", 5) == 0) &&
-	      chunksize <= LZMA_WINDOW_MAX) || delta_flag) {
-		if (memcmp(algo, "lzfx", 4) == 0 || memcmp(algo, "lz4", 3) == 0 ||
-		    memcmp(algo, "zlib", 4) == 0 || memcmp(algo, "none", 4) == 0) {
-			ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE2;
-			ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK2;
-			ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE2;
-			if (delta_flag)
-				ctx->delta_flag = DELTA_LESS_FUZZY;
-		} else {
-			ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE;
-			ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK;
-			ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE;
-		}
-	} else {
-		ctx->rabin_poly_min_block_size = RAB_POLYNOMIAL_MIN_BLOCK_SIZE2;
-		ctx->rabin_avg_block_mask = RAB_POLYNOMIAL_AVG_BLOCK_MASK2;
-		ctx->rabin_poly_avg_block_size = RAB_POLYNOMIAL_AVG_BLOCK_SIZE2;
-	}
-
+	ctx->rabin_poly_avg_block_size = 1 << (rab_blk_sz + RAB_BLK_MIN_BITS);
+	ctx->rabin_avg_block_mask = ctx->rabin_poly_avg_block_size - 1;
+	ctx->rabin_poly_min_block_size = rabin_min_blksz(chunksize, rab_blk_sz, algo, delta_flag);
 	ctx->fp_mask = ctx->rabin_avg_block_mask | ctx->rabin_poly_avg_block_size;
 	ctx->blknum = chunksize / ctx->rabin_poly_min_block_size;
+
 	if (chunksize % ctx->rabin_poly_min_block_size)
 		ctx->blknum++;
 

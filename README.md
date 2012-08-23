@@ -70,8 +70,12 @@ Usage
        pcompress -E ... - This also implies '-D'.
 
     Number of threads can optionally be specified: -t <1 - 256 count>
-    Pass '-M' to display memory allocator statistics
-    Pass '-C' to display compression statistics
+    Other flags:
+       '-L' -     Enable LZP pre-compression. This improves compression ratio of all
+                  algorithms with some extra CPU and very low RAM overhead. Using
+                  delta encoding in conjunction with this may not always be beneficial.
+       '-M' -     Display memory allocator statistics
+       '-C' -     Display compression statistics
 
 Environment Variables
 =====================

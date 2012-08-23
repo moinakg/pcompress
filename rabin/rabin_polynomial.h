@@ -63,26 +63,14 @@
 
 //List of constants, mostly constraints and defaults for various parameters
 //to the Rabin Fingerprinting algorithm
-
 #define	RAB_POLYNOMIAL_CONST 2
-// 1 << RAB_POLYNOMIAL_AVG_BLOCK_SHIFT = Average Rabin Chunk Size
-// So we are always looking at power of 2 chunk sizes to avoid doing a modulus
-//
-#define	RAB_POLYNOMIAL_AVG_BLOCK_SHIFT 12
-#define	RAB_POLYNOMIAL_AVG_BLOCK_SIZE (1 << RAB_POLYNOMIAL_AVG_BLOCK_SHIFT)
-#define	RAB_POLYNOMIAL_AVG_BLOCK_MASK (RAB_POLYNOMIAL_AVG_BLOCK_SIZE - 1)
-#define	RAB_POLYNOMIAL_MIN_BLOCK_SIZE RAB_POLYNOMIAL_AVG_BLOCK_SIZE
-#define	RAB_POLYNOMIAL_MAX_BLOCK_SIZE (128 * 1024)
-
-#define	RAB_POLYNOMIAL_AVG_BLOCK_SHIFT2 12
-#define	RAB_POLYNOMIAL_AVG_BLOCK_SIZE2 (1 << RAB_POLYNOMIAL_AVG_BLOCK_SHIFT)
-#define	RAB_POLYNOMIAL_AVG_BLOCK_MASK2 (RAB_POLYNOMIAL_AVG_BLOCK_SIZE - 1)
-#define	RAB_POLYNOMIAL_MIN_BLOCK_SIZE2 2048
-
+#define	RAB_BLK_DEFAULT 1
+#define	RAB_BLK_MIN_BITS 11
 #define LZMA_WINDOW_MAX (128L * 1024L * 1024L)
 #define	RAB_POLYNOMIAL_WIN_SIZE 16
 #define	RAB_POLYNOMIAL_MIN_WIN_SIZE 8
 #define	RAB_POLYNOMIAL_MAX_WIN_SIZE 64
+#define	RAB_POLYNOMIAL_MAX_BLOCK_SIZE (128 * 1024)
 
 // Minimum practical chunk size when doing dedup
 #define	RAB_MIN_CHUNK_SIZE (1048576L)
@@ -166,8 +154,8 @@ typedef struct {
 	int level, delta_flag;
 } rabin_context_t;
 
-extern rabin_context_t *create_rabin_context(uint64_t chunksize, uint64_t real_chunksize,
-	const char *algo, int delta_flag);
+extern rabin_context_t *create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, 
+	int rab_blk_sz, const char *algo, int delta_flag);
 extern void destroy_rabin_context(rabin_context_t *ctx);
 extern unsigned int rabin_dedup(rabin_context_t *ctx, unsigned char *buf, 
 	ssize_t *size, ssize_t offset, ssize_t *rabin_pos);
@@ -178,6 +166,7 @@ extern void rabin_parse_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *rabin_i
 extern void rabin_update_hdr(uchar_t *buf, ssize_t rabin_index_sz_cmp,
 			     ssize_t rabin_data_sz_cmp);
 extern void reset_rabin_context(rabin_context_t *ctx);
-extern uint32_t rabin_buf_extra(uint64_t chunksize);
+extern uint32_t rabin_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo,
+	int delta_flag);
 
-#endif /* _RABIN_0POLY_H_ */
+#endif /* _RABIN_POLY_H_ */

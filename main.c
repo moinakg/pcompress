@@ -45,6 +45,7 @@
 #include <pcompress.h>
 #include <allocator.h>
 #include <rabin_polynomial.h>
+#include <lzp.h>
 
 /*
  * We use 5MB chunks by default.
@@ -78,6 +79,7 @@ static int hide_cmp_stats = 1;
 static int enable_rabin_scan = 0;
 static int enable_delta_encode = 0;
 static int enable_rabin_split = 1;
+static int lzp_preprocess = 0;
 static unsigned int chunk_num;
 static uint64_t largest_chunk, smallest_chunk, avg_chunk;
 static const char *exec_name;
@@ -128,8 +130,11 @@ usage(void)
 	    "5) Perform Delta Encoding in addition to Exact Dedup:\n"
 	    "   %s -E ... - This also implies '-D'.\n"
 	    "6) Number of threads can optionally be specified: -t <1 - 256 count>\n"
-	    "7) Pass '-M' to display memory allocator statistics\n"
-	    "8) Pass '-C' to display compression statistics\n\n",
+	    "7) Other flags:\n"
+	    "   '-L'	- Enable LZP pre-compression. This improves compression ratio of all\n"
+	    "       	  algorithms with some extra CPU and very low RAM overhead.\n"
+	    "   '-M'	- Display memory allocator statistics\n"
+	    "   '-C'	- Display compression statistics\n\n",
 	    UTILITY_VERSION, exec_name, exec_name, exec_name, exec_name, exec_name, exec_name);
 }
 
@@ -146,6 +151,92 @@ show_compression_stats(uint64_t chunksize)
 	avg_chunk /= chunk_num;
 	fprintf(stderr, "Avg compressed chunk   : %s(%.2f%%)\n\n",
 	    bytes_to_size(avg_chunk), (double)avg_chunk/(double)chunksize*100);
+}
+
+/*
+ * Wrapper functions to pre-process the buffer and then call the main compression routine.
+ * At present only LZP pre-compression is used below. Some extra metadata is added:
+ * 
+ * Byte 0: A flag to indicate which pre-processor was used.
+ * Byte 1 - Byte 8: Size of buffer after pre-processing
+ * 
+ * It is possible for a buffer to be only pre-processed and not compressed by the final
+ * algorithm if the final one fails to compress for some reason. However the vice versa
+ * is not allowed.
+ */
+int
+preproc_compress(compress_func_ptr cmp_func, void *src, size_t srclen, void *dst,
+	size_t *dstlen, int level, uchar_t chdr, void *data)
+{
+	uchar_t *dest = (uchar_t *)dst, type = 0;
+	ssize_t result, _dstlen;
+
+	if (lzp_preprocess) {
+		int hashsize;
+
+		type = PREPROC_TYPE_LZP;
+		hashsize = lzp_hash_size(level);
+		result = lzp_compress(src, dst, srclen, hashsize, LZP_DEFAULT_LZPMINLEN, 0);
+		if (result < 0 || result == srclen) return (-1);
+		srclen = result;
+		memcpy(src, dst, srclen);
+	} else {
+		/*
+		 * Execution won't come here but just in case ...
+		 */
+		fprintf(stderr, "Invalid preprocessing mode\n");
+		return (-1);
+	}
+
+	*dest = type;
+	*((int64_t *)(dest + 1)) = htonll(srclen);
+	_dstlen = srclen;
+	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr, data);
+	if (result == 0 && _dstlen < srclen) {
+		*dest |= PREPROC_COMPRESSED;
+		*dstlen = _dstlen + 9;
+	} else {
+		memcpy(dest+1, src, srclen);
+		_dstlen = srclen;
+		*dstlen = _dstlen + 1;
+	}
+	return (0);
+}
+
+int
+preproc_decompress(compress_func_ptr dec_func, void *src, size_t srclen, void *dst,
+	size_t *dstlen, int level, uchar_t chdr, void *data)
+{
+	uchar_t *sorc = (uchar_t *)src, type;
+	ssize_t result;
+
+	type = *sorc;
+	sorc++;
+	srclen--;
+	if (type & PREPROC_COMPRESSED) {
+		*dstlen = ntohll(*((int64_t *)(sorc)));
+		sorc += 8;
+		srclen -= 8;
+		result = dec_func(sorc, srclen, dst, dstlen, level, chdr, data);
+		if (result < 0) return (result);
+		memcpy(src, dst, *dstlen);
+		srclen = *dstlen;
+	}
+
+	if (type & PREPROC_TYPE_LZP) {
+		int hashsize;
+		hashsize = lzp_hash_size(level);
+		result = lzp_decompress(src, dst, srclen, hashsize, LZP_DEFAULT_LZPMINLEN, 0);
+		if (result < 0) {
+			fprintf(stderr, "LZP decompression failed.\n");
+			return (-1);
+		}
+		*dstlen = result;
+	} else {
+		fprintf(stderr, "Invalid preprocessing flags: %d\n", type);
+		return (-1);
+	}
+	return (0);
 }
 
 /*
@@ -214,8 +305,13 @@ redo:
 		cmpbuf = cseg + RABIN_HDR_SIZE + rabin_index_sz_cmp;
 		ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE + rabin_index_sz;
 		if (HDR & COMPRESSED) {
-			rv = tdat->decompress(cmpbuf, rabin_data_sz_cmp, ubuf, &_chunksize,
-			tdat->level, HDR, tdat->data);
+			if (HDR & CHUNK_FLAG_PREPROC) {
+				rv = preproc_decompress(tdat->decompress, cmpbuf, rabin_data_sz_cmp,
+				    ubuf, &_chunksize, tdat->level, HDR, tdat->data);
+			} else {
+				rv = tdat->decompress(cmpbuf, rabin_data_sz_cmp, ubuf, &_chunksize,
+				    tdat->level, HDR, tdat->data);
+			}
 			if (rv == -1) {
 				tdat->len_cmp = 0;
 				fprintf(stderr, "ERROR: Chunk %d, decompression failed.\n", tdat->id);
@@ -237,8 +333,13 @@ redo:
 		}
 	} else {
 		if (HDR & COMPRESSED) {
-			rv = tdat->decompress(cseg, tdat->len_cmp, tdat->uncompressed_chunk,
-			&_chunksize, tdat->level, HDR, tdat->data);
+			if (HDR & CHUNK_FLAG_PREPROC) {
+				rv = preproc_decompress(tdat->decompress, cseg, tdat->len_cmp,
+				    tdat->uncompressed_chunk, &_chunksize, tdat->level, HDR, tdat->data);
+			} else {
+				rv = tdat->decompress(cseg, tdat->len_cmp, tdat->uncompressed_chunk,
+				    &_chunksize, tdat->level, HDR, tdat->data);
+			}
 		} else {
 			memcpy(tdat->uncompressed_chunk, cseg, _chunksize);
 		}
@@ -317,7 +418,7 @@ cont:
  * |     `---------------- 2 - Lzma (Adaptive Mode)
  * |                       3 - PPMD (Adaptive Mode)
  * |
- * `---------------------- 1 - Last Chunk flag
+ * `---------------------- 1 - Chunk size flag (if original chunk is of variable length)
  *
  * A file trailer to indicate end.
  * Zero Compressed length: 8 zero bytes.
@@ -459,7 +560,7 @@ start_decompress(const char *filename, const char *to_filename)
 			}
 		}
 		if (enable_rabin_scan) {
-			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize,
+			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, 0,
 			    algo, enable_delta_encode);
 			if (tdat->rctx == NULL) {
 				UNCOMP_BAIL;
@@ -685,7 +786,7 @@ redo:
 			/* Compress index if it is at least 90 bytes. */
 			rv = lzma_compress(tdat->uncompressed_chunk + RABIN_HDR_SIZE,
 			    rabin_index_sz, compressed_chunk + RABIN_HDR_SIZE,
-			    &index_size_cmp, tdat->rctx->level, 0, tdat->rctx->lzma_data);
+			    &index_size_cmp, tdat->rctx->level, 255, tdat->rctx->lzma_data);
 		} else {
 			memcpy(compressed_chunk + RABIN_HDR_SIZE,
 			    tdat->uncompressed_chunk + RABIN_HDR_SIZE, rabin_index_sz);
@@ -696,9 +797,16 @@ redo:
 		if (rv == 0) {
 			memcpy(compressed_chunk, tdat->uncompressed_chunk, RABIN_HDR_SIZE);
 			/* Compress data chunk. */
-			rv = tdat->compress(tdat->uncompressed_chunk + rabin_index_sz,
-			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
-		            tdat->level, 0, tdat->data);
+			if (lzp_preprocess) {
+				rv = preproc_compress(tdat->compress,
+				    tdat->uncompressed_chunk + rabin_index_sz,
+				    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
+				    tdat->level, 0, tdat->data);
+			} else {
+				rv = tdat->compress(tdat->uncompressed_chunk + rabin_index_sz,
+				    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
+				    tdat->level, 0, tdat->data);
+			}
 
 			/* Can't compress data just retain as-is. */
 			if (rv < 0)
@@ -720,8 +828,14 @@ redo:
 	} else {
 plain_compress:
 		_chunksize = tdat->rbytes;
-		rv = tdat->compress(tdat->uncompressed_chunk, tdat->rbytes,
-		    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data);
+		if (lzp_preprocess) {
+			rv = preproc_compress(tdat->compress,
+			    tdat->uncompressed_chunk, tdat->rbytes,
+			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data);
+		} else {
+			rv = tdat->compress(tdat->uncompressed_chunk, tdat->rbytes,
+			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data);
+		}
 	}
 	/*
 	 * Sanity check to ensure compressed data is lesser than original.
@@ -741,6 +855,9 @@ plain_compress:
 
 	if (enable_rabin_scan && tdat->rctx->valid) {
 		type |= CHUNK_FLAG_DEDUP;
+	}
+	if (lzp_preprocess) {
+		type |= CHUNK_FLAG_PREPROC;
 	}
 	/*
 	 * Insert compressed chunk length and CRC64 checksum into
@@ -871,8 +988,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	if (enable_rabin_scan) {
 		flags |= FLAG_DEDUP;
 		/* Additional scratch space for dedup arrays. */
-		compressed_chunksize += (rabin_buf_extra(chunksize) -
-					(compressed_chunksize - chunksize));
+		compressed_chunksize += (rabin_buf_extra(chunksize, 0, algo,
+			enable_delta_encode) - (compressed_chunksize - chunksize));
 	}
 
 	err = 0;
@@ -992,7 +1109,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			}
 		}
 		if (enable_rabin_scan) {
-			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize,
+			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, 0,
 			    algo, enable_delta_encode);
 			if (tdat->rctx == NULL) {
 				COMP_BAIL;
@@ -1057,7 +1174,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 * Read the first chunk into a spare buffer (a simple double-buffering).
 	 */
 	if (enable_rabin_split) {
-		rctx = create_rabin_context(chunksize, 0, algo, enable_delta_encode);
+		rctx = create_rabin_context(chunksize, 0, 0, algo, enable_delta_encode);
 		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 	} else {
 		rbytes = Read(uncompfd, cread_buf, chunksize);
@@ -1371,7 +1488,7 @@ main(int argc, char *argv[])
 	level = 6;
 	slab_init();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEr")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDErL")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -1430,6 +1547,10 @@ main(int argc, char *argv[])
 		    case 'E':
 			enable_rabin_scan = 1;
 			enable_delta_encode = 1;
+			break;
+
+		    case 'L':
+			lzp_preprocess = 1;
 			break;
 
 		    case 'r':

@@ -58,14 +58,21 @@ CRCSRCS = lzma/crc64_fast.c lzma/crc64_table.c
 CRCHDRS = lzma/crc64_table_le.h lzma/crc64_table_be.h lzma/crc_macros.h
 CRCOBJS = $(CRCSRCS:.c=.o)
 
-BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~
+LZPSRCS = lzp/lzp.c
+LZPHDRS = lzp/lzp.h
+LZPOBJS = $(LZPSRCS:.c=.o)
+
+BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~
 
 RM = rm -f
 CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
-	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32
+	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
+	-I./lzp
 VEC_FLAGS = -ftree-vectorize
 LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm
+OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
+$(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS)
 
 ifdef DEBUG
 LINK = g++ -m64 -pthread -msse3
@@ -115,16 +122,15 @@ $(LZFXOBJS): $(LZFXSRCS) $(LZFXHDRS)
 $(LZ4OBJS): $(LZ4SRCS) $(LZ4HDRS)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
+$(LZPOBJS): $(LZPSRCS) $(LZPHDRS)
+	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
 $(MAINOBJS): $(MAINSRCS) $(MAINHDRS)
 	$(COMPILE) $(GEN_OPT) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
-$(PROG): $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) \
-$(CRCOBJS) $(RABINOBJS) $(BSDIFFOBJS)
-	$(LINK) -o $@ $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) \
-		$(LZFXOBJS) $(LZ4OBJS) $(RABINOBJS) $(BSDIFFOBJS) \
-		$(LDLIBS)
+$(PROG): $(OBJS)
+	$(LINK) -o $@ $(OBJS) $(LDLIBS)
 
 clean:
-	$(RM) $(PROG) $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(CRCOBJS) $(LZFXOBJS) $(LZ4OBJS) \
-	$(RABINOBJS) $(BSDIFFOBJS) $(BAKFILES)
+	$(RM) $(PROG) $(OBJS) $(BAKFILES)
 
