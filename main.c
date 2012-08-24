@@ -606,6 +606,27 @@ start_decompress(const char *filename, const char *to_filename)
 			tdat->id = chunk_num;
 
 			/*
+			 * First read length of compressed chunk.
+			 */
+			rb = Read(compfd, &tdat->len_cmp, sizeof (tdat->len_cmp));
+			if (rb != sizeof (tdat->len_cmp)) {
+				if (rb < 0) perror("Read: ");
+				else
+					fprintf(stderr, "Incomplete chunk %d header,"
+					    "file corrupt\n", chunk_num);
+				UNCOMP_BAIL;
+			}
+			tdat->len_cmp = htonll(tdat->len_cmp);
+
+			/*
+			 * Zero compressed len means end of file.
+			 */
+			if (tdat->len_cmp == 0) {
+				bail = 1;
+				break;
+			}
+
+			/*
 			 * Delayed allocation. Allocate chunks if not already done. The compressed
 			 * file format does not provide any info on how many chunks are there in
 			 * order to allow pipe mode operation. So delayed allocation during
@@ -625,27 +646,6 @@ start_decompress(const char *filename, const char *to_filename)
 					UNCOMP_BAIL;
 				}
 				tdat->cmp_seg = tdat->uncompressed_chunk;
-			}
-
-			/*
-			 * First read length of compressed chunk.
-			 */
-			rb = Read(compfd, &tdat->len_cmp, sizeof (tdat->len_cmp));
-			if (rb != sizeof (tdat->len_cmp)) {
-				if (rb < 0) perror("Read: ");
-				else
-					fprintf(stderr, "Incomplete chunk %d header,"
-					    "file corrupt\n", chunk_num);
-				UNCOMP_BAIL;
-			}
-			tdat->len_cmp = htonll(tdat->len_cmp);
-
-			/*
-			 * Zero compressed len means end of file.
-			 */
-			if (tdat->len_cmp == 0) {
-				bail = 1;
-				break;
 			}
 
 			if (tdat->len_cmp > largest_chunk)
@@ -1192,6 +1192,10 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			sem_wait(&tdat->write_done_sem);
 			if (main_cancel) break;
 
+			if (rbytes == 0) { /* EOF */
+				bail = 1;
+				break;
+			}
 			/*
 			 * Delayed allocation. Allocate chunks if not already done.
 			 */
@@ -1258,10 +1262,6 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 					bail = 1;
 					perror("Read: ");
 					COMP_BAIL;
-
-				} else if (tdat->rbytes == 0) { /* EOF */
-					bail = 1;
-					break;
 				}
 			}
 			/* Signal the compression thread to start */

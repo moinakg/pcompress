@@ -84,6 +84,8 @@ int
 zlib_deinit(void **data)
 {
 	if (*data) {
+		z_stream *zs = (z_stream *)(*data);
+		deflateEnd(zs);
 		slab_free(NULL, *data);
 	}
 }
