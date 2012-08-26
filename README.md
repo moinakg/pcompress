@@ -25,6 +25,9 @@ modes in which multiple algorithms are tried per chunk to determine the best
 one for the given chunk. Finally it supports 14 compression levels to allow
 for ultra compression modes in some algorithms.
 
+NOTE: This utility is Not an archiver. It compresses only single files or
+      datastreams. To archive use something else like tar, cpio or pax.
+
 Usage
 =====
 

@@ -501,7 +501,7 @@ start_decompress(const char *filename, const char *to_filename)
 	chunksize = ntohll(chunksize);
 	level = ntohl(level);
 
-	if (version != VERSION) {
+	if (version < VERSION-1) {
 		fprintf(stderr, "Unsupported version: %d\n", version);
 		err = 1;
 		goto uncomp_done;

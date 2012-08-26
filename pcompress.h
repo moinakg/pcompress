@@ -37,7 +37,7 @@ extern "C" {
 #define	CHDR_SZ		1
 #define	ALGO_SZ		8
 #define	MIN_CHUNK	2048
-#define	VERSION		2
+#define	VERSION		3
 #define	FLAG_DEDUP	1
 #define	UTILITY_VERSION	0.7
 
