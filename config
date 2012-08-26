@@ -1,0 +1,82 @@
+#!/bin/sh
+
+usage() {
+	prog=$1
+	cat << _EOF
+${prog} [<options>]
+
+<options> can be one of the following:
+
+--prefix=<val>		The installation prefix (default: /usr).
+--enable-debug		Enable debug mode compilation (default: disabled).
+--disable-allocator	Disable use of internal memory allocator mechanism (default: enabled).
+--enable-debug-stats	Enable printing of some verbose debug info (default: disabled).
+--help			Display this help message.
+
+_EOF
+}
+
+arg1=$1
+debug=0
+allocator=1
+debug_stats=0
+prefix=/usr
+while [ "${arg1}" != "" ]
+do
+	case "$arg1" in
+	--enable-debug) debug=1;;
+	--disable-allocator) allocator=0;;
+	--enable-debug-stats) debug_stats=1;;
+	--prefix=*)
+		pval=`echo ${arg1} | cut -f2 -d"="`
+		prefix=$pval
+	;;
+	--help) usage $0;;
+	*)
+		echo "Unrecognized option: ${arg1}"
+		exit 1
+	;;
+	esac
+	shift
+	arg1=$1
+done
+
+if [ $debug -eq 1 ]
+then
+	typ="DEBUG"
+else
+	typ="RELEASE"
+fi
+
+linkvar="LINK"
+compilevar="COMPILE"
+compilecppvar="COMPILE_cpp"
+vecflagsvar="VEC_FLAGS"
+loopoptflagsvar="LOOP_OPTFLAGS"
+cppflagsvar="CPPFLAGS"
+genoptvar="GEN_OPT"
+rabinoptvar="RABIN_OPT"
+noslabcppflagsvar="NO_SLAB_CPPFLAGS"
+debugstatscppflagsvar="DEBUG_STATS_CPPFLAGS"
+prefixvar="PREFIX"
+
+noslabcppflagsval=
+debugstatscppflagsval=
+
+[ $allocator -eq 0 ] && noslabcppflagsval='\$\(NO_SLAB_CPPFLAGS\)'
+[ $debug_stats -eq 1 ] && debugstatscppflagsval='\$\(DEBUG_STATS_CPPFLAGS\)'
+
+cat Makefile.in | sed "
+s#@${linkvar}@#\\\$\\(${typ}_${linkvar}\\)#g
+s#@${compilevar}@#\\\$\\(${typ}_${compilevar}\\)#g
+s#@${compilecppvar}@#\\\$\\(${typ}_${compilecppvar}\\)#g
+s#@${vecflagsvar}@#\\\$\\(${typ}_${vecflagsvar}\\)#g
+s#@${loopoptflagsvar}@#\\\$\\(${typ}_${loopoptflagsvar}\\)#g
+s#@${cppflagsvar}@#\\\$\\(${typ}_${cppflagsvar}\\)#g
+s#@${genoptvar}@#\\\$\\(${typ}_${genoptvar}\\)#g
+s#@${rabinoptvar}@#\\\$\\(${typ}_${rabinoptvar}\\)#g
+s#@${noslabcppflagsvar}@#${noslabcppflagsval}#g
+s#@${debugstatscppflagsvar}@#${debugstatscppflagsval}#g
+s#@${prefixvar}@#${prefix}#g
+" > Makefile
+

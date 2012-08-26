@@ -1,0 +1,46 @@
+Copyright (c) 2012 Moinak Ghosh
+
+Basic Installation
+==================
+The simplest process to build and install this utility is:
+
+./config
+make
+make install
+
+Strictly speaking the 'make install' step is not required to
+run the utility as it is a single stand alone program for now.
+
+The config script controls various compile time parameters and
+generates the actual Makefile. You can get a short description
+of all the options by running:
+
+./config --help
+
+A more descriptive account is given below:
+
+./config [<options>]
+
+<options> can be one of the following:
+
+--prefix=<val>		The installation prefix. 
+			This is set to /usr by default. However alternate
+			prefix needs to eb used during packaging.
+
+--enable-debug		Enable debug mode compilation.
+			This reduces the compiler optimization level to basic
+			and taks out all the loop optimization flags. This is
+			primary to aid debugging.
+
+--disable-allocator	Disable use of internal memory allocator mechanism.
+			The internal allocator can be totally disabled by setting
+			this build time flag. It is also possible to dynamically
+			disable the allocator by setting the following env variable:
+			ALLOCATOR_BYPASS=1
+
+--enable-debug-stats	Enable printing of some verbose debug info.
+			This at present shows some info related to Dedupe
+			efficiency.
+
+--help			Display the help message.
+

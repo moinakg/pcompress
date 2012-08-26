@@ -438,6 +438,11 @@ ssize_t lzp_decompress(const unsigned char * input, unsigned char * output, ssiz
     return (result == LZP_NO_ERROR) ? dataSize : result;
 }
 
+/*
+ * Counter-intuitively we use a larger hash (with better LZP compression) for lower global
+ * compression levels. So that LZP preprocessing plays along nicely with the primary
+ * compression algorithm being used and actually provides a benefit.
+ */
 int lzp_hash_size(int level) {
     if (level > 7) {
         return (LZP_DEFAULT_LZPHASHSIZE + 2);

@@ -1,8 +1,3 @@
-/*
- * Copyright 2009 Sun Microsystems, Inc.  All rights reserved.
- * Use is subject to license terms.
- */
-
 /*  LzmaEnc.h -- LZMA Encoder
 2008-10-04 : Igor Pavlov : Public domain */
 

@@ -65,39 +65,45 @@ LZPOBJS = $(LZPSRCS:.c=.o)
 BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~
 
 RM = rm -f
-CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
+COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
 	-I./lzp
-VEC_FLAGS = -ftree-vectorize
-LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
+COMMON_VEC_FLAGS = -ftree-vectorize
+COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS)
 
-ifdef DEBUG
-LINK = g++ -m64 -pthread -msse3
-COMPILE = gcc -m64 -g -msse3 -c
-COMPILE_cpp = g++ -m64 -g -msse3 -c
-VEC_FLAGS = 
-LOOP_OPTFLAGS = 
-GEN_OPT = -O -fno-omit-frame-pointer
-RABIN_OPT = -O -fno-omit-frame-pointer
-else
-GEN_OPT = -O3
-RABIN_OPT = -O2
-LINK = g++ -m64 -pthread -msse3
-COMPILE = gcc -m64 -msse3 -c
-COMPILE_cpp = g++ -m64 -msse3 -c
-CPPFLAGS += -DNDEBUG
-endif
+DEBUG_LINK = g++ -m64 -pthread -msse3
+DEBUG_COMPILE = gcc -m64 -g -msse3 -c
+DEBUG_COMPILE_cpp = g++ -m64 -g -msse3 -c
+DEBUG_VEC_FLAGS = 
+DEBUG_LOOP_OPTFLAGS = 
+DEBUG_GEN_OPT = -O -fno-omit-frame-pointer
+DEBUG_RABIN_OPT = -O -fno-omit-frame-pointer
+DEBUG_CPPFLAGS = $(COMMON_CPPFLAGS)
 
-ifdef DEBUG_NO_SLAB
-CPPFLAGS += -DDEBUG_NO_SLAB
-endif
+RELEASE_LINK = g++ -m64 -pthread -msse3
+RELEASE_COMPILE = gcc -m64 -msse3 -c
+RELEASE_COMPILE_cpp = g++ -m64 -msse3 -c
+RELEASE_VEC_FLAGS = $(COMMON_VEC_FLAGS)
+RELEASE_LOOP_OPTFLAGS = $(COMMON_LOOP_OPTFLAGS)
+RELEASE_CPPFLAGS = $(COMMON_CPPFLAGS) -DNDEBUG
+RELEASE_GEN_OPT = -O3
+RELEASE_RABIN_OPT = -O2
 
-ifdef DEBUG_STATS
-CPPFLAGS += -DDEBUG_STATS
-endif
+NO_SLAB_CPPFLAGS = -DDEBUG_NO_SLAB
+DEBUG_STATS_CPPFLAGS = -DDEBUG_STATS
+
+LINK = @LINK@
+COMPILE = @COMPILE@
+COMPILE_cpp = @COMPILE_cpp@
+VEC_FLAGS = @VEC_FLAGS@
+LOOP_OPTFLAGS = @LOOP_OPTFLAGS@
+CPPFLAGS = @CPPFLAGS@ @NO_SLAB_CPPFLAGS@ @DEBUG_STATS_CPPFLAGS@
+GEN_OPT = @GEN_OPT@
+RABIN_OPT = @RABIN_OPT@
+PREFIX=@PREFIX@
 
 all: $(PROG)
 
@@ -133,4 +139,18 @@ $(PROG): $(OBJS)
 
 clean:
 	$(RM) $(PROG) $(OBJS) $(BAKFILES)
+
+distclean: clean
+	$(RM) Makefile
+
+install: $(PROG)
+	@mkdir -p $(PREFIX)/bin
+	@chmod 0755 $(PREFIX)/bin
+	@cp $(PROG) $(PREFIX)/bin
+	@chmod 0555 $(PREFIX)/bin/$(PROG)
+	@mkdir -p $(PREFIX)/share/doc/$(PROG)
+	@chmod 0755 $(PREFIX)/share $(PREFIX)/share/doc $(PREFIX)/share/doc/$(PROG)
+	@cp README.md $(PREFIX)/share/doc/$(PROG)/README
+	@chmod 0444 $(PREFIX)/share/doc/$(PROG)/README
+
 
