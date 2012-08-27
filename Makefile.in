@@ -62,34 +62,42 @@ LZPSRCS = lzp/lzp.c
 LZPHDRS = lzp/lzp.h
 LZPOBJS = $(LZPSRCS:.c=.o)
 
+LIBBSCWRAP = libbsc_compress.c
+LIBBSCWRAPOBJ = libbsc_compress.o
+LIBBSCDIR = @LIBBSCDIR@
+LIBBSCLFLAGS = -L$(LIBBSCDIR) -lbsc
+LIBBSCLIB = @LIBBSCLIB@
+LIBBSCGEN_OPT = -fopenmp
+LIBBSCCPPFLAGS = -I$(LIBBSCDIR)/libbsc -DENABLE_PC_LIBBSC
+
 BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~
 
 RM = rm -f
 COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
-	-I./lzp
+	-I./lzp @LIBBSCCPPFLAGS@
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
-LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm
+LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm @LIBBSCLFLAGS@
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
-$(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS)
+$(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) @LIBBSCWRAPOBJ@
 
-DEBUG_LINK = g++ -m64 -pthread -msse3
+DEBUG_LINK = g++ -m64 -pthread -msse3 @LIBBSCGEN_OPT@
 DEBUG_COMPILE = gcc -m64 -g -msse3 -c
 DEBUG_COMPILE_cpp = g++ -m64 -g -msse3 -c
 DEBUG_VEC_FLAGS = 
 DEBUG_LOOP_OPTFLAGS = 
-DEBUG_GEN_OPT = -O -fno-omit-frame-pointer
+DEBUG_GEN_OPT = -O -fno-omit-frame-pointer @LIBBSCGEN_OPT@
 DEBUG_RABIN_OPT = -O -fno-omit-frame-pointer
 DEBUG_CPPFLAGS = $(COMMON_CPPFLAGS)
 
-RELEASE_LINK = g++ -m64 -pthread -msse3
+RELEASE_LINK = g++ -m64 -pthread -msse3 @LIBBSCGEN_OPT@
 RELEASE_COMPILE = gcc -m64 -msse3 -c
 RELEASE_COMPILE_cpp = g++ -m64 -msse3 -c
 RELEASE_VEC_FLAGS = $(COMMON_VEC_FLAGS)
 RELEASE_LOOP_OPTFLAGS = $(COMMON_LOOP_OPTFLAGS)
 RELEASE_CPPFLAGS = $(COMMON_CPPFLAGS) -DNDEBUG
-RELEASE_GEN_OPT = -O3
+RELEASE_GEN_OPT = -O3 @LIBBSCGEN_OPT@
 RELEASE_RABIN_OPT = -O2
 
 NO_SLAB_CPPFLAGS = -DDEBUG_NO_SLAB
@@ -129,6 +137,12 @@ $(LZ4OBJS): $(LZ4SRCS) $(LZ4HDRS)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(LZPOBJS): $(LZPSRCS) $(LZPHDRS)
+	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
+$(LIBBSCLIB):
+	(cd $(LIBBSCDIR); make)
+
+$(LIBBSCWRAPOBJ): $(LIBBSCWRAP) $(LIBBSCLIB)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(MAINOBJS): $(MAINSRCS) $(MAINHDRS)

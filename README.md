@@ -44,6 +44,11 @@ Usage
        bzip2  - Bzip2 Algorithm from libbzip2.
        ppmd   - The PPMd algorithm excellent for textual data. PPMd requires
                 at least 64MB X CPUs more memory than the other modes.
+
+       libbsc - A Block Sorting Compressor using the Burrows Wheeler Transform
+                like Bzip2 but runs faster and gives better compression than
+                Bzip2 (See: libbsc.com).
+
        adapt  - Adaptive mode where ppmd or bzip2 will be used per chunk,
                 depending on which one produces better compression. This mode
                 is obviously fairly slow and requires lots of memory.
@@ -58,6 +63,10 @@ Usage
        <compress_level> - Can be a number from 0 meaning minimum and 14 meaning
                 maximum compression.
 
+NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
+      from http://libbsc.com/ . It is only available if pcompress in built with
+      that library. See INSTALL file for details.
+      
     To decompress a file compressed using above command:
        pcompress -d <compressed file> <target file>
 

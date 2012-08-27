@@ -105,6 +105,8 @@ typedef struct {
 	uint32_t buf_extra;
 	int compress_mt_capable;
 	int decompress_mt_capable;
+	int single_chunk_mt_capable;
+	int is_single_chunk;
 	int nthreads;
 	int c_max_threads;
 	int d_max_threads;
@@ -177,6 +179,8 @@ init_algo_props(algo_props_t *props)
 	props->buf_extra = 0;
 	props->compress_mt_capable = 0;
 	props->decompress_mt_capable = 0;
+	props->single_chunk_mt_capable = 0;
+	props->is_single_chunk = 0;
 	props->nthreads = 1;
 	props->c_max_threads = 1;
 	props->d_max_threads = 1;

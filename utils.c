@@ -284,5 +284,14 @@ set_threadcounts(algo_props_t *props, int *nthreads, int nprocs, algo_threads_ty
 			}
 		}
 		*nthreads = nthreads1;
+
+	} else if (props->single_chunk_mt_capable && props->is_single_chunk) {
+		*nthreads = 1;
+		if (typ == COMPRESS_THREADS)
+			props->nthreads = props->c_max_threads;
+		else
+			props->nthreads = props->d_max_threads;
+		if (props->nthreads > nprocs)
+			props->nthreads = nprocs;
 	}
 }

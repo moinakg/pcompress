@@ -39,6 +39,7 @@ extern "C" {
 #define	MIN_CHUNK	2048
 #define	VERSION		3
 #define	FLAG_DEDUP	1
+#define	FLAG_SINGLE_CHUNK	2
 #define	UTILITY_VERSION	0.7
 
 #define	COMPRESSED	1
@@ -131,6 +132,17 @@ extern void zlib_stats(int show);
 extern void lz_fx_stats(int show);
 extern void lz4_stats(int show);
 extern void none_stats(int show);
+
+#ifdef ENABLE_PC_LIBBSC
+extern int libbsc_compress(void *src, size_t srclen, void *dst,
+	size_t *dstlen, int level, uchar_t chdr, void *data);
+extern int libbsc_decompress(void *src, size_t srclen, void *dst,
+	size_t *dstlen, int level, uchar_t chdr, void *data);
+extern int libbsc_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern void libbsc_props(algo_props_t *data, int level, ssize_t chunksize);
+extern int libbsc_deinit(void **data);
+extern void libbsc_stats(int show);
+#endif
 
 /*
  * Per-thread data structure for compression and decompression threads.

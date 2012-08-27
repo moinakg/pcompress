@@ -17,7 +17,14 @@ of all the options by running:
 
 ./config --help
 
-A more descriptive account is given below:
+NOTE: Basic Installation does not enable support for Libbsc, a
+      new block-sorting compressor (similar to but better than
+      Bzip2). See below for details.
+
+Custom Installation
+===================
+The options to the config script are detailed below. Note that this is
+not the usual GNU Autoconf script.
 
 ./config [<options>]
 
@@ -28,19 +35,43 @@ A more descriptive account is given below:
 			prefix needs to eb used during packaging.
 
 --enable-debug		Enable debug mode compilation.
-			This reduces the compiler optimization level to basic
-			and taks out all the loop optimization flags. This is
-			primary to aid debugging.
+			This reduces the compiler optimization level to
+			basic and taks out all the loop optimization flags.
+			This is primarily to aid debugging.
 
 --disable-allocator	Disable use of internal memory allocator mechanism.
-			The internal allocator can be totally disabled by setting
-			this build time flag. It is also possible to dynamically
-			disable the allocator by setting the following env variable:
+			The internal allocator can be totally disabled by
+			setting this build time flag. It is also possible
+			to dynamically disable the allocator by setting the
+			following env variable:
 			ALLOCATOR_BYPASS=1
 
 --enable-debug-stats	Enable printing of some verbose debug info.
 			This at present shows some info related to Dedupe
 			efficiency.
 
+--with-libbsc=<path_to_libbsc_source>
+			Enable support for libbsc (See: libbsc.com). Full
+			path to the libbsc source tree must be provided. It
+			links the library statically.
+
 --help			Display the help message.
+
+Steps for building with libbsc support
+======================================
+1) Download libbsc source from:  http://libbsc.com/ . Click on the
+   "Download TAR Ball" button. Downloading the 3.1.0 release from the
+   Github project download page will Not work.
+
+2) Extract the gzippped tarball. It will create a directory for example:
+   IlyaGrebnov-libbsc-0b12f29
+
+3) Now cd into the pcompress directory and execute the config script
+   with the full path to the libbsc source directory. For example:
+
+   ./config --with-libbsc=/full/path/to/IlyaGrebnov-libbsc-0b12f29
+
+4) Now run make in the pcompress directory. This will also run make in
+   the libbsc source directory to build it.
+
 

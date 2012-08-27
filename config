@@ -11,6 +11,9 @@ ${prog} [<options>]
 --enable-debug		Enable debug mode compilation (default: disabled).
 --disable-allocator	Disable use of internal memory allocator mechanism (default: enabled).
 --enable-debug-stats	Enable printing of some verbose debug info (default: disabled).
+--with-libbsc=<path_to_libbsc_source>
+			Enable support for libbsc (See: libbsc.com). Full path to the libbsc
+                        source tree must be provided. It links the library statically.
 --help			Display this help message.
 
 _EOF
@@ -21,6 +24,13 @@ debug=0
 allocator=1
 debug_stats=0
 prefix=/usr
+libbsc_dir=
+libbsc_lib=
+libbsclflags=
+libbscwrapobj=
+libbscgenopt=
+libbsccppflags=
+
 while [ "${arg1}" != "" ]
 do
 	case "$arg1" in
@@ -30,6 +40,20 @@ do
 	--prefix=*)
 		pval=`echo ${arg1} | cut -f2 -d"="`
 		prefix=$pval
+	;;
+	--with-libbsc=*)
+		path=`echo ${arg1} | cut -f2 -d"="`
+		if [ -f ${path}/bsc.cpp -a -f ${path}/libbsc/libbsc.h ]
+		then
+			libbsc_dir="${path}"
+			libbsc_lib="${path}/libbsc.a"
+			libbsclflags='\$\(LIBBSCLFLAGS\)'
+			libbscwrapobj='\$\(LIBBSCWRAPOBJ\)'
+			libbscgenopt='\$\(LIBBSCGEN_OPT\)'
+			libbsccppflags='\$\(LIBBSCCPPFLAGS\)'
+		else
+			echo "Libbsc not found in ${path}, not enabling libbsc support.\n"
+		fi
 	;;
 	--help) usage $0;;
 	*)
@@ -60,6 +84,13 @@ noslabcppflagsvar="NO_SLAB_CPPFLAGS"
 debugstatscppflagsvar="DEBUG_STATS_CPPFLAGS"
 prefixvar="PREFIX"
 
+libbscdirvar="LIBBSCDIR"
+libbsclibvar="LIBBSCLIB"
+libbsclflagsvar="LIBBSCLFLAGS"
+libbscwrapobjvar="LIBBSCWRAPOBJ"
+libbscgenoptvar="LIBBSCGEN_OPT"
+libbsccppflagsvar="LIBBSCCPPFLAGS"
+
 noslabcppflagsval=
 debugstatscppflagsval=
 
@@ -78,5 +109,11 @@ s#@${rabinoptvar}@#\\\$\\(${typ}_${rabinoptvar}\\)#g
 s#@${noslabcppflagsvar}@#${noslabcppflagsval}#g
 s#@${debugstatscppflagsvar}@#${debugstatscppflagsval}#g
 s#@${prefixvar}@#${prefix}#g
+s#@${libbscdirvar}@#${libbsc_dir}#g
+s#@${libbsclibvar}@#${libbsc_lib}#g
+s#@${libbsclflagsvar}@#${libbsclflags}#g
+s#@${libbscwrapobjvar}@#${libbscwrapobj}#g
+s#@${libbscgenoptvar}@#${libbscgenopt}#g
+s#@${libbsccppflagsvar}@#${libbsccppflags}#g
 " > Makefile
 

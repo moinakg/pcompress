@@ -107,6 +107,11 @@ usage(void)
 	    "   bzip2  - Bzip2 Algorithm from libbzip2.\n"
 	    "   ppmd   - The PPMd algorithm excellent for textual data. PPMd requires\n"
 	    "            at least 64MB X CPUs more memory than the other modes.\n"
+#ifdef ENABLE_PC_LIBBSC
+	    "   libbsc - A Block Sorting Compressor using the Burrows Wheeler Transform\n"
+	    "            like Bzip2 but runs faster and gives better compression than\n"
+	    "            Bzip2 (See: libbsc.com).\n"
+#endif
 	    "   adapt  - Adaptive mode where ppmd or bzip2 will be used per chunk,\n"
 	    "            depending on which one produces better compression. This mode\n"
 	    "            is obviously fairly slow and requires lots of memory.\n"
@@ -1034,6 +1039,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			enable_rabin_split = 0; // Do not split for whole files.
 			nthreads = 1;
 			single_chunk = 1;
+			props.is_single_chunk = 1;
+			flags |= FLAG_SINGLE_CHUNK;
 		} else {
 			if (nthreads == 0 || nthreads > sbuf.st_size / chunksize) {
 				nthreads = sbuf.st_size / chunksize;
@@ -1471,6 +1478,17 @@ init_algo(const char *algo, int bail)
 		_stats_func = adapt_stats;
 		adapt_mode = 1;
 		rv = 0;
+#ifdef ENABLE_PC_LIBBSC
+	} else if (memcmp(algorithm, "libbsc", 6) == 0) {
+		_compress_func = libbsc_compress;
+		_decompress_func = libbsc_decompress;
+		_init_func = libbsc_init;
+		_deinit_func = libbsc_deinit;
+		_stats_func = libbsc_stats;
+		_props_func = libbsc_props;
+		adapt_mode = 1;
+		rv = 0;
+#endif
 	}
 
 	return (rv);
