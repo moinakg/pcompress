@@ -1,5 +1,33 @@
+== 0.8 Beta release ==
+Add support for libbsc a high-performance block sorting compressor.
+Enable external algorithm threading for single chunk compressed files.
+Add config script to generate Makefile based on flags.
+Add install target and installation readme file.
+Improve memory efficiency when total file size < total size of chunks.
+Fix freeing of Zlib structures.
+Add LZP Pre-Compression support ported from libbsc.
+Add generic pre-processing wrappers for future support of other pre-processors.
+Clean up computation of Rabin block sizes.
+Compute Rabin scratch space accurately to avoid RAM wastage.
+Delay allocation of per-thread chunks for performance and memory efficiency.
+Avoid allocating double-buffer for single-chunk files.
+Introduce lzmaMt option to indicate multithreaded LZMA.
+Add multithreaded LZMA port from p7zip
+Compute balanced thread count between chunk threads and algo threads
+Generic way to handle querying algorithm parameters
+Clean up unnecessary includes
+Speed up sort comparator function.
+Reduce memory consumption and improve performance in dedupe
+Re-introduce crc64 for dedup blocks to avoid wasted memcpy-s
+Restructe block array to be an array of pointers allocated on demand
+Fix a corner case issue when splitting chunks at a dedup boundary
+Improve Rabin computations using an irreducible polynomial
+Slight improvement to similarity computation
+A simple mechanism to include DEBUG mode stats
+Implement secondary sketch based on character counts to refine similarity checksum.
+Proper checksum update for last block.
 == 0.7 Beta release ==
-Bump version to 0.6
+Bump version to 0.7
 Fix handling of compression flags in adaptive mode
 Fix error handling when chunk size is too small for dedupe
 Fix initialization of adaptive modes.
