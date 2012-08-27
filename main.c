@@ -527,6 +527,10 @@ start_decompress(const char *filename, const char *to_filename)
 		enable_rabin_scan = 1;
 	}
 
+	if (flags & FLAG_SINGLE_CHUNK) {
+		props.is_single_chunk = 1;
+	}
+
 	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
 	if (nthreads > 0 && nthreads < nprocs)
 		nprocs = nthreads;

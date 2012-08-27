@@ -89,6 +89,9 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
        '-M' -     Display memory allocator statistics
        '-C' -     Display compression statistics
 
+NOTE: It is recommended not to use '-L' with libbsc compression since libbsc uses
+      LZP internally as well.
+
 Environment Variables
 =====================
 
