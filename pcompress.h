@@ -34,13 +34,13 @@ extern "C" {
 
 #include <rabin_polynomial.h>
 
-#define	CHDR_SZ		1
+#define	CHUNK_FLAG_SZ	1
 #define	ALGO_SZ		8
 #define	MIN_CHUNK	2048
 #define	VERSION		3
 #define	FLAG_DEDUP	1
 #define	FLAG_SINGLE_CHUNK	2
-#define	UTILITY_VERSION	0.8
+#define	UTILITY_VERSION	"0.8"
 
 #define	COMPRESSED	1
 #define	UNCOMPRESSED	0
@@ -55,16 +55,21 @@ extern "C" {
 #define	PREPROC_COMPRESSED	128
 
 /*
- * lower 3 bits in higher nibble indicate compression algorithm.
+ * Sizes of chunk header components.
+ */
+#define	COMPRESSED_CHUNKSZ	(sizeof (uint64_t))
+#define	ORIGINAL_CHUNKSZ	(sizeof (uint64_t))
+#define	CHUNK_HDR_SZ		(COMPRESSED_CHUNKSZ + cksum_bytes + ORIGINAL_CHUNKSZ + CHUNK_FLAG_SZ)
+
+/*
+ * lower 3 bits in higher nibble indicate chunk compression algorithm
+ * in adaptive modes.
  */
 #define	COMPRESS_LZMA	1
 #define	COMPRESS_BZIP2	2
 #define	COMPRESS_PPMD	3
 #define	CHDR_ALGO_MASK	7
 
-extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
-extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, size_t size,
-	uint64_t crc, uint64_t *cnt);
 extern uint32_t zlib_buf_extra(ssize_t buflen);
 extern int lz4_buf_extra(ssize_t buflen);
 
@@ -155,7 +160,7 @@ struct cmp_data {
 	ssize_t rbytes;
 	ssize_t chunksize;
 	ssize_t len_cmp;
-	uint64_t crc64;
+	uchar_t checksum[CKSUM_MAX_BYTES];
 	int level;
 	unsigned int id;
 	compress_func_ptr compress;

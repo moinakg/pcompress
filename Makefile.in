@@ -62,6 +62,13 @@ LZPSRCS = lzp/lzp.c
 LZPHDRS = lzp/lzp.h
 LZPOBJS = $(LZPSRCS:.c=.o)
 
+SKEINSRCS = crypto/skein/SHA3api_ref.c crypto/skein/skein_block.c \
+	crypto/skein/skein.c crypto/skein/skein_debug.c
+SKEINHDRS = crypto/skein/brg_endian.h crypto/skein/SHA3api_ref.h \
+	crypto/skein/skein.h crypto/skein/skein_port.h crypto/skein/brg_types.h \
+	crypto/skein/skein_debug.h crypto/skein/skein_iv.h
+SKEINOBJS = $(SKEINSRCS:.c=.o)
+
 LIBBSCWRAP = libbsc_compress.c
 LIBBSCWRAPOBJ = libbsc_compress.o
 LIBBSCDIR = @LIBBSCDIR@
@@ -75,12 +82,12 @@ BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~
 RM = rm -f
 COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
-	-I./lzp @LIBBSCCPPFLAGS@
+	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm @LIBBSCLFLAGS@
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
-$(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) @LIBBSCWRAPOBJ@
+$(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS)
 
 DEBUG_LINK = g++ -m64 -pthread -msse3 @LIBBSCGEN_OPT@
 DEBUG_COMPILE = gcc -m64 -g -msse3 -c
@@ -137,6 +144,9 @@ $(LZ4OBJS): $(LZ4SRCS) $(LZ4HDRS)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(LZPOBJS): $(LZPSRCS) $(LZPHDRS)
+	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
+$(SKEINOBJS): $(SKEINSRCS) $(SKEINHDRS)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(LIBBSCLIB):

@@ -32,8 +32,26 @@
 #include <errno.h>
 #include <link.h>
 #include <rabin_polynomial.h>
+#include <skein.h>
 
 #include "utils.h"
+
+/*
+ * Checksum properties
+ */
+static struct {
+	char	*name;
+	cksum_t	cksum_id;
+	int	bytes;
+} cksum_props[] = {
+	{"CRC64",	CKSUM_CRC64,	8},
+	{"SKEIN256",	CKSUM_SKEIN256,	32},
+	{"SKEIN512",	CKSUM_SKEIN512,	64}
+};
+
+extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
+extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, size_t size,
+	uint64_t crc, uint64_t *cnt);
 
 void
 err_exit(int show_errno, const char *format, ...)
@@ -293,5 +311,72 @@ set_threadcounts(algo_props_t *props, int *nthreads, int nprocs, algo_threads_ty
 			props->nthreads = props->d_max_threads;
 		if (props->nthreads > nprocs)
 			props->nthreads = nprocs;
+	}
+}
+
+int
+compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, ssize_t bytes)
+{
+	if (cksum == CKSUM_CRC64) {
+		uint64_t *ck = (uint64_t *)cksum_buf;
+		*ck = lzma_crc64(buf, bytes, 0);
+
+	} else if (cksum == CKSUM_SKEIN256) {
+		Skein_512_Ctxt_t ctx;
+
+		Skein_512_Init(&ctx, 256);
+		Skein_512_Update(&ctx, buf, bytes);
+		Skein_512_Final(&ctx, cksum_buf);
+
+	} else if (cksum == CKSUM_SKEIN512) {
+		Skein_512_Ctxt_t ctx;
+
+		Skein_512_Init(&ctx, 512);
+		Skein_512_Update(&ctx, buf, bytes);
+		Skein_512_Final(&ctx, cksum_buf);
+	} else {
+		fprintf(stderr, "Invalid checksum algorithm code: %d\n", cksum);
+		return (-1);
+	}
+	return (0);
+}
+
+int
+get_checksum_props(char *name, int *cksum, int *cksum_bytes)
+{
+	int i;
+
+	for (i=0; i<sizeof (cksum_props); i++) {
+		if ((name != NULL && strcmp(name, cksum_props[i].name) == 0) ||
+		    (*cksum != 0 && *cksum == cksum_props[i].cksum_id)) {
+			*cksum = cksum_props[i].cksum_id;
+			*cksum_bytes = cksum_props[i].bytes;
+			return (0);
+		}
+	}
+	return (-1);
+}
+
+void
+serialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes)
+{
+	int i,j;
+
+	j = 0;
+	for (i=cksum_bytes; i>0; i--) {
+		buf[j] = checksum[i-1];
+		j++;
+	}
+}
+
+void
+deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes)
+{
+	int i,j;
+
+	j = 0;
+	for (i=cksum_bytes; i>0; i--) {
+		checksum[i-1] = buf[j];
+		j++;
 	}
 }

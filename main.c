@@ -86,13 +86,15 @@ static const char *exec_name;
 static const char *algo = NULL;
 static int do_compress = 0;
 static int do_uncompress = 0;
+static int cksum_bytes;
+static int cksum = 0;
 static rabin_context_t *rctx;
 
 static void
 usage(void)
 {
 	fprintf(stderr,
-	    "\nPcompress Version %f\n\n"
+	    "\nPcompress Version %s\n\n"
 	    "Usage:\n"
 	    "1) To compress a file:\n"
 	    "   %s -c <algorithm> [-l <compress level>] [-s <chunk size>] <file>\n"
@@ -138,6 +140,9 @@ usage(void)
 	    "7) Other flags:\n"
 	    "   '-L'	- Enable LZP pre-compression. This improves compression ratio of all\n"
 	    "       	  algorithms with some extra CPU and very low RAM overhead.\n"
+	    "	'-S' <cksum>\n"
+	    "		- Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512\n"
+	    "		  Default one is SKEIN256.\n"
 	    "   '-M'	- Display memory allocator statistics\n"
 	    "   '-C'	- Display compression statistics\n\n",
 	    UTILITY_VERSION, exec_name, exec_name, exec_name, exec_name, exec_name, exec_name);
@@ -258,7 +263,7 @@ perform_decompress(void *dat)
 	ssize_t rabin_index_sz, rabin_data_sz, rabin_index_sz_cmp, rabin_data_sz_cmp;
 	int type, rv;
 	unsigned int blknum;
-	typeof (tdat->crc64) crc64;
+	uchar_t checksum[CKSUM_MAX_BYTES];
 	uchar_t HDR;
 	uchar_t *cseg;
 
@@ -275,20 +280,19 @@ redo:
 	 */
 	if (tdat->rbytes == 0) {
 		tdat->len_cmp = 0;
-		tdat->crc64 = 0;
 		goto cont;
 	}
 
-	cseg = tdat->compressed_chunk + sizeof (crc64);
+	cseg = tdat->compressed_chunk + cksum_bytes;
 	_chunksize = tdat->chunksize;
-	tdat->crc64 = htonll(*((typeof (crc64) *)(tdat->compressed_chunk)));
+	deserialize_checksum(tdat->checksum, tdat->compressed_chunk, cksum_bytes);
 	HDR = *cseg;
-	cseg += CHDR_SZ;
+	cseg += CHUNK_FLAG_SZ;
 	if (HDR & CHSIZE_MASK) {
 		uchar_t *rseg;
 
-		tdat->rbytes -= sizeof (ssize_t);
-		tdat->len_cmp -= sizeof (ssize_t);
+		tdat->rbytes -= ORIGINAL_CHUNKSZ;
+		tdat->len_cmp -= ORIGINAL_CHUNKSZ;
 		rseg = tdat->compressed_chunk + tdat->rbytes;
 		_chunksize = ntohll(*((ssize_t *)rseg));
 	}
@@ -383,8 +387,8 @@ redo:
 	 * If it does not match we set length of chunk to 0 to indicate
 	 * exit to the writer thread.
 	 */
-	crc64 = lzma_crc64(tdat->uncompressed_chunk, _chunksize, 0);
-	if (crc64 != tdat->crc64) {
+	compute_checksum(checksum, cksum, tdat->uncompressed_chunk, _chunksize);
+	if (memcmp(checksum, tdat->checksum, cksum_bytes) != 0) {
 		tdat->len_cmp = 0;
 		fprintf(stderr, "ERROR: Chunk %d, checksums do not match.\n", tdat->id);
 	}
@@ -408,7 +412,7 @@ cont:
  *
  * Chunk Header:
  * Compressed length: 8 bytes.
- * CRC64 Checksum:    8 bytes.
+ * Checksum:          Upto 64 bytes.
  * Chunk flags:       1 byte.
  * 
  * Chunk Flags, 8 bits:
@@ -512,8 +516,7 @@ start_decompress(const char *filename, const char *to_filename)
 		goto uncomp_done;
 	}
 
-	compressed_chunksize = chunksize + sizeof (chunksize) +
-	    sizeof (uint64_t) + sizeof (chunksize) + zlib_buf_extra(chunksize);
+	compressed_chunksize = chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
 
 	if (_props_func) {
 		_props_func(&props, level, chunksize);
@@ -531,6 +534,9 @@ start_decompress(const char *filename, const char *to_filename)
 		props.is_single_chunk = 1;
 	}
 
+	cksum = flags & CKSUM_MASK;
+	get_checksum_props(NULL, &cksum, &cksum_bytes);
+
 	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
 	if (nthreads > 0 && nthreads < nprocs)
 		nprocs = nthreads;
@@ -542,7 +548,7 @@ start_decompress(const char *filename, const char *to_filename)
 	if (nthreads * props.nthreads > 1) fprintf(stderr, "s");
 	fprintf(stderr, "\n");
 	nprocs = nthreads;
-	slab_cache_add(compressed_chunksize + CHDR_SZ);
+	slab_cache_add(compressed_chunksize);
 	slab_cache_add(chunksize);
 	slab_cache_add(sizeof (struct cmp_data));
 
@@ -597,7 +603,7 @@ start_decompress(const char *filename, const char *to_filename)
 	/*
 	 * Now read from the compressed file in variable compressed chunk size.
 	 * First the size is read from the chunk header and then as many bytes +
-	 * CRC64 checksum size are read and passed to decompression thread.
+	 * checksum size are read and passed to decompression thread.
 	 * Chunk sequencing is ensured.
 	 */
 	chunk_num = 0;
@@ -644,12 +650,13 @@ start_decompress(const char *filename, const char *to_filename)
 			 */
 			if (!tdat->compressed_chunk) {
 				tdat->compressed_chunk = (uchar_t *)slab_alloc(NULL,
-				compressed_chunksize + CHDR_SZ);
+				    compressed_chunksize);
 				if (enable_rabin_scan)
 					tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
-					compressed_chunksize + CHDR_SZ);
+					    compressed_chunksize);
 				else
-					tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL, chunksize);
+					tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
+					    chunksize);
 				if (!tdat->compressed_chunk || !tdat->uncompressed_chunk) {
 					fprintf(stderr, "Out of memory\n");
 					UNCOMP_BAIL;
@@ -664,12 +671,12 @@ start_decompress(const char *filename, const char *to_filename)
 			avg_chunk += tdat->len_cmp;
 
 			/*
-			 * Now read compressed chunk including the crc64 checksum.
+			 * Now read compressed chunk including the checksum.
 			 */
 			tdat->rbytes = Read(compfd, tdat->compressed_chunk,
-			    tdat->len_cmp + sizeof(tdat->crc64) + CHDR_SZ);
+			    tdat->len_cmp + cksum_bytes + CHUNK_FLAG_SZ);
 			if (main_cancel) break;
-			if (tdat->rbytes < tdat->len_cmp + sizeof(tdat->crc64) + CHDR_SZ) {
+			if (tdat->rbytes < tdat->len_cmp + cksum_bytes + CHUNK_FLAG_SZ) {
 				if (tdat->rbytes < 0) {
 					perror("Read: ");
 					UNCOMP_BAIL;
@@ -752,7 +759,7 @@ redo:
 		return (0);
 	}
 
-	compressed_chunk = tdat->compressed_chunk + CHDR_SZ;
+	compressed_chunk = tdat->compressed_chunk + CHUNK_FLAG_SZ;
 	rbytes = tdat->rbytes;
 	/* Perform Dedup if enabled. */
 	if (enable_rabin_scan) {
@@ -764,7 +771,7 @@ redo:
 		 * into uncompressed_chunk so that compress transforms uncompressed_chunk
 		 * back into cmp_seg. Avoids an extra memcpy().
 		 */
-		tdat->crc64 = lzma_crc64(tdat->cmp_seg, tdat->rbytes, 0);
+		compute_checksum(tdat->checksum, cksum, tdat->cmp_seg, tdat->rbytes);
 
 		rctx = tdat->rctx;
 		reset_rabin_context(tdat->rctx);
@@ -778,7 +785,7 @@ redo:
 		/*
 		 * Compute checksum of original uncompressed chunk.
 		 */
-		tdat->crc64 = lzma_crc64(tdat->uncompressed_chunk, tdat->rbytes, 0);
+		compute_checksum(tdat->checksum, cksum, tdat->uncompressed_chunk, tdat->rbytes);
 	}
 
 	/*
@@ -868,16 +875,16 @@ plain_compress:
 	if (lzp_preprocess) {
 		type |= CHUNK_FLAG_PREPROC;
 	}
+
 	/*
-	 * Insert compressed chunk length and CRC64 checksum into
-	 * chunk header.
+	 * Insert compressed chunk length and checksum into chunk header.
 	 */
 	len_cmp = tdat->len_cmp;
 	*((typeof (len_cmp) *)(tdat->cmp_seg)) = htonll(tdat->len_cmp);
-	*((typeof (tdat->crc64) *)(tdat->cmp_seg + sizeof (tdat->len_cmp))) = htonll(tdat->crc64);
-	tdat->len_cmp += CHDR_SZ;
+	serialize_checksum(tdat->checksum, tdat->cmp_seg + sizeof (tdat->len_cmp), cksum_bytes);
+	tdat->len_cmp += CHUNK_FLAG_SZ;
 	tdat->len_cmp += sizeof (len_cmp);
-	tdat->len_cmp += sizeof (tdat->crc64);
+	tdat->len_cmp += cksum_bytes;
 
 	if (adapt_mode)
 		type |= (rv << 4);
@@ -888,8 +895,8 @@ plain_compress:
 	if (tdat->rbytes < tdat->chunksize) {
 		type |= CHSIZE_MASK;
 		*((typeof (tdat->rbytes) *)(tdat->cmp_seg + tdat->len_cmp)) = htonll(tdat->rbytes);
-		tdat->len_cmp += sizeof (tdat->rbytes);
-		len_cmp += sizeof (tdat->rbytes);
+		tdat->len_cmp += ORIGINAL_CHUNKSZ;
+		len_cmp += ORIGINAL_CHUNKSZ;
 		*((typeof (len_cmp) *)(tdat->cmp_seg)) = htonll(len_cmp);
 	}
 	/*
@@ -924,6 +931,7 @@ repeat:
 				smallest_chunk = tdat->len_cmp;
 			avg_chunk += tdat->len_cmp;
 		}
+
 		wbytes = Write(w->wfd, tdat->cmp_seg, tdat->len_cmp);
 		if (unlikely(wbytes != tdat->len_cmp)) {
 			int i;
@@ -981,8 +989,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 * See start_decompress() routine for details of chunk header.
 	 * We also keep extra 8-byte space for the last chunk's size.
 	 */
-	compressed_chunksize = chunksize + sizeof (chunksize) +
-	    sizeof (uint64_t) + sizeof (chunksize) + zlib_buf_extra(chunksize);
+	compressed_chunksize = chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
 	init_algo_props(&props);
 
 	if (_props_func) {
@@ -1005,7 +1012,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	thread = 0;
 	single_chunk = 0;
 	slab_cache_add(chunksize);
-	slab_cache_add(compressed_chunksize + CHDR_SZ);
+	slab_cache_add(compressed_chunksize);
 	slab_cache_add(sizeof (struct cmp_data));
 
 	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
@@ -1090,7 +1097,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 
 	dary = (struct cmp_data **)slab_calloc(NULL, nprocs, sizeof (struct cmp_data *));
 	if (enable_rabin_scan)
-		cread_buf = (uchar_t *)slab_alloc(NULL, compressed_chunksize + CHDR_SZ);
+		cread_buf = (uchar_t *)slab_alloc(NULL, compressed_chunksize);
 	else
 		cread_buf = (uchar_t *)slab_alloc(NULL, chunksize);
 	if (!cread_buf) {
@@ -1149,6 +1156,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 * Write out file header. First insert hdr elements into mem buffer
 	 * then write out the full hdr in one shot.
 	 */
+	flags |= cksum;
 	memset(cread_buf, 0, ALGO_SZ);
 	strncpy(cread_buf, algo, ALGO_SZ);
 	version = htons(VERSION);
@@ -1216,9 +1224,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 						tdat->cmp_seg = (uchar_t *)1;
 					else
 						tdat->cmp_seg = (uchar_t *)slab_alloc(NULL,
-							compressed_chunksize + CHDR_SZ);
+							compressed_chunksize);
 					tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
-						compressed_chunksize + CHDR_SZ);
+						compressed_chunksize);
 				} else {
 					if (single_chunk)
 						tdat->uncompressed_chunk = (uchar_t *)1;
@@ -1226,9 +1234,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 						tdat->uncompressed_chunk =
 						    (uchar_t *)slab_alloc(NULL, chunksize);
 					tdat->cmp_seg = (uchar_t *)slab_alloc(NULL,
-						compressed_chunksize + CHDR_SZ);
+						compressed_chunksize);
 				}
-				tdat->compressed_chunk = tdat->cmp_seg + sizeof (chunksize) + sizeof (uint64_t);
+				tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ + cksum_bytes;
 				if (!tdat->cmp_seg || !tdat->uncompressed_chunk) {
 					fprintf(stderr, "Out of memory\n");
 					COMP_BAIL;
@@ -1250,7 +1258,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 				tmp = tdat->cmp_seg;
 				tdat->cmp_seg = cread_buf;
 				cread_buf = tmp;
-				tdat->compressed_chunk = tdat->cmp_seg + sizeof (chunksize) + sizeof (uint64_t);
+				tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ + cksum_bytes;
 
 				/*
 				 * If there is data after the last rabin boundary in the chunk, then
@@ -1510,7 +1518,7 @@ main(int argc, char *argv[])
 	level = 6;
 	slab_init();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDErL")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDErLS:")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -1577,6 +1585,12 @@ main(int argc, char *argv[])
 
 		    case 'r':
 			enable_rabin_split = 0;
+			break;
+
+		    case 'S':
+			if (get_checksum_props(optarg, &cksum, &cksum_bytes) == -1) {
+				err_exit(0, "Invalid checksum type %s", optarg);
+			}
 			break;
 
 		    case '?':
@@ -1653,6 +1667,8 @@ main(int argc, char *argv[])
 	}
 	main_cancel = 0;
 
+	if (cksum == 0)
+		get_checksum_props(DEFAULT_CKSUM, &cksum, &cksum_bytes);
 	/*
 	 * Start the main routines.
 	 */

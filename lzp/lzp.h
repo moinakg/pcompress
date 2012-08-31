@@ -46,7 +46,7 @@ See also the bsc and libbsc web site:
 
 #define LZP_DEFAULT_LZPHASHSIZE    16
 #define LZP_DEFAULT_LZPMINLEN      128
-#define	LZP_MAX_BLOCK              (2147483648LL)
+#define	LZP_MAX_BLOCK              (2000000000L)
 #define	ALPHABET_SIZE              (256)
 
 #ifdef __cplusplus

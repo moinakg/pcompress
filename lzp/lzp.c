@@ -46,17 +46,21 @@ See also the bsc and libbsc web site:
 
 #include "lzp.h"
 
-#define LZP_LZP_MATCH_FLAG 	0xf2
+#define LZP_MATCH_FLAG 	0xf2
 
 static
 inline int bsc_lzp_num_blocks(ssize_t n)
 {
+    int nb;
+
     if (n <       256 * 1024)   return 1;
     if (n <  4 * 1024 * 1024)   return 2;
     if (n < 16 * 1024 * 1024)   return 4;
     if (n <    LZP_MAX_BLOCK)   return 8;
 
-    return (n / LZP_MAX_BLOCK);
+    nb = n / LZP_MAX_BLOCK;
+    if (n % LZP_MAX_BLOCK) nb++;
+    return (nb);
 }
 
 static
@@ -94,7 +98,7 @@ int bsc_lzp_encode_block(const unsigned char * input, const unsigned char * inpu
                 {
                     if ((heuristic > input) && (*(unsigned int *)heuristic != *(unsigned int *)(reference + (heuristic - input))))
                     {
-                        goto LZP_LZP_MATCH_NOT_FOUND;
+                        goto LZP_MATCH_NOT_FOUND;
                     }
 
                     int len = 4;
@@ -105,7 +109,7 @@ int bsc_lzp_encode_block(const unsigned char * input, const unsigned char * inpu
                     if (len < minLen)
                     {
                         if (heuristic < input + len) heuristic = input + len;
-                        goto LZP_LZP_MATCH_NOT_FOUND;
+                        goto LZP_MATCH_NOT_FOUND;
                     }
 
                     if (input[len] == reference[len]) len++;
@@ -114,7 +118,7 @@ int bsc_lzp_encode_block(const unsigned char * input, const unsigned char * inpu
 
                     input += len; context = input[-1] | (input[-2] << 8) | (input[-3] << 16) | (input[-4] << 24);
 
-                    *output++ = LZP_LZP_MATCH_FLAG;
+                    *output++ = LZP_MATCH_FLAG;
 
                     len -= minLen; while (len >= 254) { len -= 254; *output++ = 254; if (output >= outputEOB) break; }
 
@@ -123,9 +127,9 @@ int bsc_lzp_encode_block(const unsigned char * input, const unsigned char * inpu
                 else
                 {
 		    unsigned char next;
-LZP_LZP_MATCH_NOT_FOUND:
+LZP_MATCH_NOT_FOUND:
                     next = *output++ = *input++; context = (context << 8) | next;
-                    if (next == LZP_LZP_MATCH_FLAG) *output++ = 255;
+                    if (next == LZP_MATCH_FLAG) *output++ = 255;
                 }
             }
             else
@@ -141,7 +145,7 @@ LZP_LZP_MATCH_NOT_FOUND:
             if (value > 0)
             {
                 unsigned char next = *output++ = *input++; context = (context << 8) | next;
-                if (next == LZP_LZP_MATCH_FLAG) *output++ = 255;
+                if (next == LZP_MATCH_FLAG) *output++ = 255;
             }
             else
             {
@@ -181,7 +185,7 @@ int bsc_lzp_decode_block(const unsigned char * input, const unsigned char * inpu
         {
             unsigned int index = ((context >> 15) ^ context ^ (context >> 3)) & mask;
             int value = lookup[index]; lookup[index] = (int)(output - outputStart);
-            if (*input == LZP_LZP_MATCH_FLAG && value > 0)
+            if (*input == LZP_MATCH_FLAG && value > 0)
             {
                 input++;
                 if (*input != 255)
@@ -209,7 +213,7 @@ int bsc_lzp_decode_block(const unsigned char * input, const unsigned char * inpu
                 }
                 else
                 {
-                    input++; context = (context << 8) | (*output++ = LZP_LZP_MATCH_FLAG);
+                    input++; context = (context << 8) | (*output++ = LZP_MATCH_FLAG);
                 }
             }
             else
@@ -238,14 +242,19 @@ ssize_t bsc_lzp_compress_serial(const unsigned char * input, unsigned char * out
     }
 
     int nBlocks   = bsc_lzp_num_blocks(n);
-    int chunkSize = n / nBlocks;
+    int chunkSize;
     int blockId;
     ssize_t outputPtr = 1 + 8 * nBlocks;
+
+    if (n > LZP_MAX_BLOCK)
+        chunkSize = LZP_MAX_BLOCK;
+    else
+        chunkSize = n / nBlocks;
 
     output[0] = nBlocks;
     for (blockId = 0; blockId < nBlocks; ++blockId)
     {
-        int inputStart  = blockId * chunkSize;
+        ssize_t inputStart  = blockId * chunkSize;
         int inputSize   = blockId != nBlocks - 1 ? chunkSize : n - inputStart;
         int outputSize  = inputSize; if (outputSize > n - outputPtr) outputSize = n - outputPtr;
 
@@ -407,8 +416,8 @@ ssize_t lzp_decompress(const unsigned char * input, unsigned char * output, ssiz
 
         for (blockId = 0; blockId < nBlocks; ++blockId)
         {
-            int inputPtr = 0;  for (p = 0; p < blockId; ++p) inputPtr  += *(int *)(input + 1 + 8 * p + 4);
-            int outputPtr = 0; for (p = 0; p < blockId; ++p) outputPtr += *(int *)(input + 1 + 8 * p + 0);
+            ssize_t inputPtr = 0;  for (p = 0; p < blockId; ++p) inputPtr  += *(int *)(input + 1 + 8 * p + 4);
+            ssize_t outputPtr = 0; for (p = 0; p < blockId; ++p) outputPtr += *(int *)(input + 1 + 8 * p + 0);
 
             inputPtr += 1 + 8 * nBlocks;
 

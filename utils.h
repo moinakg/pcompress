@@ -101,6 +101,20 @@ typedef ssize_t bsize_t;
 #define	DEBUG_STAT_EN(...)
 #endif
 
+/*
+ * Public checksum properties. CKSUM_MAX_BYTES must be updated if a
+ * newer larger checksum is added to the list.
+ */
+typedef enum {
+	CKSUM_CRC64 = 0x100,
+	CKSUM_SKEIN256 = 0x200,
+	CKSUM_SKEIN512 = 0x300
+} cksum_t;
+
+#define	CKSUM_MASK		0x700
+#define	CKSUM_MAX_BYTES		64
+#define	DEFAULT_CKSUM		"SKEIN256"
+
 typedef struct {
 	uint32_t buf_extra;
 	int compress_mt_capable;
@@ -127,6 +141,10 @@ extern ssize_t Read_Adjusted(int fd, uchar_t *buf, size_t count,
 extern ssize_t Write(int fd, const void *buf, size_t count);
 extern void set_threadcounts(algo_props_t *props, int *nthreads, int nprocs,
 	algo_threads_type_t typ);
+extern int compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, ssize_t bytes);
+extern int get_checksum_props(char *name, int *cksum, int *cksum_bytes);
+extern void serialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
+extern void deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
 
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, size_t srclen, void *dst,

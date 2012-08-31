@@ -65,18 +65,8 @@
 #include <allocator.h>
 #include <utils.h>
 #include <pthread.h>
-#include <arpa/nameser_compat.h>
-#include <crc_macros.h>
 
 #include "rabin_polynomial.h"
-
-#if BYTE_ORDER == BIG_ENDIAN
-#	define A1(x) ((x) >> 56)
-#else
-#	define A1 A
-#endif
-
-extern const uint64_t lzma_crc64_table[4][256];
 
 extern int lzma_init(void **data, int *level, ssize_t chunksize);
 extern int lzma_compress(void *src, size_t srclen, void *dst,
@@ -309,7 +299,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 	uint64_t *fplist;
 	uint32_t len1, fpos[2], cur_sketch2;
 	uint32_t *charcounts, byts;
-	uint64_t crc;
 
 	if (rabin_pos == NULL) {
 		/*
@@ -332,7 +321,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 	j = 0;
 	cur_sketch = 0;
 	cur_sketch2 = 0;
-	crc = 0;
 
 	/* 
 	 * If rabin_pos is non-zero then we are being asked to scan for the last rabin boundary
@@ -386,7 +374,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		cur_roll_checksum = (cur_roll_checksum << 1) + cur_byte;
 		cur_roll_checksum -= (pushed_out << RAB_POLYNOMIAL_WIN_SIZE);
 		cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
-		crc = lzma_crc64_table[0][cur_byte ^ A1(crc)] ^ S8(crc);
 
 		/*
 		 * Compute a super sketch value of the block. We store a sum of relative
@@ -473,7 +460,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			ctx->blocks[blknum]->length = length;
 			ctx->blocks[blknum]->ref = 0;
 			ctx->blocks[blknum]->similar = 0;
-			ctx->blocks[blknum]->crc = crc;
+			ctx->blocks[blknum]->crc = lzma_crc64(buf1+last_offset, length, 0);
 
 			// Accumulate the 2 sketch values into a combined similarity checksum
 			ctx->blocks[blknum]->cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
@@ -487,7 +474,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			length = 0;
 			j = 0;
 			cur_sketch2 = 0;
-			crc = 0;
 		}
 	}
 
@@ -518,7 +504,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			j = (j > 0 ? j:1);
 			ctx->blocks[blknum]->cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
 			ctx->blocks[blknum]->mean_n_length = cur_sketch / j;
-			ctx->blocks[blknum]->crc = crc;
+			ctx->blocks[blknum]->crc = lzma_crc64(buf1+last_offset, ctx->blocks[blknum]->length, 0);
 			blknum++;
 			last_offset = *size;
 		}
