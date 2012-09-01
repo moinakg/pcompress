@@ -72,6 +72,25 @@ else
 	typ="RELEASE"
 fi
 
+OS=$(uname)
+skeinblock='\$\(SKEIN_BLOCK_C\)'
+if [ "$OS" = "Linux" ]
+then
+	plat=$(uname -r)
+elif [ "$OS" = "SunOS" ]
+then
+	plat=$(isainfo -v)
+else
+	echo "Unsupported OS: $OS"
+	exit 1
+fi
+
+echo $plat | egrep 'x86_64|amd64' > /dev/null
+if [ $? -eq 0 ]
+then
+	skeinblock='\$\(SKEIN_BLOCK_ASM\)'
+fi
+
 linkvar="LINK"
 compilevar="COMPILE"
 compilecppvar="COMPILE_cpp"
@@ -83,6 +102,7 @@ rabinoptvar="RABIN_OPT"
 noslabcppflagsvar="NO_SLAB_CPPFLAGS"
 debugstatscppflagsvar="DEBUG_STATS_CPPFLAGS"
 prefixvar="PREFIX"
+skeinblockvar="SKEIN_BLOCK"
 
 libbscdirvar="LIBBSCDIR"
 libbsclibvar="LIBBSCLIB"
@@ -115,5 +135,6 @@ s#@${libbsclflagsvar}@#${libbsclflags}#g
 s#@${libbscwrapobjvar}@#${libbscwrapobj}#g
 s#@${libbscgenoptvar}@#${libbscgenopt}#g
 s#@${libbsccppflagsvar}@#${libbsccppflags}#g
+s#@${skeinblockvar}@#${skeinblock}#g
 " > Makefile
 

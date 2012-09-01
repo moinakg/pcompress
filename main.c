@@ -535,7 +535,10 @@ start_decompress(const char *filename, const char *to_filename)
 	}
 
 	cksum = flags & CKSUM_MASK;
-	get_checksum_props(NULL, &cksum, &cksum_bytes);
+	if (get_checksum_props(NULL, &cksum, &cksum_bytes) == -1) {
+		fprintf(stderr, "Invalid checksum algorithm code: %d. File corrupt ?\n", cksum);
+		UNCOMP_BAIL;
+	}
 
 	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
 	if (nthreads > 0 && nthreads < nprocs)

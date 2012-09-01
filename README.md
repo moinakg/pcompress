@@ -86,6 +86,15 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
        '-L' -     Enable LZP pre-compression. This improves compression ratio of all
                   algorithms with some extra CPU and very low RAM overhead. Using
                   delta encoding in conjunction with this may not always be beneficial.
+       '-S' <cksum>
+            -     Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512
+                  Default one is SKEIN256. The implementation actually uses SKEIN
+                  512-256. This is 25% slower than simple CRC64 but is many times more
+                  robust than CRC64 in detecting data integrity errors. SKEIN is a
+                  finalist in the NIST SHA-3 standard selection process and is one of
+                  the fastest in the group, especially on x86 platforms. BLAKE is faster
+                  than SKEIN on a few platforms.
+                  SKEIN 512-256 is about 60% faster than SHA 512-256 on x64 platforms.
        '-M' -     Display memory allocator statistics
        '-C' -     Display compression statistics
 

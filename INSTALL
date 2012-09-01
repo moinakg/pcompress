@@ -8,6 +8,12 @@ The simplest process to build and install this utility is:
 make
 make install
 
+In order to remove all binaries:
+make clean
+
+Remove all binaries and the generated Makefile:
+make distclean
+
 Strictly speaking the 'make install' step is not required to
 run the utility as it is a single stand alone program for now.
 

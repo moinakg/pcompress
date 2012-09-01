@@ -335,12 +335,15 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, ssize_t bytes)
 		Skein_512_Update(&ctx, buf, bytes);
 		Skein_512_Final(&ctx, cksum_buf);
 	} else {
-		fprintf(stderr, "Invalid checksum algorithm code: %d\n", cksum);
 		return (-1);
 	}
 	return (0);
 }
 
+/*
+ * Check is either the given checksum name or id is valid and
+ * return it's properties.
+ */
 int
 get_checksum_props(char *name, int *cksum, int *cksum_bytes)
 {
@@ -357,6 +360,12 @@ get_checksum_props(char *name, int *cksum, int *cksum_bytes)
 	return (-1);
 }
 
+/*
+ * Endian independent way of storing the checksum bytes. This is actually
+ * storing in little endian format and a copy can be avoided in x86 land.
+ * However unsightly ifdefs are avoided here since this is not so performance
+ * critical.
+ */
 void
 serialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes)
 {
