@@ -168,6 +168,5 @@ extern void rabin_update_hdr(uchar_t *buf, ssize_t rabin_index_sz_cmp,
 extern void reset_rabin_context(rabin_context_t *ctx);
 extern uint32_t rabin_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo,
 	int delta_flag);
-extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
 
 #endif /* _RABIN_POLY_H_ */

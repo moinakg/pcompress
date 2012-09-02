@@ -44,7 +44,7 @@
 #include <utils.h>
 #include <pcompress.h>
 #include <allocator.h>
-#include <rabin_polynomial.h>
+#include <rabin_dedup.h>
 #include <lzp.h>
 
 /*

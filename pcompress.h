@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 
-#include <rabin_polynomial.h>
+#include <rabin_dedup.h>
 
 #define	CHUNK_FLAG_SZ	1
 #define	ALGO_SZ		8

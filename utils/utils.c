@@ -31,7 +31,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <link.h>
-#include <rabin_polynomial.h>
+#include <rabin_dedup.h>
 #include <skein.h>
 
 #include "utils.h"

@@ -1,6 +1,4 @@
 /*
- * rabin_polynomial.c
- * 
  * The rabin polynomial computation is derived from:
  * http://code.google.com/p/rabin-fingerprint-c/
  * 
@@ -66,7 +64,7 @@
 #include <utils.h>
 #include <pthread.h>
 
-#include "rabin_polynomial.h"
+#include "rabin_dedup.h"
 
 extern int lzma_init(void **data, int *level, ssize_t chunksize);
 extern int lzma_compress(void *src, size_t srclen, void *dst,
@@ -309,6 +307,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		fplist = (uint64_t *)(ctx->cbuf + ctx->real_chunksize - fplist_sz - 256 * 4);
 		charcounts = (uint32_t *)(ctx->cbuf + ctx->real_chunksize - 256 * 4);
 		memset(fplist, 0, fplist_sz);
+		memset(charcounts, 0, 256 * 4);
 		fpos[0] = 0;
 		fpos[1] = 0;
 		len1 = 0;
@@ -460,7 +459,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			ctx->blocks[blknum]->length = length;
 			ctx->blocks[blknum]->ref = 0;
 			ctx->blocks[blknum]->similar = 0;
-			ctx->blocks[blknum]->crc = lzma_crc64(buf1+last_offset, length, 0);
+			ctx->blocks[blknum]->crc = XXH_strong32(buf1+last_offset, length, 0);
 
 			// Accumulate the 2 sketch values into a combined similarity checksum
 			ctx->blocks[blknum]->cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
@@ -504,7 +503,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			j = (j > 0 ? j:1);
 			ctx->blocks[blknum]->cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
 			ctx->blocks[blknum]->mean_n_length = cur_sketch / j;
-			ctx->blocks[blknum]->crc = lzma_crc64(buf1+last_offset, ctx->blocks[blknum]->length, 0);
+			ctx->blocks[blknum]->crc = XXH_strong32(buf1+last_offset, ctx->blocks[blknum]->length, 0);
 			blknum++;
 			last_offset = *size;
 		}

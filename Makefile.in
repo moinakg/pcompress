@@ -22,23 +22,23 @@
 #
 
 PROG= pcompress
-MAINSRCS = main.c utils.c allocator.c zlib_compress.c bzip2_compress.c \
+MAINSRCS = main.c utils/utils.c allocator.c zlib_compress.c bzip2_compress.c \
 	lzma_compress.c ppmd_compress.c adaptive_compress.c lzfx_compress.c \
-	lz4_compress.c none_compress.c
-MAINHDRS = allocator.h  pcompress.h  utils.h
+	lz4_compress.c none_compress.c utils/xxhash.c
+MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h
 MAINOBJS = $(MAINSRCS:.c=.o)
 
-RABINSRCS = rabin/rabin_polynomial.c
-RABINHDRS = rabin/rabin_polynomial.h utils.h
+RABINSRCS = rabin/rabin_dedup.c
+RABINHDRS = rabin/rabin_dedup.h utils/utils.h
 RABINOBJS = $(RABINSRCS:.c=.o)
 
 BSDIFFSRCS = bsdiff/bsdiff.c bsdiff/bspatch.c bsdiff/rle_encoder.c
-BSDIFFHDRS = bsdiff/bscommon.h utils.h allocator.h
+BSDIFFHDRS = bsdiff/bscommon.h utils/utils.h allocator.h
 BSDIFFOBJS = $(BSDIFFSRCS:.c=.o)
 
 LZMASRCS = lzma/LzmaEnc.c lzma/LzFind.c lzma/LzmaDec.c lzma/Threads.c lzma/LzFindMt.c
 LZMAHDRS = lzma/CpuArch.h lzma/LzFind.h lzma/LzmaEnc.h lzma/Types.h \
-	lzma/LzHash.h lzma/LzmaDec.h utils.h lzma/LzFindMt.h lzma/Threads.h lzma/windows.h \
+	lzma/LzHash.h lzma/LzmaDec.h utils/utils.h lzma/LzFindMt.h lzma/Threads.h lzma/windows.h \
 	lzma/Common/MyWindows.h lzma/Common/MyGuidDef.h lzma/basetyps.h
 LZMAOBJS = $(LZMASRCS:.c=.o)
 
@@ -80,12 +80,12 @@ LIBBSCLIB = @LIBBSCLIB@
 LIBBSCGEN_OPT = -fopenmp
 LIBBSCCPPFLAGS = -I$(LIBBSCDIR)/libbsc -DENABLE_PC_LIBBSC
 
-BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~
+BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~ utils/*~
 
 RM = rm -f
 COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
-	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein
+	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm @LIBBSCLFLAGS@
