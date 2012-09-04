@@ -117,8 +117,6 @@
  */
 #define	SIMILAR_EXACT 1
 #define	SIMILAR_PARTIAL 2
-#define	DELTA_FUZZY 1
-#define	DELTA_LESS_FUZZY 2
 
 /*
  * Irreducible polynomial for Rabin modulus. This value is from the

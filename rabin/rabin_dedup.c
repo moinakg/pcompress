@@ -409,7 +409,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		 */
 		fpos[0] = fpos[(fplist[fpos[1]] > fplist[fpos[0]])];
 		if (len1 == SKETCH_BASIC_BLOCK_SZ) {
-			uint32_t p1, p2;
+			uint32_t p1, p2, p3;
 			/*
 			 * Compute the super sketch value by summing all the representative
 			 * fingerprints of the block.
@@ -424,18 +424,16 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			 */
 			p1 = 0;
 			p2 = 0;
+			p3 = 0;
 			for (len1=0; len1<256; len1++) {
 				if (charcounts[len1] > p1) {
+					p3 = p2;
 					p2 = p1;
 					p1 = len1;
 				}
 				charcounts[len1] = 0;
 			}
-			if (ctx->delta_flag == DELTA_LESS_FUZZY) {
-				cur_sketch2 += ((p1 << 8) | p2);
-			} else {
-				cur_sketch2 += p2;
-			}
+			cur_sketch2 += ((p1 << 16) | (p2 << 8) | p3);
 			len1 = 0;
 			j++;
 		}
