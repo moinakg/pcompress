@@ -88,6 +88,7 @@ static int do_compress = 0;
 static int do_uncompress = 0;
 static int cksum_bytes;
 static int cksum = 0;
+static int rab_blk_size = 0;
 static rabin_context_t *rctx;
 
 static void
@@ -138,13 +139,15 @@ usage(void)
 	    "   %s -E ... - This also implies '-D'.\n"
 	    "6) Number of threads can optionally be specified: -t <1 - 256 count>\n"
 	    "7) Other flags:\n"
-	    "   '-L'	- Enable LZP pre-compression. This improves compression ratio of all\n"
-	    "       	  algorithms with some extra CPU and very low RAM overhead.\n"
-	    "	'-S' <cksum>\n"
-	    "		- Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512\n"
-	    "		  Default one is SKEIN256.\n"
-	    "   '-M'	- Display memory allocator statistics\n"
-	    "   '-C'	- Display compression statistics\n\n",
+	    "   '-L'    - Enable LZP pre-compression. This improves compression ratio of all\n"
+	    "             algorithms with some extra CPU and very low RAM overhead.\n"
+	    "   '-S' <cksum>\n"
+	    "           - Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512\n"
+	    "             Default one is SKEIN256.\n"
+	    "   '-B' <1..5>\n"
+	    "           - Specify a minimum Dedupe block size. 1 - 4K, 2 - 8K ... 5 - 64K.\n"
+	    "   '-M'    - Display memory allocator statistics\n"
+	    "   '-C'    - Display compression statistics\n\n",
 	    UTILITY_VERSION, exec_name, exec_name, exec_name, exec_name, exec_name, exec_name);
 }
 
@@ -578,7 +581,7 @@ start_decompress(const char *filename, const char *to_filename)
 			}
 		}
 		if (enable_rabin_scan) {
-			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, 0,
+			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, rab_blk_size,
 			    algo, enable_delta_encode);
 			if (tdat->rctx == NULL) {
 				UNCOMP_BAIL;
@@ -1130,7 +1133,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			}
 		}
 		if (enable_rabin_scan) {
-			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, 0,
+			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, rab_blk_size,
 			    algo, enable_delta_encode);
 			if (tdat->rctx == NULL) {
 				COMP_BAIL;
@@ -1521,7 +1524,7 @@ main(int argc, char *argv[])
 	level = 6;
 	slab_init();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDErLS:")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDErLS:B:")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -1553,6 +1556,12 @@ main(int argc, char *argv[])
 			level = atoi(optarg);
 			if (level < 0 || level > 14)
 				err_exit(0, "Compression level should be in range 0 - 14\n");
+			break;
+
+		    case 'B':
+			rab_blk_size = atoi(optarg);
+			if (rab_blk_size < 1 || rab_blk_size > 5)
+				err_exit(0, "Minimum Dedupe block size must be in range 1 (4k) - 5 (64k)\n");
 			break;
 
 		    case 'p':

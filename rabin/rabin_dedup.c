@@ -88,6 +88,9 @@ rabin_min_blksz(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta_
 	uint32_t min_blk;
 
 	min_blk = 1 << (rab_blk_sz + RAB_BLK_MIN_BITS);
+	if (rab_blk_sz > 1)
+		return (min_blk);
+
 	if (((memcmp(algo, "lzma", 4) == 0 || memcmp(algo, "adapt", 5) == 0) &&
 	      chunksize <= LZMA_WINDOW_MAX) || delta_flag) {
 		if (memcmp(algo, "lzfx", 4) == 0 || memcmp(algo, "lz4", 3) == 0 ||
@@ -220,6 +223,7 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz
 	 * x * polynomial_pow can we written as x << RAB_POLYNOMIAL_WIN_SIZE
 	 */
 
+	slab_cache_add(sizeof (rabin_blockentry_t));
 	ctx->current_window_data = current_window_data;
 	ctx->real_chunksize = real_chunksize;
 	reset_rabin_context(ctx);
@@ -408,7 +412,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		 * if (fplist[fpos[1]] > fplist[fpos[0]]) fpos[0] = fpos[1];
 		 */
 		fpos[0] = fpos[(fplist[fpos[1]] > fplist[fpos[0]])];
-		if (len1 == SKETCH_BASIC_BLOCK_SZ) {
+		if (len1 == SKETCH_BASIC_BLOCK_SZ && ctx->delta_flag) {
 			uint32_t p1, p2, p3;
 			/*
 			 * Compute the super sketch value by summing all the representative
@@ -460,9 +464,14 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			ctx->blocks[blknum]->crc = XXH_strong32(buf1+last_offset, length, 0);
 
 			// Accumulate the 2 sketch values into a combined similarity checksum
-			ctx->blocks[blknum]->cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
-			ctx->blocks[blknum]->mean_n_length = cur_sketch / j;
-			memset(fplist, 0, fplist_sz);
+			if (ctx->delta_flag) {
+				ctx->blocks[blknum]->cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
+				ctx->blocks[blknum]->mean_n_length = cur_sketch / j;
+				memset(fplist, 0, fplist_sz);
+			} else {
+				ctx->blocks[blknum]->cksum_n_offset = 0;
+				ctx->blocks[blknum]->mean_n_length = 0;
+			}
 			fpos[0] = 0;
 			len1 = 0;
 			cur_sketch = 0;
@@ -498,9 +507,14 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 			ctx->blocks[blknum]->ref = 0;
 			ctx->blocks[blknum]->similar = 0;
 
-			j = (j > 0 ? j:1);
-			ctx->blocks[blknum]->cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
-			ctx->blocks[blknum]->mean_n_length = cur_sketch / j;
+			if (ctx->delta_flag) {
+				j = (j > 0 ? j:1);
+				ctx->blocks[blknum]->cksum_n_offset = (cur_sketch + cur_sketch2) / 2;
+				ctx->blocks[blknum]->mean_n_length = cur_sketch / j;
+			} else {
+				ctx->blocks[blknum]->cksum_n_offset = 0;
+				ctx->blocks[blknum]->mean_n_length = 0;
+			}
 			ctx->blocks[blknum]->crc = XXH_strong32(buf1+last_offset, ctx->blocks[blknum]->length, 0);
 			blknum++;
 			last_offset = *size;
@@ -771,6 +785,7 @@ rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
 	sz = 0;
 	ctx->valid = 1;
 
+	slab_cache_add(sizeof (rabin_blockentry_t));
 	for (blk = 0; blk < blknum; blk++) {
 		if (ctx->blocks[blk] == 0)
 			ctx->blocks[blk] = (rabin_blockentry_t *)slab_alloc(NULL, sizeof (rabin_blockentry_t));
