@@ -1,3 +1,18 @@
+== 0.8.1 Bugfix Release ==
+Fix return code handling in LZP pre-compression, crashed adaptive modes.
+Allow user-specified minimum Dedupe block size.
+Compute similarity sketch only if Delta Compression enabled.
+Fix secondary sketch computation, some more accuracy in diff detection.
+Add xxHash for Rabin block checksums, slightly faster than CRC64.
+Fix missing initialization of character counts table.
+Some file reorganization.
+Add ASM version of Skein for x64 platforms with auto-detection
+Error checking for checksum flag when decompressing
+Add support for Skein512 and Skein256 checksums
+Import Skein code from NIST CD submission
+Make checksum algorithms pluggable
+Fix handling of huge buffers (>2GB) in LZP
+Cleanup of some buffer sizing code
 == 0.8 Beta release ==
 Add support for libbsc a high-performance block sorting compressor.
 Enable external algorithm threading for single chunk compressed files.
