@@ -205,15 +205,13 @@ preproc_compress(compress_func_ptr cmp_func, void *src, size_t srclen, void *dst
 	*((int64_t *)(dest + 1)) = htonll(srclen);
 	_dstlen = srclen;
 	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr, data);
-	if (result == 0 && _dstlen < srclen) {
+	if (result > -1 && _dstlen < srclen) {
 		*dest |= PREPROC_COMPRESSED;
 		*dstlen = _dstlen + 9;
 	} else {
-		memcpy(dest+1, src, srclen);
-		_dstlen = srclen;
-		*dstlen = _dstlen + 1;
+		result = -1;
 	}
-	return (0);
+	return (result);
 }
 
 int
