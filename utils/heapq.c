@@ -131,7 +131,7 @@ _siftupmax_s(heap_t *h, __TYPE spos)
         /* Set childpos to index of smaller child.   */
         rightpos = childpos + 1;
         if (rightpos < endpos) {
-            if (! (heap[rightpos] < heap[childpos]))
+            if (heap[rightpos] < heap[childpos])
                 childpos = rightpos;
         }
         /* Move the smaller child up. */
