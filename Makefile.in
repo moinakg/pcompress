@@ -24,8 +24,8 @@
 PROG= pcompress
 MAINSRCS = main.c utils/utils.c allocator.c zlib_compress.c bzip2_compress.c \
 	lzma_compress.c ppmd_compress.c adaptive_compress.c lzfx_compress.c \
-	lz4_compress.c none_compress.c utils/xxhash.c
-MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h
+	lz4_compress.c none_compress.c utils/xxhash.c utils/heapq.c
+MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heapq.h
 MAINOBJS = $(MAINSRCS:.c=.o)
 
 RABINSRCS = rabin/rabin_dedup.c
