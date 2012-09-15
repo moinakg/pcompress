@@ -127,7 +127,7 @@
 typedef struct {
 	ssize_t offset;
 	uint64_t cksum_n_offset; // Dual purpose variable
-	uint64_t mean_n_length;  // Dual purpose variable
+	uint64_t alt_length;
 	uint64_t crc;
 	unsigned int index;
 	unsigned int length;
@@ -149,11 +149,11 @@ typedef struct {
 	uint64_t real_chunksize;
 	short valid;
 	void *lzma_data;
-	int level, delta_flag;
+	int level, delta_flag, fixed_flag;
 } rabin_context_t;
 
 extern rabin_context_t *create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, 
-	int rab_blk_sz, const char *algo, int delta_flag);
+	int rab_blk_sz, const char *algo, int delta_flag, int fixed_flag);
 extern void destroy_rabin_context(rabin_context_t *ctx);
 extern unsigned int rabin_dedup(rabin_context_t *ctx, unsigned char *buf, 
 	ssize_t *size, ssize_t offset, ssize_t *rabin_pos);

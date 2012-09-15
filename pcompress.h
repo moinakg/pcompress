@@ -39,6 +39,7 @@ extern "C" {
 #define	MIN_CHUNK	2048
 #define	VERSION		3
 #define	FLAG_DEDUP	1
+#define	FLAG_DEDUP_FIXED	1
 #define	FLAG_SINGLE_CHUNK	2
 #define	UTILITY_VERSION	"0.8.1"
 

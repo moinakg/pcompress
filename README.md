@@ -115,7 +115,7 @@ Examples
 ========
 
 Compress "file.tar" using bzip2 level 6, 64MB chunk size and use 4 threads. In
-addition perform exact deduplication and delta compression prior to compression.
+addition perform identity deduplication and delta compression prior to compression.
 
     pcompress -D -E -c bzip2 -l6 -s64m -t4 file.tar
 
@@ -177,6 +177,3 @@ Normally this utility requires lots of RAM depending on compression algorithm,
 compression level, and dedupe being enabled. Larger chunk sizes can give
 better compression ratio but at the same time use more RAM.
 
-In some cases for files less than a gigabyte. Using Delta Compression in addition
-to exact Dedupe can have a slight negative impact on LZMA compression ratio
-especially when using the large-window ultra compression levels above 10.

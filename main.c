@@ -79,6 +79,7 @@ static int hide_cmp_stats = 1;
 static int enable_rabin_scan = 0;
 static int enable_delta_encode = 0;
 static int enable_rabin_split = 1;
+static int enable_fixed_scan = 0;
 static int lzp_preprocess = 0;
 static unsigned int chunk_num;
 static uint64_t largest_chunk, smallest_chunk, avg_chunk;
@@ -261,7 +262,7 @@ perform_decompress(void *dat)
 {
 	struct cmp_data *tdat = (struct cmp_data *)dat;
 	ssize_t _chunksize;
-	ssize_t rabin_index_sz, rabin_data_sz, rabin_index_sz_cmp, rabin_data_sz_cmp;
+	ssize_t dedupe_index_sz, rabin_data_sz, dedupe_index_sz_cmp, rabin_data_sz_cmp;
 	int type, rv;
 	unsigned int blknum;
 	uchar_t checksum[CKSUM_MAX_BYTES];
@@ -302,8 +303,8 @@ redo:
 		uchar_t *cmpbuf, *ubuf;
 
 		/* Extract various sizes from rabin header. */
-		rabin_parse_hdr(cseg, &blknum, &rabin_index_sz, &rabin_data_sz,
-				&rabin_index_sz_cmp, &rabin_data_sz_cmp, &_chunksize);
+		rabin_parse_hdr(cseg, &blknum, &dedupe_index_sz, &rabin_data_sz,
+				&dedupe_index_sz_cmp, &rabin_data_sz_cmp, &_chunksize);
 		memcpy(tdat->uncompressed_chunk, cseg, RABIN_HDR_SIZE);
 
 		/*
@@ -312,8 +313,8 @@ redo:
 		 * state/dictionary info. Since data chunk directly follows index
 		 * uncompressing index first corrupts the data.
 		 */
-		cmpbuf = cseg + RABIN_HDR_SIZE + rabin_index_sz_cmp;
-		ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE + rabin_index_sz;
+		cmpbuf = cseg + RABIN_HDR_SIZE + dedupe_index_sz_cmp;
+		ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE + dedupe_index_sz;
 		if (HDR & COMPRESSED) {
 			if (HDR & CHUNK_FLAG_PREPROC) {
 				rv = preproc_decompress(tdat->decompress, cmpbuf, rabin_data_sz_cmp,
@@ -334,12 +335,12 @@ redo:
 		rv = 0;
 		cmpbuf = cseg + RABIN_HDR_SIZE;
 		ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE;
-		if (rabin_index_sz >= 90) {
+		if (dedupe_index_sz >= 90) {
 			/* Index should be at least 90 bytes to have been compressed. */
-			rv = lzma_decompress(cmpbuf, rabin_index_sz_cmp, ubuf,
-			    &rabin_index_sz, tdat->rctx->level, 0, tdat->rctx->lzma_data);
+			rv = lzma_decompress(cmpbuf, dedupe_index_sz_cmp, ubuf,
+			    &dedupe_index_sz, tdat->rctx->level, 0, tdat->rctx->lzma_data);
 		} else {
-			memcpy(ubuf, cmpbuf, rabin_index_sz);
+			memcpy(ubuf, cmpbuf, dedupe_index_sz);
 		}
 	} else {
 		if (HDR & COMPRESSED) {
@@ -529,6 +530,9 @@ start_decompress(const char *filename, const char *to_filename)
 
 	if (flags & FLAG_DEDUP) {
 		enable_rabin_scan = 1;
+
+	} else if (flags & FLAG_DEDUP_FIXED) {
+		enable_fixed_scan = 1;
 	}
 
 	if (flags & FLAG_SINGLE_CHUNK) {
@@ -580,7 +584,7 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 		if (enable_rabin_scan) {
 			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, rab_blk_size,
-			    algo, enable_delta_encode);
+			    algo, enable_delta_encode, enable_fixed_scan);
 			if (tdat->rctx == NULL) {
 				UNCOMP_BAIL;
 			}
@@ -750,7 +754,7 @@ uncomp_done:
 static void *
 perform_compress(void *dat) {
 	struct cmp_data *tdat = (struct cmp_data *)dat;
-	typeof (tdat->chunksize) _chunksize, len_cmp, rabin_index_sz, index_size_cmp;
+	typeof (tdat->chunksize) _chunksize, len_cmp, dedupe_index_sz, index_size_cmp;
 	int type, rv;
 	uchar_t *compressed_chunk;
 	ssize_t rbytes;
@@ -780,7 +784,7 @@ redo:
 		rctx = tdat->rctx;
 		reset_rabin_context(tdat->rctx);
 		rctx->cbuf = tdat->uncompressed_chunk;
-		rabin_index_sz = rabin_dedup(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0, NULL);
+		dedupe_index_sz = rabin_dedup(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0, NULL);
 		if (!rctx->valid) {
 			memcpy(tdat->uncompressed_chunk, tdat->cmp_seg, rbytes);
 			tdat->rbytes = rbytes;
@@ -798,32 +802,32 @@ redo:
 	 * reducing compression effectiveness of the data chunk. So we separate them.
 	 */
 	if (enable_rabin_scan && tdat->rctx->valid) {
-		_chunksize = tdat->rbytes - rabin_index_sz - RABIN_HDR_SIZE;
-		index_size_cmp = rabin_index_sz;
+		_chunksize = tdat->rbytes - dedupe_index_sz - RABIN_HDR_SIZE;
+		index_size_cmp = dedupe_index_sz;
 
 		rv = 0;
-		if (rabin_index_sz >= 90) {
+		if (dedupe_index_sz >= 90) {
 			/* Compress index if it is at least 90 bytes. */
 			rv = lzma_compress(tdat->uncompressed_chunk + RABIN_HDR_SIZE,
-			    rabin_index_sz, compressed_chunk + RABIN_HDR_SIZE,
+			    dedupe_index_sz, compressed_chunk + RABIN_HDR_SIZE,
 			    &index_size_cmp, tdat->rctx->level, 255, tdat->rctx->lzma_data);
 		} else {
 			memcpy(compressed_chunk + RABIN_HDR_SIZE,
-			    tdat->uncompressed_chunk + RABIN_HDR_SIZE, rabin_index_sz);
+			    tdat->uncompressed_chunk + RABIN_HDR_SIZE, dedupe_index_sz);
 		}
 
 		index_size_cmp += RABIN_HDR_SIZE;
-		rabin_index_sz += RABIN_HDR_SIZE;
+		dedupe_index_sz += RABIN_HDR_SIZE;
 		if (rv == 0) {
 			memcpy(compressed_chunk, tdat->uncompressed_chunk, RABIN_HDR_SIZE);
 			/* Compress data chunk. */
 			if (lzp_preprocess) {
 				rv = preproc_compress(tdat->compress,
-				    tdat->uncompressed_chunk + rabin_index_sz,
+				    tdat->uncompressed_chunk + dedupe_index_sz,
 				    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
 				    tdat->level, 0, tdat->data);
 			} else {
-				rv = tdat->compress(tdat->uncompressed_chunk + rabin_index_sz,
+				rv = tdat->compress(tdat->uncompressed_chunk + dedupe_index_sz,
 				    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
 				    tdat->level, 0, tdat->data);
 			}
@@ -831,7 +835,7 @@ redo:
 			/* Can't compress data just retain as-is. */
 			if (rv < 0)
 				memcpy(compressed_chunk + index_size_cmp,
-				    tdat->uncompressed_chunk + rabin_index_sz, _chunksize);
+				    tdat->uncompressed_chunk + dedupe_index_sz, _chunksize);
 			/* Now update rabin header with the compressed sizes. */
 			rabin_update_hdr(compressed_chunk, index_size_cmp - RABIN_HDR_SIZE,
 					 _chunksize);
@@ -1005,8 +1009,11 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	}
 
 	flags = 0;
-	if (enable_rabin_scan) {
-		flags |= FLAG_DEDUP;
+	if (enable_rabin_scan || enable_fixed_scan) {
+		if (enable_rabin_scan)
+			flags |= FLAG_DEDUP;
+		else
+			flags |= FLAG_DEDUP_FIXED;
 		/* Additional scratch space for dedup arrays. */
 		compressed_chunksize += (rabin_buf_extra(chunksize, 0, algo,
 			enable_delta_encode) - (compressed_chunksize - chunksize));
@@ -1132,7 +1139,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		}
 		if (enable_rabin_scan) {
 			tdat->rctx = create_rabin_context(chunksize, compressed_chunksize, rab_blk_size,
-			    algo, enable_delta_encode);
+			    algo, enable_delta_encode, enable_fixed_scan);
 			if (tdat->rctx == NULL) {
 				COMP_BAIL;
 			}
@@ -1197,7 +1204,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 * Read the first chunk into a spare buffer (a simple double-buffering).
 	 */
 	if (enable_rabin_split) {
-		rctx = create_rabin_context(chunksize, 0, 0, algo, enable_delta_encode);
+		rctx = create_rabin_context(chunksize, 0, 0, algo, enable_delta_encode,
+		    enable_fixed_scan);
 		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 	} else {
 		rbytes = Read(uncompfd, cread_buf, chunksize);
@@ -1589,6 +1597,10 @@ main(int argc, char *argv[])
 			enable_delta_encode = 1;
 			break;
 
+		    case 'f':
+			enable_fixed_scan = 1;
+			break;
+
 		    case 'L':
 			lzp_preprocess = 1;
 			break;
@@ -1633,6 +1645,11 @@ main(int argc, char *argv[])
 	}
 	if (!enable_rabin_scan)
 		enable_rabin_split = 0;
+
+	if (enable_fixed_scan && (enable_rabin_scan || enable_delta_encode)) {
+		fprintf(stderr, "Rabin Deduplication and Fixed block Deduplication are mutually exclusive\n");
+		exit(1);
+	}
 
 	if (num_rem == 0 && !pipe_mode) {
 		usage(); /* At least 1 filename needed. */
