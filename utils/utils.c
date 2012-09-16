@@ -223,7 +223,7 @@ Read_Adjusted(int fd, uchar_t *buf, size_t count, ssize_t *rabin_count, void *ct
 {
         char *buf2;
         ssize_t rcount;
-        rabin_context_t *rctx = (rabin_context_t *)ctx;
+        dedupe_context_t *rctx = (dedupe_context_t *)ctx;
 
         if (!ctx)  return (Read(fd, buf, count));
         buf2 = buf;
@@ -235,7 +235,7 @@ Read_Adjusted(int fd, uchar_t *buf, size_t count, ssize_t *rabin_count, void *ct
         if (rcount > 0) {
                 rcount += *rabin_count;
 		if (rcount == count)
-			rabin_dedup(rctx, buf, &rcount, 0, rabin_count);
+			dedupe_compress(rctx, buf, &rcount, 0, rabin_count);
 		else
 			*rabin_count = 0;
         } else {

@@ -157,7 +157,7 @@ struct cmp_data {
 	uchar_t *cmp_seg;
 	uchar_t *compressed_chunk;
 	uchar_t *uncompressed_chunk;
-	rabin_context_t *rctx;
+	dedupe_context_t *rctx;
 	ssize_t rbytes;
 	ssize_t chunksize;
 	ssize_t len_cmp;

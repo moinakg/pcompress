@@ -86,7 +86,7 @@ uint64_t ir[256];
 static int inited = 0;
 
 static uint32_t
-rabin_min_blksz(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta_flag)
+dedupe_min_blksz(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta_flag)
 {
 	uint32_t min_blk;
 
@@ -95,22 +95,22 @@ rabin_min_blksz(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta_
 }
 
 uint32_t
-rabin_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta_flag)
+dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta_flag)
 {
 	if (rab_blk_sz < 1 || rab_blk_sz > 5)
 		rab_blk_sz = RAB_BLK_DEFAULT;
 
-	return ((chunksize / rabin_min_blksz(chunksize, rab_blk_sz, algo, delta_flag))
+	return ((chunksize / dedupe_min_blksz(chunksize, rab_blk_sz, algo, delta_flag))
 	    * sizeof (uint32_t));
 }
 
 /*
  * Initialize the algorithm with the default params.
  */
-rabin_context_t *
-create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz,
+dedupe_context_t *
+create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz,
     const char *algo, int delta_flag, int fixed_flag) {
-	rabin_context_t *ctx;
+	dedupe_context_t *ctx;
 	unsigned char *current_window_data;
 	uint32_t i;
 
@@ -165,7 +165,7 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz
 	 * use 4K minimum Rabin block size. For everything else it is 2K based
 	 * on experimentation.
 	 */
-	ctx = (rabin_context_t *)slab_alloc(NULL, sizeof (rabin_context_t));
+	ctx = (dedupe_context_t *)slab_alloc(NULL, sizeof (dedupe_context_t));
 	ctx->rabin_poly_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
 
 	ctx->fixed_flag = fixed_flag;
@@ -173,7 +173,7 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz
 	ctx->delta_flag = delta_flag;
 	ctx->rabin_poly_avg_block_size = 1 << (rab_blk_sz + RAB_BLK_MIN_BITS);
 	ctx->rabin_avg_block_mask = ctx->rabin_poly_avg_block_size - 1;
-	ctx->rabin_poly_min_block_size = rabin_min_blksz(chunksize, rab_blk_sz, algo, delta_flag);
+	ctx->rabin_poly_min_block_size = dedupe_min_blksz(chunksize, rab_blk_sz, algo, delta_flag);
 	ctx->fp_mask = ctx->rabin_avg_block_mask | ctx->rabin_poly_avg_block_size;
 
 	if (!fixed_flag)
@@ -186,7 +186,7 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz
 
 	if (ctx->blknum > RABIN_MAX_BLOCKS) {
 		fprintf(stderr, "Chunk size too large for dedup.\n");
-		destroy_rabin_context(ctx);
+		destroy_dedupe_context(ctx);
 		return (NULL);
 	}
 	current_window_data = slab_alloc(NULL, RAB_POLYNOMIAL_WIN_SIZE);
@@ -198,7 +198,7 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz
 	if(ctx == NULL || current_window_data == NULL || (ctx->blocks == NULL && real_chunksize > 0)) {
 		fprintf(stderr,
 		    "Could not allocate rabin polynomial context, out of memory\n");
-		destroy_rabin_context(ctx);
+		destroy_dedupe_context(ctx);
 		return (NULL);
 	}
 
@@ -209,7 +209,7 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz
 		if (!(ctx->lzma_data)) {
 			fprintf(stderr,
 			    "Could not initialize LZMA data for dedupe index, out of memory\n");
-			destroy_rabin_context(ctx);
+			destroy_dedupe_context(ctx);
 			return (NULL);
 		}
 	}
@@ -227,19 +227,19 @@ create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz
 	slab_cache_add(sizeof (rabin_blockentry_t));
 	ctx->current_window_data = current_window_data;
 	ctx->real_chunksize = real_chunksize;
-	reset_rabin_context(ctx);
+	reset_dedupe_context(ctx);
 	return (ctx);
 }
 
 void
-reset_rabin_context(rabin_context_t *ctx)
+reset_dedupe_context(dedupe_context_t *ctx)
 {
 	memset(ctx->current_window_data, 0, RAB_POLYNOMIAL_WIN_SIZE);
 	ctx->window_pos = 0;
 }
 
 void
-destroy_rabin_context(rabin_context_t *ctx)
+destroy_dedupe_context(dedupe_context_t *ctx)
 {
 	if (ctx) {
 		uint32_t i;
@@ -288,11 +288,13 @@ cmpblks(const void *a, const void *b)
 }
 
 /**
- * Perform Deduplication based on Rabin Fingerprinting. A 31-byte window is used for
- * the rolling checksum and dedup blocks vary in size from 4K-128K.
+ * Perform Deduplication.
+ * Both Semi-Rabin fingerprinting based and Fixed Block Deduplication are supported.
+ * A 16-byte window is used for the rolling checksum and dedup blocks can vary in size
+ * from 4K-128K.
  */
 uint32_t
-rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, ssize_t *rabin_pos)
+dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, ssize_t *rabin_pos)
 {
 	ssize_t i, last_offset, j, fplist_sz;
 	uint32_t blknum;
@@ -301,6 +303,40 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 	uint64_t cur_roll_checksum, cur_pos_checksum, cur_sketch;
 	uint32_t *fplist;
 	heap_t heap;
+
+	length = offset;
+	last_offset = 0;
+	blknum = 0;
+	ctx->valid = 0;
+	cur_roll_checksum = 0;
+	cur_sketch = 0;
+
+	if (ctx->fixed_flag) {
+		blknum = *size / ctx->rabin_poly_avg_block_size;
+		j = *size % ctx->rabin_poly_avg_block_size;
+		if (j) blknum++;
+
+		last_offset = 0;
+		length = ctx->rabin_poly_avg_block_size;
+		for (i=0; i<blknum; i++) {
+			if (i == blknum-1) {
+				length = j;
+			}
+			if (ctx->blocks[i] == 0) {
+				ctx->blocks[i] = (rabin_blockentry_t *)slab_alloc(NULL,
+				    sizeof (rabin_blockentry_t));
+			}
+			ctx->blocks[i]->offset = last_offset;
+			ctx->blocks[i]->index = i; // Need to store for sorting
+			ctx->blocks[i]->length = length;
+			ctx->blocks[i]->ref = 0;
+			ctx->blocks[i]->similar = 0;
+			ctx->blocks[i]->crc = XXH_strong32(buf1+last_offset, length, 0);
+			ctx->blocks[i]->cksum_n_offset = ctx->blocks[i]->crc;
+			last_offset += length;
+		}
+		goto process_blocks;
+	}
 
 	if (rabin_pos == NULL) {
 		/*
@@ -312,12 +348,6 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		memset(fplist, 0, fplist_sz);
 		reset_heap(&heap, fplist_sz/2);
 	}
-	length = offset;
-	last_offset = 0;
-	blknum = 0;
-	ctx->valid = 0;
-	cur_roll_checksum = 0;
-	cur_sketch = 0;
 
 	/* 
 	 * If rabin_pos is non-zero then we are being asked to scan for the last rabin boundary
@@ -434,6 +464,7 @@ rabin_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, s
 		}
 	}
 
+process_blocks:
 	DEBUG_STAT_EN(printf("Original size: %lld, blknum: %u\n", *size, blknum));
 	// If we found at least a few chunks, perform dedup.
 	if (blknum > 2) {
@@ -701,7 +732,7 @@ cont:
 }
 
 void
-rabin_update_hdr(uchar_t *buf, ssize_t dedupe_index_sz_cmp, ssize_t rabin_data_sz_cmp)
+update_dedupe_hdr(uchar_t *buf, ssize_t dedupe_index_sz_cmp, ssize_t rabin_data_sz_cmp)
 {
 	ssize_t *entries;
 
@@ -712,7 +743,7 @@ rabin_update_hdr(uchar_t *buf, ssize_t dedupe_index_sz_cmp, ssize_t rabin_data_s
 }
 
 void
-rabin_parse_hdr(uchar_t *buf, uint32_t *blknum, ssize_t *dedupe_index_sz,
+parse_dedupe_hdr(uchar_t *buf, uint32_t *blknum, ssize_t *dedupe_index_sz,
 		ssize_t *rabin_data_sz, ssize_t *dedupe_index_sz_cmp,
 		ssize_t *rabin_data_sz_cmp, ssize_t *rabin_deduped_size)
 {
@@ -730,7 +761,7 @@ rabin_parse_hdr(uchar_t *buf, uint32_t *blknum, ssize_t *dedupe_index_sz,
 }
 
 void
-rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
+dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size)
 {
 	uint32_t blknum, blk, oblk, len;
 	uint32_t *dedupe_index;
@@ -738,7 +769,7 @@ rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
 	ssize_t dedupe_index_sz, pos1, i;
 	uchar_t *pos2;
 
-	rabin_parse_hdr(buf, &blknum, &dedupe_index_sz, &data_sz, &indx_cmp, &data_sz_cmp, &deduped_sz);
+	parse_dedupe_hdr(buf, &blknum, &dedupe_index_sz, &data_sz, &indx_cmp, &data_sz_cmp, &deduped_sz);
 	dedupe_index = (uint32_t *)(buf + RABIN_HDR_SIZE);
 	pos1 = dedupe_index_sz + RABIN_HDR_SIZE;
 	pos2 = ctx->cbuf;
@@ -828,7 +859,7 @@ rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size)
  * TODO: Consolidate rabin dedup and compression/decompression in functions here rather than
  * messy code in main program.
 int
-rabin_compress(rabin_context_t *ctx, uchar_t *from, ssize_t fromlen, uchar_t *to, ssize_t *tolen,
+rabin_compress(dedupe_context_t *ctx, uchar_t *from, ssize_t fromlen, uchar_t *to, ssize_t *tolen,
     int level, char chdr, void *data, compress_func_ptr cmp)
 {
 }

@@ -97,6 +97,12 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
                   the fastest in the group, especially on x86 platforms. BLAKE is faster
                   than SKEIN on a few platforms.
                   SKEIN 512-256 is about 60% faster than SHA 512-256 on x64 platforms.
+
+       '-F' -     Perform Fixed Block Deduplication. This is faster than fingerprinting
+                  based content-aware deduplication in some cases. However this is mostly
+                  usable for disk dumps especially virtual machine images. This generally
+                  gives lower dedupe ratio than content-aware dedupe (-D) and does not
+                  support delta compression.
        '-M' -     Display memory allocator statistics
        '-C' -     Display compression statistics
 

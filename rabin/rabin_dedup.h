@@ -150,21 +150,21 @@ typedef struct {
 	short valid;
 	void *lzma_data;
 	int level, delta_flag, fixed_flag;
-} rabin_context_t;
+} dedupe_context_t;
 
-extern rabin_context_t *create_rabin_context(uint64_t chunksize, uint64_t real_chunksize, 
+extern dedupe_context_t *create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, 
 	int rab_blk_sz, const char *algo, int delta_flag, int fixed_flag);
-extern void destroy_rabin_context(rabin_context_t *ctx);
-extern unsigned int rabin_dedup(rabin_context_t *ctx, unsigned char *buf, 
+extern void destroy_dedupe_context(dedupe_context_t *ctx);
+extern unsigned int dedupe_compress(dedupe_context_t *ctx, unsigned char *buf, 
 	ssize_t *size, ssize_t offset, ssize_t *rabin_pos);
-extern void rabin_inverse_dedup(rabin_context_t *ctx, uchar_t *buf, ssize_t *size);
-extern void rabin_parse_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *rabin_index_sz,
+extern void dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size);
+extern void parse_dedupe_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *rabin_index_sz,
 		ssize_t *rabin_data_sz, ssize_t *rabin_index_sz_cmp,
 		ssize_t *rabin_data_sz_cmp, ssize_t *rabin_deduped_size);
-extern void rabin_update_hdr(uchar_t *buf, ssize_t rabin_index_sz_cmp,
+extern void update_dedupe_hdr(uchar_t *buf, ssize_t rabin_index_sz_cmp,
 			     ssize_t rabin_data_sz_cmp);
-extern void reset_rabin_context(rabin_context_t *ctx);
-extern uint32_t rabin_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo,
+extern void reset_dedupe_context(dedupe_context_t *ctx);
+extern uint32_t dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo,
 	int delta_flag);
 
 #endif /* _RABIN_POLY_H_ */
