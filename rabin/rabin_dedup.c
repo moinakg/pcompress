@@ -86,7 +86,7 @@ uint64_t ir[256];
 static int inited = 0;
 
 static uint32_t
-dedupe_min_blksz(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta_flag)
+dedupe_min_blksz(int rab_blk_sz)
 {
 	uint32_t min_blk;
 
@@ -100,8 +100,7 @@ dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta
 	if (rab_blk_sz < 1 || rab_blk_sz > 5)
 		rab_blk_sz = RAB_BLK_DEFAULT;
 
-	return ((chunksize / dedupe_min_blksz(chunksize, rab_blk_sz, algo, delta_flag))
-	    * sizeof (uint32_t));
+	return ((chunksize / dedupe_min_blksz(rab_blk_sz)) * sizeof (uint32_t));
 }
 
 /*
@@ -173,7 +172,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx->delta_flag = delta_flag;
 	ctx->rabin_poly_avg_block_size = 1 << (rab_blk_sz + RAB_BLK_MIN_BITS);
 	ctx->rabin_avg_block_mask = ctx->rabin_poly_avg_block_size - 1;
-	ctx->rabin_poly_min_block_size = dedupe_min_blksz(chunksize, rab_blk_sz, algo, delta_flag);
+	ctx->rabin_poly_min_block_size = dedupe_min_blksz(rab_blk_sz);
 	ctx->fp_mask = ctx->rabin_avg_block_mask | ctx->rabin_poly_avg_block_size;
 
 	if (!fixed_flag)
@@ -300,7 +299,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 	uint32_t blknum;
 	char *buf1 = (char *)buf;
 	uint32_t length;
-	uint64_t cur_roll_checksum, cur_pos_checksum, cur_sketch;
+	uint64_t cur_roll_checksum, cur_pos_checksum;
 	uint32_t *fplist;
 	heap_t heap;
 
@@ -309,7 +308,6 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 	blknum = 0;
 	ctx->valid = 0;
 	cur_roll_checksum = 0;
-	cur_sketch = 0;
 
 	if (ctx->fixed_flag) {
 		blknum = *size / ctx->rabin_poly_avg_block_size;
@@ -348,6 +346,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 		memset(fplist, 0, fplist_sz);
 		reset_heap(&heap, fplist_sz/2);
 	}
+	memset(ctx->current_window_data, 0, RAB_POLYNOMIAL_WIN_SIZE);
 
 	/* 
 	 * If rabin_pos is non-zero then we are being asked to scan for the last rabin boundary
@@ -439,7 +438,6 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 			ctx->blocks[blknum]->length = length;
 			ctx->blocks[blknum]->ref = 0;
 			ctx->blocks[blknum]->similar = 0;
-			ctx->blocks[blknum]->crc = XXH_strong32(buf1+last_offset, length, 0);
 
 			if (ctx->delta_flag) {
 				/*
@@ -450,17 +448,29 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 				 */
 				reset_heap(&heap, FORTY_PCNT(j));
 				ksmallest(fplist, j, &heap);
-				cur_sketch = XXH_fast32((const uchar_t *)fplist,  FORTY_PCNT(j)*4, 0);
+				ctx->blocks[blknum]->cksum_n_offset =
+					XXH_fast32((const uchar_t *)fplist,  FORTY_PCNT(j)*4, 0);
 				memset(fplist, 0, fplist_sz);
-			} else {
-				cur_sketch = ctx->blocks[blknum]->crc;
 			}
-			ctx->blocks[blknum]->cksum_n_offset = cur_sketch;
-			cur_sketch = 0;
 			blknum++;
 			last_offset = i+1;
 			length = 0;
 			j = 0;
+		}
+	}
+
+	/*
+	 * Compute hash signature for each block. We do this in a separate loop to 
+	 * have a fast linear scan through the buffer.
+	 */
+	if (ctx->delta_flag) {
+		for (i=0; i<blknum; i++) {
+			ctx->blocks[i]->crc = XXH_strong32(buf1+ctx->blocks[i]->offset, ctx->blocks[i]->length, 0);
+		}
+	} else {
+		for (i=0; i<blknum; i++) {
+			ctx->blocks[i]->crc = XXH_strong32(buf1+ctx->blocks[i]->offset, ctx->blocks[i]->length, 0);
+			ctx->blocks[i]->cksum_n_offset = ctx->blocks[i]->crc;
 		}
 	}
 
@@ -481,6 +491,8 @@ process_blocks:
 
 		// Insert the last left-over trailing bytes, if any, into a block.
 		if (last_offset < *size) {
+			uint64_t cur_sketch;
+
 			if (ctx->blocks[blknum] == 0)
 				ctx->blocks[blknum] = (rabin_blockentry_t *)slab_alloc(NULL,
 					sizeof (rabin_blockentry_t));

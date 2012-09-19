@@ -148,7 +148,7 @@ usage(void)
 	    "   '-F'    - Perform Fixed-Block Deduplication. Faster than '-D' in some cases\n"
 	    "             but with lower deduplication ratio.\n"
 	    "   '-B' <1..5>\n"
-	    "           - Specify a minimum Dedupe block size. 1 - 4K, 2 - 8K ... 5 - 64K.\n"
+	    "           - Specify an average Dedupe block size. 1 - 4K, 2 - 8K ... 5 - 64K.\n"
 	    "   '-M'    - Display memory allocator statistics\n"
 	    "   '-C'    - Display compression statistics\n\n",
 	    UTILITY_VERSION, exec_name, exec_name, exec_name, exec_name, exec_name, exec_name);
@@ -1569,7 +1569,7 @@ main(int argc, char *argv[])
 		    case 'B':
 			rab_blk_size = atoi(optarg);
 			if (rab_blk_size < 1 || rab_blk_size > 5)
-				err_exit(0, "Minimum Dedupe block size must be in range 1 (4k) - 5 (64k)\n");
+				err_exit(0, "Average Dedupe block size must be in range 1 (4k) - 5 (64k)\n");
 			break;
 
 		    case 'p':
