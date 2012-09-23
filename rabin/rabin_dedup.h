@@ -75,9 +75,6 @@
 // Minimum practical chunk size when doing dedup
 #define	RAB_MIN_CHUNK_SIZE (1048576L)
 
-// Number of bytes to compute one maximal fingerprint value
-#define	SKETCH_BASIC_BLOCK_SZ (1024)
-
 // An entry in the Rabin block array in the chunk.
 // It is either a length value <= RABIN_MAX_BLOCK_SIZE or an index value with
 // which this block is a duplicate/similar. The entries are variable sized.
@@ -117,6 +114,7 @@
  */
 #define	SIMILAR_EXACT 1
 #define	SIMILAR_PARTIAL 2
+#define	SIMILAR_REF 3
 
 /*
  * Irreducible polynomial for Rabin modulus. This value is from the
@@ -124,14 +122,15 @@
  */
 #define	FP_POLY  0xbfe6b8a5bf378d83ULL
 
-typedef struct {
+typedef struct rab_blockentry {
 	ssize_t offset;
-	uint64_t cksum_n_offset; // Dual purpose variable
-	uint64_t alt_length;
-	uint64_t crc;
-	unsigned int index;
-	unsigned int length;
-	unsigned char ref, similar;
+	uint32_t similarity_hash;
+	uint32_t hash;
+	uint32_t index;
+	uint32_t length;
+	unsigned char similar;
+	struct rab_blockentry *other;
+	struct rab_blockentry *next;
 } rabin_blockentry_t;
 
 typedef struct {

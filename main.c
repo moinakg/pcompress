@@ -949,11 +949,9 @@ repeat:
 			perror("Chunk Write: ");
 do_cancel:
 			main_cancel = 1;
-			for (i = 0; i < w->nprocs; i++) {
-				tdat->cancel = 1;
-				sem_post(&tdat->start_sem);
-				sem_post(&tdat->write_done_sem);
-			}
+			tdat->cancel = 1;
+			sem_post(&tdat->start_sem);
+			sem_post(&tdat->write_done_sem);
 			return (0);
 		}
 		sem_post(&tdat->write_done_sem);

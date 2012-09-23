@@ -152,13 +152,6 @@ ksmallest(__TYPE *ary, __TYPE len, heap_t *heap)
     __TYPE elem, los;
     __TYPE i, *hp, n;
 
-#ifdef ERROR_CHK
-    if (len >= heap->tot) {
-        fprintf(stderr, "nsmallest: array size > heap size\n");
-        return (-1);
-    }
-#endif
-
     n = heap->tot;
     heap->ary = ary;
     hp = ary;
