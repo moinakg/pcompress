@@ -135,9 +135,10 @@ usage(void)
 	    "   %s -p ...\n"
 	    "4) Attempt Rabin fingerprinting based deduplication on chunks:\n"
 	    "   %s -D ...\n"
-	    "   %s -D -r ... - Do NOT split chunks at a rabin boundary. Default is to split.\n"
-	    "5) Perform Delta Encoding in addition to Exact Dedup:\n"
-	    "   %s -E ... - This also implies '-D'.\n"
+	    "   %s -D -r ... - Do NOT split chunks at a rabin boundary. Default is to split.\n\n"
+	    "5) Perform Delta Encoding in addition to Identical Dedup:\n"
+	    "   %s -E ... - This also implies '-D'. This checks for at least 60%% similarity.\n"
+	    "   The flag can be repeated as in '-EE' to indicate at least 40%% similarity.\n\n"
 	    "6) Number of threads can optionally be specified: -t <1 - 256 count>\n"
 	    "7) Other flags:\n"
 	    "   '-L'    - Enable LZP pre-compression. This improves compression ratio of all\n"
@@ -1594,7 +1595,10 @@ main(int argc, char *argv[])
 
 		    case 'E':
 			enable_rabin_scan = 1;
-			enable_delta_encode = 1;
+			if (!enable_delta_encode)
+				enable_delta_encode = DELTA_NORMAL;
+			else
+				enable_delta_encode = DELTA_EXTRA;
 			break;
 
 		    case 'F':

@@ -80,8 +80,13 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
        pcompress -D -r ... - Do NOT split chunks at a rabin boundary. Default
                              is to split.
 
-    Perform Delta Encoding in addition to Exact Dedup:
-       pcompress -E ... - This also implies '-D'.
+    Perform Delta Encoding in addition to Identical Dedup:
+       pcompress -E ... - This also implies '-D'. This performs Delta Compression
+                          between 2 blocks if they are at least 60% similar.
+       pcompress -EE .. - This causes Delta Compression to happen if 2 blocks are
+                          at least 40% similar. This can effect greater final
+                          compression ratio at the cost of higher processing
+                          overhead.
 
     Number of threads can optionally be specified: -t <1 - 256 count>
     Other flags:

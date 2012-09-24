@@ -117,6 +117,14 @@
 #define	SIMILAR_REF 3
 
 /*
+ * TYpes of delta operations.
+ * DELTA_NORMAL = Check for at least 60% similarity
+ * DELTA_EXTRA  = Check for at least 40% similarity
+ */
+#define	DELTA_NORMAL	1
+#define	DELTA_EXTRA	2
+
+/*
  * Irreducible polynomial for Rabin modulus. This value is from the
  * Low Bandwidth Filesystem.
  */

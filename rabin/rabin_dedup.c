@@ -68,6 +68,7 @@
 #include "rabin_dedup.h"
 
 #define	FORTY_PCNT(x) (((x)/5 << 1))
+#define	SIXTY_PCNT(x) (((x) >> 1) + ((x) >> 3))
 
 extern int lzma_init(void **data, int *level, ssize_t chunksize);
 extern int lzma_compress(void *src, size_t srclen, void *dst,
@@ -135,7 +136,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 			val = 0;
 			for (i=0; i<RAB_POLYNOMIAL_WIN_SIZE; i++) {
 				if (term & FP_POLY) {
-					val = (val << 1) + j;
+					val += term * j;
 				}
 				term <<= 1;
 			}
@@ -297,7 +298,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 			ctx->blocks[i]->index = i; // Need to store for sorting
 			ctx->blocks[i]->length = length;
 			ctx->blocks[i]->similar = 0;
-			ctx->blocks[i]->hash = XXH_strong32(buf1+last_offset, length, 0);
+			ctx->blocks[i]->hash = XXH_fast32(buf1+last_offset, length, 0);
 			ctx->blocks[i]->similarity_hash = ctx->blocks[i]->hash;
 			last_offset += length;
 		}
@@ -355,7 +356,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 	j = 0;
 
 	for (i=offset; i<*size; i++) {
-		uint32_t *splits;
+		ssize_t pc[3];
 		uchar_t cur_byte = buf1[i];
 		uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
 		ctx->current_window_data[ctx->window_pos] = cur_byte;
@@ -403,21 +404,22 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 			ctx->blocks[blknum]->offset = last_offset;
 			ctx->blocks[blknum]->index = blknum; // Need to store for sorting
 			ctx->blocks[blknum]->length = length;
-			ctx->blocks[blknum]->other = 0;
-			ctx->blocks[blknum]->next = 0;
-			ctx->blocks[blknum]->similar = 0;
 
+			/*
+			 * Reset the heap structure and find the K min values if Delta Compression
+			 * is enabled. We use a min heap mechanism taken from the heap based priority
+			 * queue implementation in Python.
+			 * Here K = 60% or 40%. We are aiming to detect either 60% (default) or 40%
+			 * similarity on average.
+			 */
 			if (ctx->delta_flag) {
-				/*
-				 * Reset the heap structure and find the K min values. We use a
-				 * min heap mechanism taken from the heap based priority queue
-				 * implementation in Python.
-				 * Here K = 40%. We are aiming to detect 40% similarity on average.
-				 */
-				reset_heap(&heap, FORTY_PCNT(j));
+				pc[1] = SIXTY_PCNT(j);
+				pc[2] = FORTY_PCNT(j);
+
+				reset_heap(&heap, pc[ctx->delta_flag]);
 				ksmallest(fplist, j, &heap);
 				ctx->blocks[blknum]->similarity_hash =
-					XXH_fast32((const uchar_t *)fplist,  FORTY_PCNT(j)*4, 0);
+					XXH_fast32((const uchar_t *)fplist,  pc[ctx->delta_flag]*4, 0);
 				memset(fplist, 0, ary_sz);
 			}
 			blknum++;
@@ -435,20 +437,20 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 		ctx->blocks[blknum]->offset = last_offset;
 		ctx->blocks[blknum]->index = blknum;
 		ctx->blocks[blknum]->length = *size - last_offset;
-		ctx->blocks[blknum]->other = 0;
-		ctx->blocks[blknum]->next = 0;
-		ctx->blocks[blknum]->similar = 0;
-		ctx->blocks[blknum]->hash = XXH_strong32(buf1+last_offset, ctx->blocks[blknum]->length, 0);
 
 		if (ctx->delta_flag) {
 			uint64_t cur_sketch;
-			j = (j > 0 ? j:1);
+			ssize_t pc[3];
+
 			if (j > 1) {
-				reset_heap(&heap, FORTY_PCNT(j));
+				pc[1] = SIXTY_PCNT(j);
+				pc[2] = FORTY_PCNT(j);
+				reset_heap(&heap, pc[ctx->delta_flag]);
 				ksmallest(fplist, j, &heap);
 				cur_sketch =
-				    XXH_fast32((const uchar_t *)fplist,  FORTY_PCNT(j)*4, 0);
+				    XXH_fast32((const uchar_t *)fplist,  pc[ctx->delta_flag]*4, 0);
 			} else {
+				if (j == 0) j = 1;
 				cur_sketch =
 				    XXH_fast32((const uchar_t *)fplist, (j*4)/2, 0);
 			}
@@ -483,12 +485,12 @@ process_blocks:
 		 */
 		if (ctx->delta_flag) {
 			for (i=0; i<blknum; i++) {
-				ctx->blocks[i]->hash = XXH_strong32(buf1+ctx->blocks[i]->offset,
+				ctx->blocks[i]->hash = XXH_fast32(buf1+ctx->blocks[i]->offset,
 								    ctx->blocks[i]->length, 0);
 			}
 		} else {
 			for (i=0; i<blknum; i++) {
-				ctx->blocks[i]->hash = XXH_strong32(buf1+ctx->blocks[i]->offset,
+				ctx->blocks[i]->hash = XXH_fast32(buf1+ctx->blocks[i]->offset,
 								    ctx->blocks[i]->length, 0);
 				ctx->blocks[i]->similarity_hash = ctx->blocks[i]->hash;
 			}
@@ -507,15 +509,21 @@ process_blocks:
 			uint64_t ck;
 
 			/*
-			 * Add length to hash for fewer collisions. If Delta Compression is
+			 * Bias hash with length for fewer collisions. If Delta Compression is
 			 * not enabled then value of similarity_hash == hash.
 			 */
 			ck = ctx->blocks[i]->similarity_hash;
-			ck += ctx->blocks[i]->length;
+			ck += (ck / ctx->blocks[i]->length);
 			j = ck % blknum;
 
 			if (htab[j] == 0) {
-					htab[j] = ctx->blocks[i];
+				/*
+				 * Hash bucket empty. So add block into table.
+				 */
+				htab[j] = ctx->blocks[i];
+				ctx->blocks[i]->other = 0;
+				ctx->blocks[i]->next = 0;
+				ctx->blocks[i]->similar = 0;
 			} else {
 				be = htab[j];
 				length = 0;
@@ -562,8 +570,14 @@ process_blocks:
 							break;
 					}
 				}
-				// This is an unique block so add it to hashtable.
+				/*
+				 * No duplicate in table for this block. So add it to
+				 * the bucket chain.
+				 */
 				if (!length) {
+					ctx->blocks[i]->other = 0;
+					ctx->blocks[i]->next = 0;
+					ctx->blocks[i]->similar = 0;
 					be->next = ctx->blocks[i];
 					DEBUG_STAT_EN(hash_collisions++);
 				}
