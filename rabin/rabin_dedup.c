@@ -583,8 +583,9 @@ process_blocks:
 				}
 			}
 		}
-		DEBUG_STAT_EN(printf("Hash collisions: %u\n", hash_collisions));
+		DEBUG_STAT_EN(printf("Total Hashtable bucket collisions: %u\n", hash_collisions));
 
+		dedupe_index_sz = (ssize_t)blknum * RABIN_ENTRY_SIZE;
 		if (matchlen < dedupe_index_sz) {
 			ctx->valid = 0;
 			return;
