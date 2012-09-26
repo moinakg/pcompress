@@ -82,11 +82,13 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
 
     Perform Delta Encoding in addition to Identical Dedup:
        pcompress -E ... - This also implies '-D'. This performs Delta Compression
-                          between 2 blocks if they are at least 60% similar.
+                          between 2 blocks if they are 40% to 60% similar. The
+                          similarity %age is selected based on the dedupe block
+                          size to balance performance and effectiveness.
        pcompress -EE .. - This causes Delta Compression to happen if 2 blocks are
-                          at least 40% similar. This can effect greater final
-                          compression ratio at the cost of higher processing
-                          overhead.
+                          at least 40% similar regardless of block size. This can
+                          effect greater final compression ratio at the cost of
+                          higher processing overhead.
 
     Number of threads can optionally be specified: -t <1 - 256 count>
     Other flags:

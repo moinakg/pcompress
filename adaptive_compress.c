@@ -140,55 +140,43 @@ adapt_compress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
-	int rv, rv1, rv2;
-	unsigned int *inc;
-	size_t dst2len, dst3len, smaller_dstlen;
-	uchar_t *dst2, *smaller_dst;
-	void *tmp;
+	uchar_t *src1 = (uchar_t *)src;
+	size_t i, bincount;
+	int rv;
 
-	dst2 = slab_alloc(NULL, *dstlen);
-	if (!dst2) {
-		fprintf(stderr, "Adapt: Out of memory\n");
-		return (-1);
-	}
+	/*
+	 * Count number of 8-bit binary bytes in source.
+	 */
+	bincount = 0;
+	for (i = 0; i < srclen; i++)
+		bincount += (src1[i] >> 7);
 
-	rv = COMPRESS_PPMD;
-	inc = &ppmd_count;
-	dst2len = *dstlen;
-	dst3len = *dstlen;
-	rv1 = ppmd_compress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data);
-	if (rv1 < 0) *dstlen = dst3len;
-
-	if (adat->adapt_mode == 2) {
-		rv2 = lzma_compress(src, srclen, dst2, &dst2len, level, chdr, adat->lzma_data);
-		if (rv2 < 0) dst2len = dst3len;
-		if (dst2len < *dstlen) {
-			inc = &lzma_count;
+	/*
+	 * Use PPMd if at least 70% of source is 7-bit textual bytes, otherwise
+	 * use Bzip2 or LZMA.
+	 */
+	if (bincount > (srclen / 10 * 3)) {
+		if (adat->adapt_mode == 2) {
+			rv = lzma_compress(src, srclen, dst, dstlen, level, chdr, adat->lzma_data);
+			if (rv < 0)
+				return (rv);
 			rv = COMPRESS_LZMA;
-		}
-	} else {
-		rv2 = bzip2_compress(src, srclen, dst2, &dst2len, level, chdr, NULL);
-		if (rv2 < 0) dst2len = dst3len;
-		if (dst2len < *dstlen) {
-			inc = &bzip2_count;
+			lzma_count++;
+		} else {
+			rv = bzip2_compress(src, srclen, dst, dstlen, level, chdr, NULL);
+			if (rv < 0)
+				return (rv);
 			rv = COMPRESS_BZIP2;
+			bzip2_count++;
 		}
-	}
-
-	if (dst2len < *dstlen) {
-		smaller_dstlen = dst2len;
-		smaller_dst = dst2;
 	} else {
-		smaller_dstlen = *dstlen;
-		smaller_dst = dst;
+		rv = ppmd_compress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data);
+		if (rv < 0)
+			return (rv);
+		rv = COMPRESS_PPMD;
+		ppmd_count++;
 	}
 
-	*inc += 1;
-	if (smaller_dst != dst) {
-		memcpy(dst, smaller_dst, smaller_dstlen);
-		*dstlen = smaller_dstlen;
-	}
-	slab_free(NULL, dst2);
 	return (rv);
 }
 

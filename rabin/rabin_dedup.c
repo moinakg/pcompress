@@ -67,7 +67,8 @@
 
 #include "rabin_dedup.h"
 
-#define	FORTY_PCNT(x) (((x)/5 << 1))
+#define	FORTY_PCNT(x) ((x)/5 << 1)
+#define	FIFTY_PCNT(x) ((x) >> 1)
 #define	SIXTY_PCNT(x) (((x) >> 1) + ((x) >> 3))
 
 extern int lzma_init(void **data, int *level, ssize_t chunksize);
@@ -170,11 +171,27 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 
 	ctx->fixed_flag = fixed_flag;
 	ctx->rabin_break_patt = 0;
-	ctx->delta_flag = delta_flag;
 	ctx->rabin_poly_avg_block_size = 1 << (rab_blk_sz + RAB_BLK_MIN_BITS);
 	ctx->rabin_avg_block_mask = ctx->rabin_poly_avg_block_size - 1;
 	ctx->rabin_poly_min_block_size = dedupe_min_blksz(rab_blk_sz);
 	ctx->fp_mask = ctx->rabin_avg_block_mask | ctx->rabin_poly_avg_block_size;
+	ctx->delta_flag = 0;
+
+	/*
+	 * Scale down similarity percentage based on avg block size unless user specified
+	 * argument '-EE' in which case fixed 40% match is used for Delta compression.
+	 */
+	if (delta_flag == DELTA_NORMAL) {
+		if (ctx->rabin_poly_avg_block_size < (1 << 14)) {
+			ctx->delta_flag = 1;
+		} else if (ctx->rabin_poly_avg_block_size < (1 << 16)) {
+			ctx->delta_flag = 2;
+		} else {
+			ctx->delta_flag = 3;
+		}
+	} else if (delta_flag == DELTA_EXTRA) {
+		ctx->delta_flag = 1;
+	}
 
 	if (!fixed_flag)
 		ctx->blknum = chunksize / ctx->rabin_poly_min_block_size;
@@ -356,7 +373,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 	j = 0;
 
 	for (i=offset; i<*size; i++) {
-		ssize_t pc[3];
+		ssize_t pc[4];
 		uchar_t cur_byte = buf1[i];
 		uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
 		ctx->current_window_data[ctx->window_pos] = cur_byte;
@@ -414,7 +431,8 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 			 */
 			if (ctx->delta_flag) {
 				pc[1] = SIXTY_PCNT(j);
-				pc[2] = FORTY_PCNT(j);
+				pc[2] = FIFTY_PCNT(j);
+				pc[3] = FORTY_PCNT(j);
 
 				reset_heap(&heap, pc[ctx->delta_flag]);
 				ksmallest(fplist, j, &heap);
@@ -444,7 +462,8 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 
 			if (j > 1) {
 				pc[1] = SIXTY_PCNT(j);
-				pc[2] = FORTY_PCNT(j);
+				pc[2] = FIFTY_PCNT(j);
+				pc[3] = FORTY_PCNT(j);
 				reset_heap(&heap, pc[ctx->delta_flag]);
 				ksmallest(fplist, j, &heap);
 				cur_sketch =
