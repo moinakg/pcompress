@@ -1,3 +1,20 @@
+== 0.8.5 Update Release ==
+Update adaptive mode heuristic based on algorithms.
+Remove incorrect check in PPMd decompression code.
+Speed up adaptive modes by using heuristics to select compression algorithm.
+Select similarity percentage based on dedupe block size for effectiveness.
+Fix check for size reduction in dedupe.
+Fix polynomial table computation.
+Change hashing and length bias to reduce hashtable bucket collisions.
+Add support for user-selectable 60% or 40% similarity for Delta Compression.
+Overall slight speedup.
+Rewrite core dedupe logic to simplify code and improve performance.
+Hashtable based chunk-level deduplication instead of Quicksort.
+Fix a corner case bug in Dedupe decompression.
+Speed up Hash computation for dedupe blocks.
+Add support for Fixed-Block deduplication.
+Reduce dedupe loop checks for slight speed edge.
+Implement K-min-values Sketch for Similarity detection.
 == 0.8.1 Bugfix Release ==
 Fix return code handling in LZP pre-compression, crashed adaptive modes.
 Allow user-specified minimum Dedupe block size.
