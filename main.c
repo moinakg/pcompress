@@ -265,7 +265,7 @@ perform_decompress(void *dat)
 {
 	struct cmp_data *tdat = (struct cmp_data *)dat;
 	ssize_t _chunksize;
-	ssize_t dedupe_index_sz, rabin_data_sz, dedupe_index_sz_cmp, rabin_data_sz_cmp;
+	ssize_t dedupe_index_sz, dedupe_data_sz, dedupe_index_sz_cmp, dedupe_data_sz_cmp;
 	int type, rv;
 	unsigned int blknum;
 	uchar_t checksum[CKSUM_MAX_BYTES];
@@ -305,9 +305,9 @@ redo:
 	if ((enable_rabin_scan || enable_fixed_scan) && (HDR & CHUNK_FLAG_DEDUP)) {
 		uchar_t *cmpbuf, *ubuf;
 
-		/* Extract various sizes from rabin header. */
-		parse_dedupe_hdr(cseg, &blknum, &dedupe_index_sz, &rabin_data_sz,
-				&dedupe_index_sz_cmp, &rabin_data_sz_cmp, &_chunksize);
+		/* Extract various sizes from dedupe header. */
+		parse_dedupe_hdr(cseg, &blknum, &dedupe_index_sz, &dedupe_data_sz,
+				&dedupe_index_sz_cmp, &dedupe_data_sz_cmp, &_chunksize);
 		memcpy(tdat->uncompressed_chunk, cseg, RABIN_HDR_SIZE);
 
 		/*
@@ -320,10 +320,10 @@ redo:
 		ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE + dedupe_index_sz;
 		if (HDR & COMPRESSED) {
 			if (HDR & CHUNK_FLAG_PREPROC) {
-				rv = preproc_decompress(tdat->decompress, cmpbuf, rabin_data_sz_cmp,
+				rv = preproc_decompress(tdat->decompress, cmpbuf, dedupe_data_sz_cmp,
 				    ubuf, &_chunksize, tdat->level, HDR, tdat->data);
 			} else {
-				rv = tdat->decompress(cmpbuf, rabin_data_sz_cmp, ubuf, &_chunksize,
+				rv = tdat->decompress(cmpbuf, dedupe_data_sz_cmp, ubuf, &_chunksize,
 				    tdat->level, HDR, tdat->data);
 			}
 			if (rv == -1) {

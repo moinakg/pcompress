@@ -165,11 +165,11 @@ extern void destroy_dedupe_context(dedupe_context_t *ctx);
 extern unsigned int dedupe_compress(dedupe_context_t *ctx, unsigned char *buf, 
 	ssize_t *size, ssize_t offset, ssize_t *rabin_pos);
 extern void dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size);
-extern void parse_dedupe_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *rabin_index_sz,
-		ssize_t *rabin_data_sz, ssize_t *rabin_index_sz_cmp,
-		ssize_t *rabin_data_sz_cmp, ssize_t *rabin_deduped_size);
-extern void update_dedupe_hdr(uchar_t *buf, ssize_t rabin_index_sz_cmp,
-			     ssize_t rabin_data_sz_cmp);
+extern void parse_dedupe_hdr(uchar_t *buf, unsigned int *blknum, ssize_t *dedupe_index_sz,
+		ssize_t *dedupe_data_sz, ssize_t *rabin_index_sz_cmp,
+		ssize_t *dedupe_data_sz_cmp, ssize_t *deduped_size);
+extern void update_dedupe_hdr(uchar_t *buf, ssize_t dedupe_index_sz_cmp,
+			     ssize_t dedupe_data_sz_cmp);
 extern void reset_dedupe_context(dedupe_context_t *ctx);
 extern uint32_t dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo,
 	int delta_flag);

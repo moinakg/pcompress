@@ -52,11 +52,11 @@ Usage
                 Bzip2 (See: libbsc.com).
 
        adapt  - Adaptive mode where ppmd or bzip2 will be used per chunk,
-                depending on which one produces better compression. This mode
-                is obviously fairly slow and requires lots of memory.
-       adapt2 - Adaptive mode which includes ppmd and lzma. This requires
-                more memory than adapt mode, is slower and potentially gives
-                the best compression.
+                depending on heuristics. If at least 50% of the input data is
+                7-bit text then PPMd will be used otherwise Bzip2.
+       adapt2 - Adaptive mode which includes ppmd and lzma. If at least 80% of
+                the input data is 7-bit text then PPMd will be used otherwise
+                LZMA. It has significantly more memory usage than adapt.
        none   - No compression. This is only meaningful with -D and -E so Dedupe
                 can be done for post-processing with an external utility.
        <chunk_size> - This can be in bytes or can use the following suffixes:

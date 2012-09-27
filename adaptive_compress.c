@@ -35,6 +35,9 @@
 #include <pcompress.h>
 #include <allocator.h>
 
+#define	FIFTY_PCT(x)	(((x)/10) * 5)
+#define	TWENTY_PCT(x)	(((x)/10) * 2)
+
 static unsigned int lzma_count = 0;
 static unsigned int bzip2_count = 0;
 static unsigned int ppmd_count = 0;
@@ -141,34 +144,34 @@ adapt_compress(void *src, size_t srclen, void *dst,
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t *src1 = (uchar_t *)src;
-	size_t i, bincount;
+	size_t i, tot8b;
 	int rv;
 
 	/*
 	 * Count number of 8-bit binary bytes in source.
 	 */
-	bincount = 0;
+	tot8b = 0;
 	for (i = 0; i < srclen; i++)
-		bincount += (src1[i] >> 7);
+		tot8b += (src1[i] >> 7);
 
 	/*
-	 * Use PPMd if at least 70% of source is 7-bit textual bytes, otherwise
+	 * Use PPMd if some percentage of source is 7-bit textual bytes, otherwise
 	 * use Bzip2 or LZMA.
 	 */
-	if (bincount > (srclen / 10 * 3)) {
-		if (adat->adapt_mode == 2) {
-			rv = lzma_compress(src, srclen, dst, dstlen, level, chdr, adat->lzma_data);
-			if (rv < 0)
-				return (rv);
-			rv = COMPRESS_LZMA;
-			lzma_count++;
-		} else {
-			rv = bzip2_compress(src, srclen, dst, dstlen, level, chdr, NULL);
-			if (rv < 0)
-				return (rv);
-			rv = COMPRESS_BZIP2;
-			bzip2_count++;
-		}
+	if (adat->adapt_mode == 2 && tot8b > TWENTY_PCT(srclen)) {
+		rv = lzma_compress(src, srclen, dst, dstlen, level, chdr, adat->lzma_data);
+		if (rv < 0)
+			return (rv);
+		rv = COMPRESS_LZMA;
+		lzma_count++;
+
+	} else if (adat->adapt_mode == 1 && tot8b > FIFTY_PCT(srclen)) {
+		rv = bzip2_compress(src, srclen, dst, dstlen, level, chdr, NULL);
+		if (rv < 0)
+			return (rv);
+		rv = COMPRESS_BZIP2;
+		bzip2_count++;
+
 	} else {
 		rv = ppmd_compress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data);
 		if (rv < 0)

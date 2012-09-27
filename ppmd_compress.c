@@ -130,9 +130,6 @@ ppmd_decompress(void *src, size_t srclen, void *dst,
 	size_t i;
 	int res;
 
-	if (*((char *)_src) < 2)
-		return (-1);
-
 	_ppmd->buf = (Byte *)_src;
 	_ppmd->bufLen = srclen;
 	_ppmd->bufUsed = 0;

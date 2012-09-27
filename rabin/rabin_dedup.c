@@ -707,20 +707,20 @@ cont:
 }
 
 void
-update_dedupe_hdr(uchar_t *buf, ssize_t dedupe_index_sz_cmp, ssize_t rabin_data_sz_cmp)
+update_dedupe_hdr(uchar_t *buf, ssize_t dedupe_index_sz_cmp, ssize_t dedupe_data_sz_cmp)
 {
 	ssize_t *entries;
 
 	buf += sizeof (uint32_t);
 	entries = (ssize_t *)buf;
 	entries[1] = htonll(dedupe_index_sz_cmp);
-	entries[3] = htonll(rabin_data_sz_cmp);
+	entries[3] = htonll(dedupe_data_sz_cmp);
 }
 
 void
 parse_dedupe_hdr(uchar_t *buf, uint32_t *blknum, ssize_t *dedupe_index_sz,
-		ssize_t *rabin_data_sz, ssize_t *dedupe_index_sz_cmp,
-		ssize_t *rabin_data_sz_cmp, ssize_t *rabin_deduped_size)
+		ssize_t *dedupe_data_sz, ssize_t *dedupe_index_sz_cmp,
+		ssize_t *dedupe_data_sz_cmp, ssize_t *deduped_size)
 {
 	ssize_t *entries;
 
@@ -728,11 +728,11 @@ parse_dedupe_hdr(uchar_t *buf, uint32_t *blknum, ssize_t *dedupe_index_sz,
 	buf += sizeof (uint32_t);
 
 	entries = (ssize_t *)buf;
-	*rabin_data_sz = ntohll(entries[0]);
+	*dedupe_data_sz = ntohll(entries[0]);
 	*dedupe_index_sz = (ssize_t)(*blknum) * RABIN_ENTRY_SIZE;
 	*dedupe_index_sz_cmp =  ntohll(entries[1]);
-	*rabin_deduped_size = ntohll(entries[2]);
-	*rabin_data_sz_cmp = ntohll(entries[3]);
+	*deduped_size = ntohll(entries[2]);
+	*dedupe_data_sz_cmp = ntohll(entries[3]);
 }
 
 void
