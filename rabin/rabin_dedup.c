@@ -84,7 +84,7 @@ extern int bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new,
 	bsize_t *_newsize);
 
 static pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
-uint64_t ir[256];
+uint64_t ir[256], out[256];
 static int inited = 0;
 
 static uint32_t
@@ -130,16 +130,22 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	pthread_mutex_lock(&init_lock);
 	if (!inited) {
 		int term, j;
-		uint64_t val;
+		uint64_t val, poly_pow;
+
+		poly_pow = 1;
+		for (j = 0; j < RAB_POLYNOMIAL_WIN_SIZE; j++) {
+			poly_pow = (poly_pow * RAB_POLYNOMIAL_CONST) & POLY_MASK;
+		}
 
 		for (j = 0; j < 256; j++) {
 			term = 1;
-			val = 0;
+			val = 1;
+			out[j] = (j * poly_pow) & POLY_MASK;
 			for (i=0; i<RAB_POLYNOMIAL_WIN_SIZE; i++) {
 				if (term & FP_POLY) {
-					val += term * j;
+					val += ((term * j) & POLY_MASK);
 				}
-				term <<= 1;
+				term = (term * RAB_POLYNOMIAL_CONST) & POLY_MASK;
 			}
 			ir[j] = val;
 		}
@@ -346,10 +352,11 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 		for (i=offset; i<*size; i++) {
 			uchar_t cur_byte = buf1[i];
 			uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
-
 			ctx->current_window_data[ctx->window_pos] = cur_byte;
-			cur_roll_checksum = (cur_roll_checksum << 1) + cur_byte;
-			cur_roll_checksum -= (pushed_out << RAB_POLYNOMIAL_WIN_SIZE);
+
+			cur_roll_checksum = (cur_roll_checksum * RAB_POLYNOMIAL_CONST) & POLY_MASK;
+			cur_roll_checksum += cur_byte;
+			cur_roll_checksum -= out[pushed_out];
 			cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
 
 			ctx->window_pos = (ctx->window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
@@ -377,15 +384,10 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 		uchar_t cur_byte = buf1[i];
 		uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
 		ctx->current_window_data[ctx->window_pos] = cur_byte;
-		/*
-		 * We want to do:
-		 * cur_roll_checksum = cur_roll_checksum * RAB_POLYNOMIAL_CONST + cur_byte;
-		 * cur_roll_checksum -= pushed_out * polynomial_pow;
-		 *
-		 * However since RAB_POLYNOMIAL_CONST == 2, we use shifts.
-		 */
-		cur_roll_checksum = (cur_roll_checksum << 1) + cur_byte;
-		cur_roll_checksum -= (pushed_out << RAB_POLYNOMIAL_WIN_SIZE);
+
+		cur_roll_checksum = (cur_roll_checksum * RAB_POLYNOMIAL_CONST) & POLY_MASK;
+		cur_roll_checksum += cur_byte;
+		cur_roll_checksum -= out[pushed_out];
 		cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
 
 		/*

@@ -63,7 +63,9 @@
 
 //List of constants, mostly constraints and defaults for various parameters
 //to the Rabin Fingerprinting algorithm
-#define	RAB_POLYNOMIAL_CONST 2
+//Use prime constant from Bulat Ziganshin's REP. Seems to work best across wide range of data.
+#define	RAB_POLYNOMIAL_CONST 153191
+#define	POLY_MASK (0xffffffffffULL)
 #define	RAB_BLK_DEFAULT 1
 #define	RAB_BLK_MIN_BITS 11
 #define LZMA_WINDOW_MAX (128L * 1024L * 1024L)
