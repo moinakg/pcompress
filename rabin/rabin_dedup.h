@@ -153,7 +153,6 @@ typedef struct {
 	uint32_t rabin_poly_min_block_size;
 	uint32_t rabin_poly_avg_block_size;
 	uint32_t rabin_avg_block_mask;
-	uint32_t fp_mask;
 	uint32_t rabin_break_patt;
 	uint64_t real_chunksize;
 	short valid;

@@ -178,9 +178,8 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx->fixed_flag = fixed_flag;
 	ctx->rabin_break_patt = 0;
 	ctx->rabin_poly_avg_block_size = 1 << (rab_blk_sz + RAB_BLK_MIN_BITS);
-	ctx->rabin_avg_block_mask = ctx->rabin_poly_avg_block_size - 1;
+	ctx->rabin_avg_block_mask = ((ctx->rabin_poly_avg_block_size - 1) >> 1);
 	ctx->rabin_poly_min_block_size = dedupe_min_blksz(rab_blk_sz);
-	ctx->fp_mask = ctx->rabin_avg_block_mask | ctx->rabin_poly_avg_block_size;
 	ctx->delta_flag = 0;
 
 	/*

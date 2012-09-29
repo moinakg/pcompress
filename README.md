@@ -3,6 +3,8 @@ Pcompress
 
 Copyright (C) 2012 Moinak Ghosh. All rights reserved.
 Use is subject to license terms.
+moinakg (_at) gma1l _dot com.
+Comments, suggestions, code, rants etc are welcome.
 
 Pcompress is a utility to do compression and decompression in parallel by
 splitting input data into chunks. It has a modular structure and includes
