@@ -129,7 +129,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	 */
 	pthread_mutex_lock(&init_lock);
 	if (!inited) {
-		int term, j;
+		int term, pow, j;
 		uint64_t val, poly_pow;
 
 		poly_pow = 1;
@@ -139,13 +139,15 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 
 		for (j = 0; j < 256; j++) {
 			term = 1;
+			pow = 1;
 			val = 1;
 			out[j] = (j * poly_pow) & POLY_MASK;
 			for (i=0; i<RAB_POLYNOMIAL_WIN_SIZE; i++) {
 				if (term & FP_POLY) {
-					val += ((term * j) & POLY_MASK);
+					val += ((pow * j) & POLY_MASK);
 				}
-				term = (term * RAB_POLYNOMIAL_CONST) & POLY_MASK;
+				pow = (pow * RAB_POLYNOMIAL_CONST) & POLY_MASK;
+				term <<= 1;
 			}
 			ir[j] = val;
 		}
@@ -304,7 +306,10 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 	if (ctx->fixed_flag) {
 		blknum = *size / ctx->rabin_poly_avg_block_size;
 		j = *size % ctx->rabin_poly_avg_block_size;
-		if (j) blknum++;
+		if (j)
+			blknum++;
+		else
+			j = ctx->rabin_poly_avg_block_size;
 
 		last_offset = 0;
 		length = ctx->rabin_poly_avg_block_size;
