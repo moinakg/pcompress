@@ -41,7 +41,7 @@ extern "C" {
 #define	FLAG_DEDUP	1
 #define	FLAG_DEDUP_FIXED	1
 #define	FLAG_SINGLE_CHUNK	2
-#define	UTILITY_VERSION	"0.8.5"
+#define	UTILITY_VERSION	"0.8.6"
 
 #define	COMPRESSED	1
 #define	UNCOMPRESSED	0

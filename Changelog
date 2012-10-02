@@ -1,3 +1,8 @@
+== 0.8.6 Update Release ==
+Fix polynomial computation.
+Fix incorrect block length when doing fixed-block dedupe.
+Remove unused structure member.
+Switch to multiplicative rolling hash for good
 == 0.8.5 Update Release ==
 Update adaptive mode heuristic based on algorithms.
 Remove incorrect check in PPMd decompression code.
