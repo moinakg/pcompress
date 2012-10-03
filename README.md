@@ -98,8 +98,8 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
                   algorithms with some extra CPU and very low RAM overhead. Using
                   delta encoding in conjunction with this may not always be beneficial.
        '-S' <cksum>
-            -     Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512
-                  Default one is SKEIN256. The implementation actually uses SKEIN
+            -     Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512, SHA256 and
+                  SHA512. Default one is SKEIN256. The implementation actually uses SKEIN
                   512-256. This is 25% slower than simple CRC64 but is many times more
                   robust than CRC64 in detecting data integrity errors. SKEIN is a
                   finalist in the NIST SHA-3 standard selection process and is one of

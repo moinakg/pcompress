@@ -11,9 +11,12 @@ ${prog} [<options>]
 --enable-debug		Enable debug mode compilation (default: disabled).
 --disable-allocator	Disable use of internal memory allocator mechanism (default: enabled).
 --enable-debug-stats	Enable printing of some verbose debug info (default: disabled).
---with-libbsc=<path_to_libbsc_source>
+--with-libbsc=<path to libbsc source>
 			Enable support for libbsc (See: libbsc.com). Full path to the libbsc
                         source tree must be provided. It links the library statically.
+--with-openssl=<path to OpenSSL installation tree> (Default: System)
+                        This defaults to the system's OpenSSL library. You can use this option
+                        if you want to use an alternate OpenSSL installation.
 --help			Display this help message.
 
 _EOF
@@ -30,6 +33,9 @@ libbsclflags=
 libbscwrapobj=
 libbscgenopt=
 libbsccppflags=
+openssl_prefix=
+openssl_libdir=
+openssl_incdir=
 
 while [ "${arg1}" != "" ]
 do
@@ -54,6 +60,9 @@ do
 		else
 			echo "Libbsc not found in ${path}, not enabling libbsc support.\n"
 		fi
+	;;
+	--with-openssl=*)
+		openssl_prefix=`echo ${arg1} | cut -f2 -d"="`
 	;;
 	--help) usage $0;;
 	*)
@@ -91,6 +100,58 @@ then
 	skeinblock='\$\(SKEIN_BLOCK_ASM\)'
 fi
 
+# Detect OpenSSL library
+for lib in "${openssl_prefix}/lib64" "${openssl_prefix}/usr/lib64" \
+	"${openssl_prefix}/lib" "${openssl_prefix}/usr/lib" \
+	"${openssl_prefix}/ssl/lib64" "${openssl_prefix}/ssl/lib"
+do
+	if [ -d ${lib} ]
+	then
+		if [ -f "${lib}/libcrypto.so" ]
+		then
+			openssl_libdir=${lib}
+			break
+		else
+			if [ -f "${lib}/libcrypto.a" ]
+			then
+				openssl_libdir=${lib}
+				break
+			fi
+		fi
+	fi
+done
+
+if [ "x${openssl_libdir}" = "x" ]
+then
+	echo "ERROR: OpenSSL libraries not detected."
+	exit 1
+fi
+
+# Detect OpenSSL headers
+for inc in "${openssl_prefix}/include" \
+	"${openssl_prefix}/usr/include" \
+	"${openssl_prefix}/ssl/include"
+do
+	if [ -d ${inc} ]
+	then
+		if [ -f "${inc}/openssl/sha.h" ]
+		then
+			openssl_incdir=${inc}
+			break
+		fi
+	fi
+done
+
+if [ "x${openssl_incdir}" = "x" ]
+then
+	echo "ERROR: OpenSSL header files not detected."
+	if [ "x${openssl_prefix}" = "x" ]
+	then
+		echo "Depending on your system you may need to install the openssl-devel package."
+	fi
+	exit 1
+fi
+
 linkvar="LINK"
 compilevar="COMPILE"
 compilecppvar="COMPILE_cpp"
@@ -110,6 +171,9 @@ libbsclflagsvar="LIBBSCLFLAGS"
 libbscwrapobjvar="LIBBSCWRAPOBJ"
 libbscgenoptvar="LIBBSCGEN_OPT"
 libbsccppflagsvar="LIBBSCCPPFLAGS"
+
+openssllibdirvar="OPENSSL_LIBDIR"
+opensslincdirvar="OPENSSL_INCDIR"
 
 noslabcppflagsval=
 debugstatscppflagsval=
@@ -136,5 +200,7 @@ s#@${libbscwrapobjvar}@#${libbscwrapobj}#g
 s#@${libbscgenoptvar}@#${libbscgenopt}#g
 s#@${libbsccppflagsvar}@#${libbsccppflags}#g
 s#@${skeinblockvar}@#${skeinblock}#g
+s#@${openssllibdirvar}@#${openssl_libdir}#g
+s#@${opensslincdirvar}@#${openssl_incdir}#g
 " > Makefile
 

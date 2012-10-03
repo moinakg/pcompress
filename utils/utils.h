@@ -108,7 +108,9 @@ typedef ssize_t bsize_t;
 typedef enum {
 	CKSUM_CRC64 = 0x100,
 	CKSUM_SKEIN256 = 0x200,
-	CKSUM_SKEIN512 = 0x300
+	CKSUM_SKEIN512 = 0x300,
+	CKSUM_SHA256 = 0x400,
+	CKSUM_SHA512 = 0x500
 } cksum_t;
 
 #define	CKSUM_MASK		0x700

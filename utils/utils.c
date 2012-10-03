@@ -33,6 +33,7 @@
 #include <link.h>
 #include <rabin_dedup.h>
 #include <skein.h>
+#include <openssl/sha.h>
 
 #include "utils.h"
 
@@ -46,7 +47,9 @@ static struct {
 } cksum_props[] = {
 	{"CRC64",	CKSUM_CRC64,	8},
 	{"SKEIN256",	CKSUM_SKEIN256,	32},
-	{"SKEIN512",	CKSUM_SKEIN512,	64}
+	{"SKEIN512",	CKSUM_SKEIN512,	64},
+	{"SHA256",	CKSUM_SHA256,	32},
+	{"SHA512",	CKSUM_SHA512,	64}
 };
 
 extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
@@ -334,6 +337,20 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, ssize_t bytes)
 		Skein_512_Init(&ctx, 512);
 		Skein_512_Update(&ctx, buf, bytes);
 		Skein_512_Final(&ctx, cksum_buf);
+
+	} else if (cksum == CKSUM_SHA256) {
+		SHA256_CTX ctx;
+
+		SHA256_Init(&ctx);
+		SHA256_Update(&ctx, buf, bytes);
+		SHA256_Final(cksum_buf, &ctx);
+
+	} else if (cksum == CKSUM_SKEIN512) {
+		SHA512_CTX ctx;
+
+		SHA512_Init(&ctx);
+		SHA512_Update(&ctx, buf, bytes);
+		SHA512_Final(cksum_buf, &ctx);
 	} else {
 		return (-1);
 	}

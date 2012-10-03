@@ -85,10 +85,10 @@ BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~ utils/*~
 RM = rm -f
 COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
-	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils
+	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I@OPENSSL_INCDIR@
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
-LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm @LIBBSCLFLAGS@
+LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm @LIBBSCLFLAGS@ -L@OPENSSL_LIBDIR@ -lcrypto
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) $(SKEIN_BLOCK_OBJ)
 
