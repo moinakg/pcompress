@@ -345,7 +345,7 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, ssize_t bytes)
 		SHA256_Update(&ctx, buf, bytes);
 		SHA256_Final(cksum_buf, &ctx);
 
-	} else if (cksum == CKSUM_SKEIN512) {
+	} else if (cksum == CKSUM_SHA512) {
 		SHA512_CTX ctx;
 
 		SHA512_Init(&ctx);
