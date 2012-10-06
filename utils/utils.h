@@ -133,6 +133,19 @@ typedef enum {
 	DECOMPRESS_THREADS
 } algo_threads_type_t;
 
+typedef enum {
+	PROC_BIGENDIAN_GENERIC = 1,
+	PROC_LITENDIAN_GENERIC,
+	PROC_X64_INTEL,
+	PROC_X64_AMD
+} proc_type_t;
+
+typedef struct {
+	int sse_level;
+	int avx_level;
+	proc_type_t proc_type;
+} processor_info_t;
+
 extern void err_exit(int show_errno, const char *format, ...);
 extern const char *get_execname(const char *);
 extern int parse_numeric(ssize_t *val, const char *str);

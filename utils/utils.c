@@ -34,23 +34,35 @@
 #include <rabin_dedup.h>
 #include <skein.h>
 #include <openssl/sha.h>
+#include <sha256.h>
 
 #include "utils.h"
+#include "cpuid.h"
+
+#define	PROVIDER_OPENSSL	0
+#define	PROVIDER_X64_OPT	1
+
+static void init_sha256(void);
 
 /*
  * Checksum properties
  */
+typedef void (*ckinit_func_ptr)(void);
 static struct {
 	char	*name;
 	cksum_t	cksum_id;
 	int	bytes;
+	ckinit_func_ptr init_func;
 } cksum_props[] = {
-	{"CRC64",	CKSUM_CRC64,	8},
-	{"SKEIN256",	CKSUM_SKEIN256,	32},
-	{"SKEIN512",	CKSUM_SKEIN512,	64},
-	{"SHA256",	CKSUM_SHA256,	32},
-	{"SHA512",	CKSUM_SHA512,	64}
+	{"CRC64",	CKSUM_CRC64,	8,	NULL},
+	{"SKEIN256",	CKSUM_SKEIN256,	32,	NULL},
+	{"SKEIN512",	CKSUM_SKEIN512,	64,	NULL},
+	{"SHA256",	CKSUM_SHA256,	32,	init_sha256},
+	{"SHA512",	CKSUM_SHA512,	64,	NULL}
 };
+
+
+static int cksum_provider = PROVIDER_OPENSSL;
 
 extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
 extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, size_t size,
@@ -339,12 +351,19 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, ssize_t bytes)
 		Skein_512_Final(&ctx, cksum_buf);
 
 	} else if (cksum == CKSUM_SHA256) {
-		SHA256_CTX ctx;
+		if (cksum_provider == PROVIDER_OPENSSL) {
+			SHA256_CTX ctx;
 
-		SHA256_Init(&ctx);
-		SHA256_Update(&ctx, buf, bytes);
-		SHA256_Final(cksum_buf, &ctx);
+			SHA256_Init(&ctx);
+			SHA256_Update(&ctx, buf, bytes);
+			SHA256_Final(cksum_buf, &ctx);
+		} else {
+			SHA256_Context ctx;
 
+			opt_SHA256_Init(&ctx);
+			opt_SHA256_Update(&ctx, buf, bytes);
+			opt_SHA256_Final(&ctx, cksum_buf);
+		}
 	} else if (cksum == CKSUM_SHA512) {
 		SHA512_CTX ctx;
 
@@ -355,6 +374,26 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, ssize_t bytes)
 		return (-1);
 	}
 	return (0);
+}
+
+static void
+init_sha256(void)
+{
+#ifdef	WORDS_BIGENDIAN
+	cksum_provider = PROVIDER_OPENSSL;
+#else
+#ifdef	__x86_64__
+	processor_info_t pc;
+
+	cksum_provider = PROVIDER_OPENSSL;
+	cpuid_basic_identify(&pc);
+	if (pc.proc_type == PROC_X64_INTEL || pc.proc_type == PROC_X64_AMD) {
+		if (opt_Init_SHA(&pc) == 0) {
+			cksum_provider = PROVIDER_X64_OPT;
+		}
+	}
+#endif
+#endif
 }
 
 /*
@@ -371,6 +410,8 @@ get_checksum_props(char *name, int *cksum, int *cksum_bytes)
 		    (*cksum != 0 && *cksum == cksum_props[i].cksum_id)) {
 			*cksum = cksum_props[i].cksum_id;
 			*cksum_bytes = cksum_props[i].bytes;
+			if (cksum_props[i].init_func)
+				cksum_props[i].init_func();
 			return (0);
 		}
 	}

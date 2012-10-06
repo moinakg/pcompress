@@ -36,6 +36,9 @@ libbsccppflags=
 openssl_prefix=
 openssl_libdir=
 openssl_incdir=
+sha256asmobjs=
+sha256objs=
+yasm=yasm
 
 while [ "${arg1}" != "" ]
 do
@@ -98,6 +101,33 @@ echo $plat | egrep 'x86_64|amd64' > /dev/null
 if [ $? -eq 0 ]
 then
 	skeinblock='\$\(SKEIN_BLOCK_ASM\)'
+	yasm=
+
+	#
+	# Detect Yasm
+	#
+	for bindir in /bin /usr/bin /usr/local/bin
+	do
+		if [ -x ${bindir}/yasm ]
+		then
+			# Get yasm version
+			yver=`${bindir}/yasm --version | head -1 | awk '{print $2}'`
+			_OIFS=$IFS; IFS="."; set -- ${yver}; IFS="$_OIFS"
+			major=$1
+			minor=$2
+
+			# Minimum yasm version 1.1
+			[ $major -lt 1 -o $minor -lt 1 ] && continue
+			yasm=${bindir}/yasm
+			sha256asmobjs='\$\(SHA256ASM_OBJS\)'
+			sha256objs='\$\(SHA256_OBJS\)'
+		fi
+	done
+	if [ "x${yasm}" = "x" ]
+	then
+		echo "Yasm version 1.1 or later is required to build on x64 platforms"
+		exit 1
+	fi
 fi
 
 # Detect OpenSSL library
@@ -152,6 +182,7 @@ then
 	exit 1
 fi
 
+
 linkvar="LINK"
 compilevar="COMPILE"
 compilecppvar="COMPILE_cpp"
@@ -171,6 +202,9 @@ libbsclflagsvar="LIBBSCLFLAGS"
 libbscwrapobjvar="LIBBSCWRAPOBJ"
 libbscgenoptvar="LIBBSCGEN_OPT"
 libbsccppflagsvar="LIBBSCCPPFLAGS"
+sha256asmobjsvar="SHA256ASM_OBJS"
+sha256objsvar="SHA256_OBJS"
+yasmvar="YASM"
 
 openssllibdirvar="OPENSSL_LIBDIR"
 opensslincdirvar="OPENSSL_INCDIR"
@@ -202,5 +236,8 @@ s#@${libbsccppflagsvar}@#${libbsccppflags}#g
 s#@${skeinblockvar}@#${skeinblock}#g
 s#@${openssllibdirvar}@#${openssl_libdir}#g
 s#@${opensslincdirvar}@#${openssl_incdir}#g
+s#@${sha256asmobjsvar}@#${sha256asmobjs}#g
+s#@${sha256objsvar}@#${sha256objs}#g
+s#@${yasmvar}@#${yasm}#g
 " > Makefile
 
