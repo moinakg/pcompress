@@ -34,6 +34,7 @@ extern "C" {
 
 #define	DATA_TEXT	1
 #define	DATA_BINARY	2
+#define	MAX_PW_LEN	16
 
 #if !defined(sun) && !defined(__sun)
 #define uchar_t u_char
@@ -146,6 +147,19 @@ typedef struct {
 	proc_type_t proc_type;
 } processor_info_t;
 
+#define ENCRYPT_FLAG	1
+#define DECRYPT_FLAG	0
+#define	CRYPTO_ALG_AES	0x10
+#define	MAX_SALTLEN	64
+
+typedef struct {
+	void *crypto_ctx;
+	int crypto_alg;
+	int enc_dec;
+	uchar_t *salt;
+	int saltlen;
+} crypto_ctx_t;
+
 extern void err_exit(int show_errno, const char *format, ...);
 extern const char *get_execname(const char *);
 extern int parse_numeric(ssize_t *val, const char *str);
@@ -160,6 +174,12 @@ extern int compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, ssize_t
 extern int get_checksum_props(char *name, int *cksum, int *cksum_bytes);
 extern void serialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
 extern void deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
+extern int init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
+		       uchar_t *salt, int saltlen, uint64_t nonce, int enc_dec);
+extern int crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, ssize_t bytes, uint64_t id);
+extern uint64_t crypto_nonce(crypto_ctx_t *cctx);
+extern void cleanup_crypto(crypto_ctx_t *cctx);
+extern int get_pw_string(char pw[MAX_PW_LEN], char *prompt);
 
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, size_t srclen, void *dst,

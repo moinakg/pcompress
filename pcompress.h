@@ -37,11 +37,12 @@ extern "C" {
 #define	CHUNK_FLAG_SZ	1
 #define	ALGO_SZ		8
 #define	MIN_CHUNK	2048
-#define	VERSION		3
+#define	VERSION		4
 #define	FLAG_DEDUP	1
-#define	FLAG_DEDUP_FIXED	1
-#define	FLAG_SINGLE_CHUNK	2
+#define	FLAG_DEDUP_FIXED	2
+#define	FLAG_SINGLE_CHUNK	4
 #define	UTILITY_VERSION	"0.8.6"
+#define	MASK_CRYPTO_ALG	0x30
 
 #define	COMPRESSED	1
 #define	UNCOMPRESSED	0

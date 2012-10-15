@@ -29,6 +29,9 @@ modes in which multiple algorithms are tried per chunk to determine the best
 one for the given chunk. Finally it supports 14 compression levels to allow
 for ultra compression modes in some algorithms.
 
+Pcompress also supports encryption via AES and uses Scrypt from Tarsnap
+for Password Based Key generation.
+
 NOTE: This utility is Not an archiver. It compresses only single files or
       datastreams. To archive use something else like tar, cpio or pax.
 
@@ -117,6 +120,26 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
 
 NOTE: It is recommended not to use '-L' with libbsc compression since libbsc uses
       LZP internally as well.
+
+    Encryption flags:
+       '-e'       Encrypt chunks with AES. The password can be prompted from the user
+                  or read from a file. Whether 128-Bit or 256-Bit keys are used depends
+                  on how the pcompress binary was built. Default build uses 128-Bit keys.
+                  Unique keys are generated every time pcompress is run even when giving
+                  the same password. Of course enough info is stored in the compressed
+                  file so that the key used for the file can be re-created given the
+                  correct password.
+
+                  The Scrypt algorithm from Tarsnap is used
+                  (See: http://www.tarsnap.com/scrypt.html) for generating keys from
+                  passwords. The CTR mode AES mechanism from Tarsnap is also utilized.
+
+       '-w <pathname>'
+                  Provide a file which contains the encryption password. This file must
+                  be readable and writable since it is zeroed out after the password is
+                  read.
+
+NOTE: When using pipe-mode via -p the only way to provide a password is to use '-w'.
 
 Environment Variables
 =====================

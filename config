@@ -17,6 +17,7 @@ ${prog} [<options>]
 --with-openssl=<path to OpenSSL installation tree> (Default: System)
                         This defaults to the system's OpenSSL library. You can use this option
                         if you want to use an alternate OpenSSL installation.
+--use-key256		Use 256-bit encryption keys. Default key length is 128-bit.
 --help			Display this help message.
 
 _EOF
@@ -38,6 +39,7 @@ openssl_libdir=
 openssl_incdir=
 sha256asmobjs=
 sha256objs=
+keylen=
 yasm=yasm
 
 while [ "${arg1}" != "" ]
@@ -66,6 +68,9 @@ do
 	;;
 	--with-openssl=*)
 		openssl_prefix=`echo ${arg1} | cut -f2 -d"="`
+	;;
+	--use-key256)
+		keylen='-DKEYLEN=32'
 	;;
 	--help) usage $0;;
 	*)
@@ -195,6 +200,7 @@ noslabcppflagsvar="NO_SLAB_CPPFLAGS"
 debugstatscppflagsvar="DEBUG_STATS_CPPFLAGS"
 prefixvar="PREFIX"
 skeinblockvar="SKEIN_BLOCK"
+keylenvar="KEYLEN"
 
 libbscdirvar="LIBBSCDIR"
 libbsclibvar="LIBBSCLIB"
@@ -239,5 +245,6 @@ s#@${opensslincdirvar}@#${openssl_incdir}#g
 s#@${sha256asmobjsvar}@#${sha256asmobjs}#g
 s#@${sha256objsvar}@#${sha256objs}#g
 s#@${yasmvar}@#${yasm}#g
+s#@${keylenvar}@#${keylen}#g
 " > Makefile
 

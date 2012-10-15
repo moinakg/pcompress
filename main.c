@@ -81,6 +81,7 @@ static int enable_delta_encode = 0;
 static int enable_rabin_split = 1;
 static int enable_fixed_scan = 0;
 static int lzp_preprocess = 0;
+static int encrypt_type = 0;
 static unsigned int chunk_num;
 static uint64_t largest_chunk, smallest_chunk, avg_chunk;
 static const char *exec_name;
@@ -91,6 +92,8 @@ static int cksum_bytes;
 static int cksum = 0;
 static int rab_blk_size = 0;
 static dedupe_context_t *rctx;
+static crypto_ctx_t crypto_ctx;
+static char *pwd_file = NULL;
 
 static void
 usage(void)
@@ -300,6 +303,26 @@ redo:
 		tdat->len_cmp -= ORIGINAL_CHUNKSZ;
 		rseg = tdat->compressed_chunk + tdat->rbytes;
 		_chunksize = ntohll(*((ssize_t *)rseg));
+	}
+
+	/*
+	 * Decrypt compressed data if necessary.
+	 */
+	if (encrypt_type) {
+		/*
+		 * Encryption algorithm should not change the size and
+		 * encryption is in-place.
+		 */
+		rv = crypto_buf(&crypto_ctx, cseg, cseg, tdat->len_cmp, tdat->id);
+		if (rv == -1) {
+			/*
+			 * Decryption failure is fatal.
+			 */
+			main_cancel = 1;
+			tdat->len_cmp = 0;
+			sem_post(&tdat->cmp_done_sem);
+			return;
+		}
 	}
 
 	if ((enable_rabin_scan || enable_fixed_scan) && (HDR & CHUNK_FLAG_DEDUP)) {
@@ -515,7 +538,7 @@ start_decompress(const char *filename, const char *to_filename)
 	chunksize = ntohll(chunksize);
 	level = ntohl(level);
 
-	if (version < VERSION-1) {
+	if (version < VERSION-2) {
 		fprintf(stderr, "Unsupported version: %d\n", version);
 		err = 1;
 		goto uncomp_done;
@@ -548,6 +571,96 @@ start_decompress(const char *filename, const char *to_filename)
 		UNCOMP_BAIL;
 	}
 
+	/*
+	 * If encryption is enabled initialize crypto.
+	 */
+	if (flags & MASK_CRYPTO_ALG) {
+		int saltlen;
+		uchar_t *salt1, *salt2;
+		uint64_t nonce;
+		uchar_t pw[MAX_PW_LEN];
+		int pw_len;
+
+		encrypt_type = flags & MASK_CRYPTO_ALG;
+		if (Read(compfd, &saltlen, sizeof (saltlen)) < sizeof (saltlen)) {
+			perror("Read: ");
+			UNCOMP_BAIL;
+		}
+		saltlen = ntohl(saltlen);
+		salt1 = malloc(saltlen);
+		salt2 = malloc(saltlen);
+		if (Read(compfd, salt1, saltlen) < saltlen) {
+			free(salt1);  free(salt2);
+			perror("Read: ");
+			UNCOMP_BAIL;
+		}
+		deserialize_checksum(salt2, salt1, saltlen);
+		memset(salt1, 0, saltlen);
+		free(salt1);
+
+		if (Read(compfd, &nonce, sizeof (nonce)) < sizeof (nonce)) {
+			memset(salt2, 0, saltlen);
+			free(salt2);
+			perror("Read: ");
+			UNCOMP_BAIL;
+		}
+		nonce = ntohll(nonce);
+
+		if (!pwd_file) {
+			pw_len = get_pw_string(pw,
+				"Please enter encryption password");
+			if (pw_len == -1) {
+				memset(salt2, 0, saltlen);
+				free(salt2);
+				err_exit(1, "Failed to get password.\n");
+			}
+		} else {
+			int fd, len;
+			uchar_t zero[MAX_PW_LEN];
+
+			/*
+			 * Read password from a file and zero out the file after reading.
+			 */
+			memset(zero, 0, MAX_PW_LEN);
+			fd = open(pwd_file, O_RDWR);
+			if (fd != -1) {
+				pw_len = lseek(fd, 0, SEEK_END);
+				if (pw_len != -1) {
+					if (pw_len > MAX_PW_LEN) pw_len = MAX_PW_LEN-1;
+					lseek(fd, 0, SEEK_SET);
+					len = Read(fd, pw, pw_len);
+					if (len != -1 && len == pw_len) {
+						pw[pw_len] = '\0';
+						if (isspace(pw[pw_len - 1]))
+							pw[pw_len-1] = '\0';
+						lseek(fd, 0, SEEK_SET);
+						Write(fd, zero, pw_len);
+					} else {
+						pw_len = -1;
+					}
+				}
+			}
+			if (pw_len == -1) {
+				perror(" ");
+				memset(salt2, 0, saltlen);
+				free(salt2);
+				err_exit(1, "Failed to get password.\n");
+			}
+			close(fd);
+		}
+		if (init_crypto(&crypto_ctx, pw, pw_len, encrypt_type, salt2,
+		    saltlen, nonce, DECRYPT_FLAG) == -1) {
+			memset(salt2, 0, saltlen);
+			free(salt2);
+			memset(pw, 0, MAX_PW_LEN);
+			err_exit(1, "Failed to initialize crypto\n");
+		}
+		memset(salt2, 0, saltlen);
+		free(salt2);
+		nonce = 0;
+		memset(pw, 0, MAX_PW_LEN);
+	}
+
 	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
 	if (nthreads > 0 && nthreads < nprocs)
 		nprocs = nthreads;
@@ -572,6 +685,7 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 		tdat = dary[i];
 		tdat->compressed_chunk = NULL;
+		tdat->uncompressed_chunk = NULL;
 		tdat->chunksize = chunksize;
 		tdat->compress = _compress_func;
 		tdat->decompress = _decompress_func;
@@ -880,6 +994,27 @@ plain_compress:
 		type = COMPRESSED;
 	}
 
+	/*
+	 * Now perform encryption on the compressed data, if requested.
+	 */
+	if (encrypt_type) {
+		/*
+		 * Encryption algorithm should not change the size and
+		 * encryption is in-place.
+		 */
+		rv = crypto_buf(&crypto_ctx, compressed_chunk, compressed_chunk,
+			tdat->len_cmp, tdat->id);
+		if (rv == -1) {
+			/*
+			 * Encryption failure is fatal.
+			 */
+			main_cancel = 1;
+			tdat->len_cmp = 0;
+			sem_post(&tdat->cmp_done_sem);
+			return;
+		}
+	}
+
 	if ((enable_rabin_scan || enable_fixed_scan) && tdat->rctx->valid) {
 		type |= CHUNK_FLAG_DEDUP;
 	}
@@ -1020,6 +1155,56 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			enable_delta_encode) - (compressed_chunksize - chunksize));
 	}
 
+	if (encrypt_type) {
+		uchar_t pw[MAX_PW_LEN];
+		int pw_len;
+
+		if (!pwd_file) {
+			pw_len = get_pw_string(pw,
+				"Please enter encryption password");
+			if (pw_len == -1) {
+				err_exit(1, "Failed to get password.\n");
+			}
+		} else {
+			int fd, len;
+			uchar_t zero[MAX_PW_LEN];
+
+			/*
+			 * Read password from a file and zero out the file after reading.
+			 */
+			memset(zero, 0, MAX_PW_LEN);
+			fd = open(pwd_file, O_RDWR);
+			if (fd != -1) {
+				pw_len = lseek(fd, 0, SEEK_END);
+				if (pw_len != -1) {
+					if (pw_len > MAX_PW_LEN) pw_len = MAX_PW_LEN-1;
+					lseek(fd, 0, SEEK_SET);
+					len = Read(fd, pw, pw_len);
+					if (len != -1 && len == pw_len) {
+						pw[pw_len] = '\0';
+						if (isspace(pw[pw_len - 1]))
+							pw[pw_len-1] = '\0';
+						lseek(fd, 0, SEEK_SET);
+						Write(fd, zero, pw_len);
+					} else {
+						pw_len = -1;
+					}
+				}
+			}
+			if (pw_len == -1) {
+				perror(" ");
+				err_exit(1, "Failed to get password.\n");
+			}
+			close(fd);
+		}
+		if (init_crypto(&crypto_ctx, pw, pw_len, encrypt_type, NULL,
+		    0, 0, ENCRYPT_FLAG) == -1) {
+			memset(pw, 0, MAX_PW_LEN);
+			err_exit(1, "Failed to initialize crypto\n");
+		}
+		memset(pw, 0, MAX_PW_LEN);
+	}
+
 	err = 0;
 	thread = 0;
 	single_chunk = 0;
@@ -1101,6 +1286,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		}
 	}
 
+	if (encrypt_type)
+		flags |= encrypt_type;
+
 	set_threadcounts(&props, &nthreads, nprocs, COMPRESS_THREADS);
 	fprintf(stderr, "Scaling to %d thread", nthreads * props.nthreads);
 	if (nthreads * props.nthreads > 1) fprintf(stderr, "s");
@@ -1128,6 +1316,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		tdat->chunksize = chunksize;
 		tdat->compress = _compress_func;
 		tdat->decompress = _decompress_func;
+		tdat->uncompressed_chunk = (uchar_t *)1;
 		tdat->cancel = 0;
 		tdat->level = level;
 		sem_init(&(tdat->start_sem), 0, 0);
@@ -1187,6 +1376,23 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	if (Write(compfd, cread_buf, pos - cread_buf) != pos - cread_buf) {
 		perror("Write ");
 		COMP_BAIL;
+	}
+
+	/*
+	 * If encryption is enabled, write the salt and nonce.
+	 */
+	pos = cread_buf;
+	if (encrypt_type) {
+		*((int *)pos) = htonl(crypto_ctx.saltlen);
+		pos += sizeof (int);
+		serialize_checksum(crypto_ctx.salt, pos, crypto_ctx.saltlen);
+		pos += crypto_ctx.saltlen;
+		*((uint64_t *)pos) = htonll(crypto_nonce(&crypto_ctx));
+		pos += 8;
+		if (Write(compfd, cread_buf, pos - cread_buf) != pos - cread_buf) {
+			perror("Write ");
+			COMP_BAIL;
+		}
 	}
 
 	/*
@@ -1531,7 +1737,7 @@ main(int argc, char *argv[])
 	level = 6;
 	slab_init();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDErLS:B:F")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEew:rLS:B:F")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -1601,6 +1807,14 @@ main(int argc, char *argv[])
 				enable_delta_encode = DELTA_EXTRA;
 			break;
 
+		    case 'e':
+			encrypt_type = CRYPTO_ALG_AES;
+			break;
+
+		    case 'w':
+			pwd_file = strdup(optarg);
+			break;
+
 		    case 'F':
 			enable_fixed_scan = 1;
 			enable_rabin_split = 0;
@@ -1656,6 +1870,14 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 
+	if (!do_compress && encrypt_type) {
+		fprintf(stderr, "Encryption only makes sense when compressing!\n");
+		exit(1);
+	} else if (pipe_mode && !pwd_file) {
+		fprintf(stderr, "Pipe mode requires password to be provided in a file.\n");
+		exit(1);
+	}
+
 	if (num_rem == 0 && !pipe_mode) {
 		usage(); /* At least 1 filename needed. */
 		exit(1);
@@ -1701,6 +1923,7 @@ main(int argc, char *argv[])
 
 	if (cksum == 0)
 		get_checksum_props(DEFAULT_CKSUM, &cksum, &cksum_bytes);
+
 	/*
 	 * Start the main routines.
 	 */
@@ -1709,6 +1932,8 @@ main(int argc, char *argv[])
 	else if (do_uncompress)
 		start_decompress(filename, to_filename);
 
+	if (pwd_file)
+		free(pwd_file);
 	free(filename);
 	free((void *)exec_name);
 	return (0);
