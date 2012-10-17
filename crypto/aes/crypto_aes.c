@@ -107,11 +107,11 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 	 uint64_t nonce, int enc)
 {
 	int rv;
-	uchar_t key[KEYLEN];
 	struct timespec tp;
 	uint64_t tv;
 	uchar_t num[25];
 	uchar_t IV[32];
+	uchar_t *key = ctx->pkey;
 
 #ifndef	_USE_PBK
 	int logN;
@@ -153,8 +153,6 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 		ctx->nonce = nonce;
 		AES_set_encrypt_key(key, (KEYLEN << 3), &(ctx->key));
 	}
-
-	memset(key, 0, KEYLEN);
 	return (0);
 }
 
@@ -208,6 +206,12 @@ uint64_t
 aes_nonce(aes_ctx_t *ctx)
 {
 	return (ctx->nonce);
+}
+
+void
+aes_clean_pkey(aes_ctx_t *ctx)
+{
+	memset(ctx->pkey, 0, KEYLEN);
 }
 
 void

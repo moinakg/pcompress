@@ -33,6 +33,7 @@ extern "C" {
 #endif
 
 #include <rabin_dedup.h>
+#include <crypto_utils.h>
 
 #define	CHUNK_FLAG_SZ	1
 #define	ALGO_SZ		8
@@ -43,6 +44,7 @@ extern "C" {
 #define	FLAG_SINGLE_CHUNK	4
 #define	UTILITY_VERSION	"0.8.6"
 #define	MASK_CRYPTO_ALG	0x30
+#define	MAX_LEVEL	14
 
 #define	COMPRESSED	1
 #define	UNCOMPRESSED	0

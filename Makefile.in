@@ -26,9 +26,10 @@ MAINSRCS = main.c utils/utils.c allocator.c zlib_compress.c bzip2_compress.c \
 	lzma_compress.c ppmd_compress.c adaptive_compress.c lzfx_compress.c \
 	lz4_compress.c none_compress.c utils/xxhash.c utils/heapq.c utils/cpuid.c \
 	crypto/aes/crypto_aes.c crypto/scrypt/crypto_scrypt-nosse.c \
-	crypto/scrypt/sha256.c crypto/scrypt/crypto_aesctr.c
+	crypto/scrypt/sha256.c crypto/scrypt/crypto_aesctr.c crypto/crypto_utils.c
 MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heapq.h \
-	utils/cpuid.h
+	utils/cpuid.h crypto/crypto_utils.h crypto/scrypt/crypto_scrypt.h \
+	crypto/scrypt/sha256.h crypto/scrypt/crypto_aesctr.h crypto/aes/crypto_aes.h
 MAINOBJS = $(MAINSRCS:.c=.o)
 
 RABINSRCS = rabin/rabin_dedup.c
@@ -92,13 +93,13 @@ LIBBSCGEN_OPT = -fopenmp
 LIBBSCCPPFLAGS = -I$(LIBBSCDIR)/libbsc -DENABLE_PC_LIBBSC
 
 BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~ utils/*~ crypto/sha2/*~ \
-	crypto/sha2/intel/*~ crypto/aes/*~ crypto/scrypt/*~
+	crypto/sha2/intel/*~ crypto/aes/*~ crypto/scrypt/*~ crypto/*~
 
 RM = rm -f
 COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
 	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I@OPENSSL_INCDIR@ \
-	-I./crypto/sha2 -I./crypto/scrypt -I./crypto/aes @KEYLEN@
+	-I./crypto/sha2 -I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm @LIBBSCLFLAGS@ -L@OPENSSL_LIBDIR@ -lcrypto -lrt

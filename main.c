@@ -51,6 +51,7 @@
  * We use 5MB chunks by default.
  */
 #define	DEFAULT_CHUNKSIZE	(5 * 1024 * 1024)
+#define	EIGHTY_PCT(x) ((x) - ((x)/5))
 
 struct wdata {
 	struct cmp_data **dary;
@@ -88,7 +89,7 @@ static const char *exec_name;
 static const char *algo = NULL;
 static int do_compress = 0;
 static int do_uncompress = 0;
-static int cksum_bytes;
+static int cksum_bytes, mac_bytes;
 static int cksum = 0;
 static int rab_blk_size = 0;
 static dedupe_context_t *rctx;
@@ -291,7 +292,7 @@ redo:
 		goto cont;
 	}
 
-	cseg = tdat->compressed_chunk + cksum_bytes;
+	cseg = tdat->compressed_chunk + cksum_bytes + mac_bytes;
 	_chunksize = tdat->chunksize;
 	deserialize_checksum(tdat->checksum, tdat->compressed_chunk, cksum_bytes);
 	HDR = *cseg;
@@ -309,6 +310,8 @@ redo:
 	 * Decrypt compressed data if necessary.
 	 */
 	if (encrypt_type) {
+		uchar_t hmac[CKSUM_MAX_BYTES];
+
 		/*
 		 * Encryption algorithm should not change the size and
 		 * encryption is in-place.
@@ -538,6 +541,25 @@ start_decompress(const char *filename, const char *to_filename)
 	chunksize = ntohll(chunksize);
 	level = ntohl(level);
 
+	/*
+	 * Check for ridiculous values (malicious tampering or otherwise).
+	 */
+	if (version > VERSION) {
+		fprintf(stderr, "Cannot handle newer archive version %d, capability %d\n",
+			version, VERSION);
+		err = 1;
+		goto uncomp_done;
+	}
+	if (chunksize > EIGHTY_PCT(get_total_ram())) {
+		fprintf(stderr, "Chunk size must not exceed 80%% of total RAM.\n");
+		err = 1;
+		goto uncomp_done;
+	}
+	if (level > MAX_LEVEL || level < 0) {
+		fprintf(stderr, "Invalid compression level in header: %d\n", level);
+		err = 1;
+		goto uncomp_done;
+	}
 	if (version < VERSION-2) {
 		fprintf(stderr, "Unsupported version: %d\n", version);
 		err = 1;
@@ -566,7 +588,7 @@ start_decompress(const char *filename, const char *to_filename)
 	}
 
 	cksum = flags & CKSUM_MASK;
-	if (get_checksum_props(NULL, &cksum, &cksum_bytes) == -1) {
+	if (get_checksum_props(NULL, &cksum, &cksum_bytes, &mac_bytes) == -1) {
 		fprintf(stderr, "Invalid checksum algorithm code: %d. File corrupt ?\n", cksum);
 		UNCOMP_BAIL;
 	}
@@ -580,7 +602,13 @@ start_decompress(const char *filename, const char *to_filename)
 		uint64_t nonce;
 		uchar_t pw[MAX_PW_LEN];
 		int pw_len;
+		mac_ctx_t hdr_mac;
+		uchar_t hdr_hash1[mac_bytes], hdr_hash2[mac_bytes];
+		unsigned int hlen;
+		unsigned short d1;
+		unsigned int d2;
 
+		compressed_chunksize += mac_bytes;
 		encrypt_type = flags & MASK_CRYPTO_ALG;
 		if (Read(compfd, &saltlen, sizeof (saltlen)) < sizeof (saltlen)) {
 			perror("Read: ");
@@ -606,13 +634,21 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 		nonce = ntohll(nonce);
 
+		if (Read(compfd, hdr_hash1, mac_bytes) < mac_bytes) {
+			memset(salt2, 0, saltlen);
+			free(salt2);
+			perror("Read: ");
+			UNCOMP_BAIL;
+		}
+		deserialize_checksum(hdr_hash2, hdr_hash1, mac_bytes);
+
 		if (!pwd_file) {
 			pw_len = get_pw_string(pw,
 				"Please enter encryption password");
 			if (pw_len == -1) {
 				memset(salt2, 0, saltlen);
 				free(salt2);
-				err_exit(1, "Failed to get password.\n");
+				err_exit(0, "Failed to get password.\n");
 			}
 		} else {
 			int fd, len;
@@ -644,21 +680,45 @@ start_decompress(const char *filename, const char *to_filename)
 				perror(" ");
 				memset(salt2, 0, saltlen);
 				free(salt2);
-				err_exit(1, "Failed to get password.\n");
+				err_exit(0, "Failed to get password.\n");
 			}
 			close(fd);
 		}
+
 		if (init_crypto(&crypto_ctx, pw, pw_len, encrypt_type, salt2,
 		    saltlen, nonce, DECRYPT_FLAG) == -1) {
 			memset(salt2, 0, saltlen);
 			free(salt2);
 			memset(pw, 0, MAX_PW_LEN);
-			err_exit(1, "Failed to initialize crypto\n");
+			err_exit(0, "Failed to initialize crypto\n");
 		}
 		memset(salt2, 0, saltlen);
 		free(salt2);
 		nonce = 0;
 		memset(pw, 0, MAX_PW_LEN);
+
+		/*
+		 * Verify header HMAC.
+		 */
+		if (hmac_init(&hdr_mac, cksum, &crypto_ctx) == -1) {
+			err_exit(0, "Cannot initialize header hmac.\n");
+		}
+		hmac_update(&hdr_mac, (uchar_t *)algo, ALGO_SZ);
+		d1 = htons(version);
+		hmac_update(&hdr_mac, (uchar_t *)&d1, sizeof (version));
+		d1 = htons(flags);
+		hmac_update(&hdr_mac, (uchar_t *)&d1, sizeof (version));
+		nonce = htonll(chunksize);
+		hmac_update(&hdr_mac, (uchar_t *)&nonce, sizeof (nonce));
+		d2 = htonl(level);
+		hmac_update(&hdr_mac, (uchar_t *)&d2, sizeof (level));
+		hmac_final(&hdr_mac, hdr_hash1, &hlen);
+		hmac_cleanup(&hdr_mac);
+		if (memcmp(hdr_hash2, hdr_hash1, mac_bytes) != 0) {
+			err_exit(0, "Header verification failed! File tampered.\n");
+		}
+	} else {
+		mac_bytes = 0;
 	}
 
 	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
@@ -759,6 +819,15 @@ start_decompress(const char *filename, const char *to_filename)
 			tdat->len_cmp = htonll(tdat->len_cmp);
 
 			/*
+			 * Check for ridiculous length.
+			 */
+			if (tdat->len_cmp > chunksize + 256) {
+				fprintf(stderr, "Compressed length too big for chunk: %d\n",
+				    chunk_num);
+				UNCOMP_BAIL;
+			}
+
+			/*
 			 * Zero compressed len means end of file.
 			 */
 			if (tdat->len_cmp == 0) {
@@ -799,9 +868,9 @@ start_decompress(const char *filename, const char *to_filename)
 			 * Now read compressed chunk including the checksum.
 			 */
 			tdat->rbytes = Read(compfd, tdat->compressed_chunk,
-			    tdat->len_cmp + cksum_bytes + CHUNK_FLAG_SZ);
+			    tdat->len_cmp + cksum_bytes + mac_bytes + CHUNK_FLAG_SZ);
 			if (main_cancel) break;
-			if (tdat->rbytes < tdat->len_cmp + cksum_bytes + CHUNK_FLAG_SZ) {
+			if (tdat->rbytes < tdat->len_cmp + cksum_bytes + mac_bytes + CHUNK_FLAG_SZ) {
 				if (tdat->rbytes < 0) {
 					perror("Read: ");
 					UNCOMP_BAIL;
@@ -978,6 +1047,7 @@ plain_compress:
 			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data);
 		}
 	}
+
 	/*
 	 * Sanity check to ensure compressed data is lesser than original.
 	 * If at all compression expands/does not shrink data then the chunk
@@ -1030,7 +1100,7 @@ plain_compress:
 	serialize_checksum(tdat->checksum, tdat->cmp_seg + sizeof (tdat->len_cmp), cksum_bytes);
 	tdat->len_cmp += CHUNK_FLAG_SZ;
 	tdat->len_cmp += sizeof (len_cmp);
-	tdat->len_cmp += cksum_bytes;
+	tdat->len_cmp += (cksum_bytes + mac_bytes);
 
 	if (adapt_mode)
 		type |= (rv << 4);
@@ -1159,6 +1229,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		uchar_t pw[MAX_PW_LEN];
 		int pw_len;
 
+		compressed_chunksize += mac_bytes;
 		if (!pwd_file) {
 			pw_len = get_pw_string(pw,
 				"Please enter encryption password");
@@ -1379,16 +1450,31 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	}
 
 	/*
-	 * If encryption is enabled, write the salt and nonce.
+	 * If encryption is enabled, compute header HMAC. Then
+	 * write the salt, nonce and header hmac in that order.
 	 */
-	pos = cread_buf;
 	if (encrypt_type) {
+		mac_ctx_t hdr_mac;
+		uchar_t hdr_hash[mac_bytes];
+		unsigned int hlen;
+
+		if (hmac_init(&hdr_mac, cksum, &crypto_ctx) == -1) {
+			fprintf(stderr, "Cannot initialize header hmac.\n");
+			COMP_BAIL;
+		}
+		hmac_update(&hdr_mac, cread_buf, pos - cread_buf);
+		hmac_final(&hdr_mac, hdr_hash, &hlen);
+		hmac_cleanup(&hdr_mac);
+
+		pos = cread_buf;
 		*((int *)pos) = htonl(crypto_ctx.saltlen);
 		pos += sizeof (int);
 		serialize_checksum(crypto_ctx.salt, pos, crypto_ctx.saltlen);
 		pos += crypto_ctx.saltlen;
 		*((uint64_t *)pos) = htonll(crypto_nonce(&crypto_ctx));
 		pos += 8;
+		serialize_checksum(hdr_hash, pos, hlen);
+		pos += hlen;
 		if (Write(compfd, cread_buf, pos - cread_buf) != pos - cread_buf) {
 			perror("Write ");
 			COMP_BAIL;
@@ -1455,7 +1541,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 					tdat->cmp_seg = (uchar_t *)slab_alloc(NULL,
 						compressed_chunksize);
 				}
-				tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ + cksum_bytes;
+				tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ +
+				    cksum_bytes + mac_bytes;
 				if (!tdat->cmp_seg || !tdat->uncompressed_chunk) {
 					fprintf(stderr, "Out of memory\n");
 					COMP_BAIL;
@@ -1477,7 +1564,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 				tmp = tdat->cmp_seg;
 				tdat->cmp_seg = cread_buf;
 				cread_buf = tmp;
-				tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ + cksum_bytes;
+				tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ +
+				    cksum_bytes + mac_bytes;
 
 				/*
 				 * If there is data after the last rabin boundary in the chunk, then
@@ -1763,11 +1851,14 @@ main(int argc, char *argv[])
 			if (chunksize < MIN_CHUNK) {
 				err_exit(0, "Minimum chunk size is %ld\n", MIN_CHUNK);
 			}
+			if (chunksize > EIGHTY_PCT(get_total_ram())) {
+				err_exit(0, "Chunk size must not exceed 80%% of total RAM.\n");
+			}
 			break;
 
 		    case 'l':
 			level = atoi(optarg);
-			if (level < 0 || level > 14)
+			if (level < 0 || level > MAX_LEVEL)
 				err_exit(0, "Compression level should be in range 0 - 14\n");
 			break;
 
@@ -1829,7 +1920,7 @@ main(int argc, char *argv[])
 			break;
 
 		    case 'S':
-			if (get_checksum_props(optarg, &cksum, &cksum_bytes) == -1) {
+			if (get_checksum_props(optarg, &cksum, &cksum_bytes, &mac_bytes) == -1) {
 				err_exit(0, "Invalid checksum type %s", optarg);
 			}
 			break;
@@ -1873,6 +1964,7 @@ main(int argc, char *argv[])
 	if (!do_compress && encrypt_type) {
 		fprintf(stderr, "Encryption only makes sense when compressing!\n");
 		exit(1);
+
 	} else if (pipe_mode && !pwd_file) {
 		fprintf(stderr, "Pipe mode requires password to be provided in a file.\n");
 		exit(1);
@@ -1922,8 +2014,10 @@ main(int argc, char *argv[])
 	main_cancel = 0;
 
 	if (cksum == 0)
-		get_checksum_props(DEFAULT_CKSUM, &cksum, &cksum_bytes);
+		get_checksum_props(DEFAULT_CKSUM, &cksum, &cksum_bytes, &mac_bytes);
 
+	if (!encrypt_type)
+		mac_bytes = 0;
 	/*
 	 * Start the main routines.
 	 */

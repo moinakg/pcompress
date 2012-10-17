@@ -53,6 +53,11 @@ typedef struct _SHA256_Context {
 	} buffer;
 } SHA256_Context;
 
+typedef struct HMAC_SHA256Context {
+	SHA256_Context ictx;
+	SHA256_Context octx;
+} HMAC_SHA256_Context;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -62,9 +67,13 @@ extern "C" {
 #endif /* !APS_NAMESPACE */
 
 void APS_NAMESPACE(SHA256_Init) (SHA256_Context *sc);
-void APS_NAMESPACE(SHA256_Update) (SHA256_Context *sc, void *data, size_t len);
+void APS_NAMESPACE(SHA256_Update) (SHA256_Context *sc, const void *data, size_t len);
 void APS_NAMESPACE(SHA256_Final) (SHA256_Context *sc, uint8_t hash[SHA256_HASH_SIZE]);
 int  APS_NAMESPACE(Init_SHA) (processor_info_t *pc);
+
+void APS_NAMESPACE(HMAC_SHA256_Init) (HMAC_SHA256_Context * ctx, const void * _K, size_t Klen);
+void APS_NAMESPACE(HMAC_SHA256_Update) (HMAC_SHA256_Context * ctx, const void *in, size_t len);
+void APS_NAMESPACE(HMAC_SHA256_Final) (HMAC_SHA256_Context * ctx, unsigned char digest[32]);
 
 /*
  * Intel's optimized SHA256 core routines. These routines are described in an

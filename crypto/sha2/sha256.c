@@ -105,7 +105,7 @@ static void
 _init (SHA256_Context *sc, const uint32_t iv[SHA256_HASH_WORDS])
 {
 	int i;
-	
+
 	/*
 	 * SHA256_HASH_WORDS is 8, must be 8, cannot be anything but 8!
 	 * So we unroll a loop here.
@@ -118,7 +118,7 @@ _init (SHA256_Context *sc, const uint32_t iv[SHA256_HASH_WORDS])
 	sc->hash[5] = iv[5];
 	sc->hash[6] = iv[6];
 	sc->hash[7] = iv[7];
-	
+
 	sc->totalLength = 0LL;
 	sc->bufferLength = 0L;
 }
@@ -130,26 +130,26 @@ APS_NAMESPACE(SHA256_Init) (SHA256_Context *sc)
 }
 
 void
-APS_NAMESPACE(SHA256_Update) (SHA256_Context *sc, void *vdata, size_t len)
+APS_NAMESPACE(SHA256_Update) (SHA256_Context *sc, const void *vdata, size_t len)
 {
 	const uint8_t *data = vdata;
 	uint32_t bufferBytesLeft;
 	size_t bytesToCopy;
 	int rem;
-	
+
 	if (sc->bufferLength) {
 		do {
 			bufferBytesLeft = 64L - sc->bufferLength;
 			bytesToCopy = bufferBytesLeft;
 			if (bytesToCopy > len)
 				bytesToCopy = len;
-			
+
 			memcpy (&sc->buffer.bytes[sc->bufferLength], data, bytesToCopy);
 			sc->totalLength += bytesToCopy * 8L;
 			sc->bufferLength += bytesToCopy;
 			data += bytesToCopy;
 			len -= bytesToCopy;
-			
+
 			if (sc->bufferLength == 64L) {
 				sc->blocks = 1;
 				sha_update_func(sc->buffer.words, sc->hash, sc->blocks);
@@ -160,12 +160,12 @@ APS_NAMESPACE(SHA256_Update) (SHA256_Context *sc, void *vdata, size_t len)
 		} while (len > 0 && len <= 64L);
 		if (!len) return;
 	}
-	
+
 	sc->blocks = len >> 6;
 	rem = len - (sc->blocks << 6);
 	len = sc->blocks << 6;
 	sc->totalLength += rem * 8L;
-	
+
 	if (len) {
 		sc->totalLength += len * 8L;
 		sha_update_func((uint32_t *)data, sc->hash, sc->blocks);
@@ -182,16 +182,16 @@ _final (SHA256_Context *sc, uint8_t *hash, int hashWords)
 	uint32_t bytesToPad;
 	uint64_t lengthPad;
 	int i;
-	
+
 	bytesToPad = 120L - sc->bufferLength;
 	if (bytesToPad > 64L)
 		bytesToPad -= 64L;
-	
+
 	lengthPad = BYTESWAP64(sc->totalLength);
-	
+
 	APS_NAMESPACE(SHA256_Update) (sc, padding, bytesToPad);
 	APS_NAMESPACE(SHA256_Update) (sc, &lengthPad, 8L);
-	
+
 	if (hash) {
 		for (i = 0; i < hashWords; i++) {
 			hash[0] = (uint8_t) (sc->hash[i] >> 24);
@@ -207,4 +207,67 @@ void
 APS_NAMESPACE(SHA256_Final) (SHA256_Context *sc, uint8_t hash[SHA256_HASH_SIZE])
 {
 	_final (sc, hash, SHA256_HASH_WORDS);
+}
+
+/* Initialize an HMAC-SHA256 operation with the given key. */
+void
+APS_NAMESPACE(HMAC_SHA256_Init) (HMAC_SHA256_Context * ctx, const void * _K, size_t Klen)
+{
+	unsigned char pad[64];
+	unsigned char khash[32];
+	const unsigned char * K = _K;
+	size_t i;
+
+	/* If Klen > 64, the key is really SHA256(K). */
+	if (Klen > 64) {
+		APS_NAMESPACE(SHA256_Init)(&ctx->ictx);
+		APS_NAMESPACE(SHA256_Update)(&ctx->ictx, K, Klen);
+		APS_NAMESPACE(SHA256_Final)(&ctx->ictx, khash);
+		K = khash;
+		Klen = 32;
+	}
+
+	/* Inner SHA256 operation is SHA256(K xor [block of 0x36] || data). */
+	APS_NAMESPACE(SHA256_Init)(&ctx->ictx);
+	memset(pad, 0x36, 64);
+	for (i = 0; i < Klen; i++)
+		pad[i] ^= K[i];
+	APS_NAMESPACE(SHA256_Update)(&ctx->ictx, pad, 64);
+
+	/* Outer SHA256 operation is SHA256(K xor [block of 0x5c] || hash). */
+	APS_NAMESPACE(SHA256_Init)(&ctx->octx);
+	memset(pad, 0x5c, 64);
+	for (i = 0; i < Klen; i++)
+		pad[i] ^= K[i];
+	APS_NAMESPACE(SHA256_Update)(&ctx->octx, pad, 64);
+
+	/* Clean the stack. */
+	memset(khash, 0, 32);
+}
+
+/* Add bytes to the HMAC-SHA256 operation. */
+void
+APS_NAMESPACE(HMAC_SHA256_Update) (HMAC_SHA256_Context * ctx, const void *in, size_t len)
+{
+	/* Feed data to the inner SHA256 operation. */
+	APS_NAMESPACE(SHA256_Update)(&ctx->ictx, in, len);
+}
+
+/* Finish an HMAC-SHA256 operation. */
+void
+APS_NAMESPACE(HMAC_SHA256_Final) (HMAC_SHA256_Context * ctx, unsigned char digest[32])
+{
+	unsigned char ihash[32];
+
+	/* Finish the inner SHA256 operation. */
+	APS_NAMESPACE(SHA256_Final)(&ctx->ictx, ihash);
+
+	/* Feed the inner hash to the outer SHA256 operation. */
+	APS_NAMESPACE(SHA256_Update)(&ctx->octx, ihash, 32);
+
+	/* Finish the outer SHA256 operation. */
+	APS_NAMESPACE(SHA256_Final)(&ctx->octx, digest);
+
+	/* Clean the stack. */
+	memset(ihash, 0, 32);
 }

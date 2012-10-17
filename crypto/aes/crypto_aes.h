@@ -43,6 +43,7 @@ extern "C" {
 typedef struct {
 	uint64_t nonce;
 	AES_KEY key;
+	uchar_t pkey[KEYLEN];
 } aes_ctx_t;
 
 int aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
@@ -50,6 +51,7 @@ int aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_l
 int aes_encrypt(aes_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, ssize_t len, uint64_t id);
 int aes_decrypt(aes_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, ssize_t len, uint64_t id);
 uint64_t aes_nonce(aes_ctx_t *ctx);
+void aes_clean_pkey(aes_ctx_t *ctx);
 void aes_cleanup(aes_ctx_t *ctx);
 
 #ifdef	__cplusplus
