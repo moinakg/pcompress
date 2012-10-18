@@ -163,7 +163,7 @@ struct cmp_data {
 	dedupe_context_t *rctx;
 	ssize_t rbytes;
 	ssize_t chunksize;
-	ssize_t len_cmp;
+	ssize_t len_cmp, len_cmp_be;
 	uchar_t checksum[CKSUM_MAX_BYTES];
 	int level;
 	unsigned int id;
@@ -175,6 +175,7 @@ struct cmp_data {
 	sem_t write_done_sem;
 	void *data;
 	pthread_t thr;
+	mac_ctx_t chunk_hmac;
 };
 
 #ifdef	__cplusplus

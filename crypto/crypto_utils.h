@@ -85,7 +85,7 @@ int crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, ssize_t bytes, ui
 uint64_t crypto_nonce(crypto_ctx_t *cctx);
 void crypto_clean_pkey(crypto_ctx_t *cctx);
 void cleanup_crypto(crypto_ctx_t *cctx);
-int get_pw_string(char pw[MAX_PW_LEN], char *prompt);
+int get_pw_string(char pw[MAX_PW_LEN], char *prompt, int twice);
 
 /*
  * HMAC functions.

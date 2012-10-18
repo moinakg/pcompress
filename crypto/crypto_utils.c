@@ -541,7 +541,7 @@ err0:
 }
 
 int
-get_pw_string(char pw[MAX_PW_LEN], char *prompt)
+get_pw_string(char pw[MAX_PW_LEN], char *prompt, int twice)
 {
 	int fd, len;
 	FILE *input, *strm;
@@ -575,22 +575,28 @@ get_pw_string(char pw[MAX_PW_LEN], char *prompt)
 		return (-1);
 	}
 
-	fprintf(stderr, "%s (once more): ", prompt);
-	fflush(stderr);
-	s = fgets(pw2, MAX_PW_LEN, input);
-	tcsetattr(fd, TCSANOW, &oldt);
-	fflush(strm);
-	fputs("\n", stderr);
+	if (twice) {
+		fprintf(stderr, "%s (once more): ", prompt);
+		fflush(stderr);
+		s = fgets(pw2, MAX_PW_LEN, input);
+		tcsetattr(fd, TCSANOW, &oldt);
+		fflush(strm);
+		fputs("\n", stderr);
 
-	if (s == NULL) {
-		return (-1);
-	}
+		if (s == NULL) {
+			return (-1);
+		}
 
-	if (strcmp(pw1, pw2) != 0) {
-		fprintf(stderr, "Passwords do not match!\n");
-		memset(pw1, 0, MAX_PW_LEN);
-		memset(pw2, 0, MAX_PW_LEN);
-		return (-1);
+		if (strcmp(pw1, pw2) != 0) {
+			fprintf(stderr, "Passwords do not match!\n");
+			memset(pw1, 0, MAX_PW_LEN);
+			memset(pw2, 0, MAX_PW_LEN);
+			return (-1);
+		}
+	} else {
+		tcsetattr(fd, TCSANOW, &oldt);
+		fflush(strm);
+		fputs("\n", stderr);
 	}
 
 	len = strlen(pw1);

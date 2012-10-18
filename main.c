@@ -292,6 +292,32 @@ redo:
 		goto cont;
 	}
 
+	/*
+	 * Verify HMAC first before anything else.
+	 */
+	if (encrypt_type) {
+		unsigned int len;
+
+		len = mac_bytes;
+		deserialize_checksum(checksum, tdat->compressed_chunk + cksum_bytes, mac_bytes);
+		memset(tdat->compressed_chunk + cksum_bytes, 0, mac_bytes);
+		hmac_reinit(&tdat->chunk_hmac);
+		hmac_update(&tdat->chunk_hmac, (uchar_t *)&tdat->len_cmp_be, sizeof (tdat->len_cmp_be));
+		hmac_update(&tdat->chunk_hmac, tdat->compressed_chunk,
+		    tdat->len_cmp + cksum_bytes + mac_bytes + CHUNK_FLAG_SZ);
+		hmac_final(&tdat->chunk_hmac, tdat->checksum, &len);
+		if (memcmp(checksum, tdat->checksum, len) != 0) {
+			/*
+			 * HMAC verification failure is fatal.
+			 */
+			fprintf(stderr, "Chunk %d, HMAC verification failed\n", tdat->id);
+			main_cancel = 1;
+			tdat->len_cmp = 0;
+			sem_post(&tdat->cmp_done_sem);
+			return;
+		}
+	}
+
 	cseg = tdat->compressed_chunk + cksum_bytes + mac_bytes;
 	_chunksize = tdat->chunksize;
 	deserialize_checksum(tdat->checksum, tdat->compressed_chunk, cksum_bytes);
@@ -644,7 +670,7 @@ start_decompress(const char *filename, const char *to_filename)
 
 		if (!pwd_file) {
 			pw_len = get_pw_string(pw,
-				"Please enter encryption password");
+				"Please enter decryption password", 0);
 			if (pw_len == -1) {
 				memset(salt2, 0, saltlen);
 				free(salt2);
@@ -680,6 +706,7 @@ start_decompress(const char *filename, const char *to_filename)
 				perror(" ");
 				memset(salt2, 0, saltlen);
 				free(salt2);
+				close(uncompfd); unlink(to_filename);
 				err_exit(0, "Failed to get password.\n");
 			}
 			close(fd);
@@ -690,6 +717,7 @@ start_decompress(const char *filename, const char *to_filename)
 			memset(salt2, 0, saltlen);
 			free(salt2);
 			memset(pw, 0, MAX_PW_LEN);
+			close(uncompfd); unlink(to_filename);
 			err_exit(0, "Failed to initialize crypto\n");
 		}
 		memset(salt2, 0, saltlen);
@@ -701,6 +729,7 @@ start_decompress(const char *filename, const char *to_filename)
 		 * Verify header HMAC.
 		 */
 		if (hmac_init(&hdr_mac, cksum, &crypto_ctx) == -1) {
+			close(uncompfd); unlink(to_filename);
 			err_exit(0, "Cannot initialize header hmac.\n");
 		}
 		hmac_update(&hdr_mac, (uchar_t *)algo, ALGO_SZ);
@@ -715,7 +744,8 @@ start_decompress(const char *filename, const char *to_filename)
 		hmac_final(&hdr_mac, hdr_hash1, &hlen);
 		hmac_cleanup(&hdr_mac);
 		if (memcmp(hdr_hash2, hdr_hash1, mac_bytes) != 0) {
-			err_exit(0, "Header verification failed! File tampered.\n");
+			close(uncompfd); unlink(to_filename);
+			err_exit(0, "Header verification failed! File tampered or wrong password.\n");
 		}
 	} else {
 		mac_bytes = 0;
@@ -768,6 +798,13 @@ start_decompress(const char *filename, const char *to_filename)
 		} else {
 			tdat->rctx = NULL;
 		}
+
+		if (encrypt_type) {
+			if (hmac_init(&tdat->chunk_hmac, cksum, &crypto_ctx) == -1) {
+				fprintf(stderr, "Cannot initialize chunk hmac.\n");
+				UNCOMP_BAIL;
+			}
+		}
 		if (pthread_create(&(tdat->thr), NULL, perform_decompress,
 		    (void *)tdat) != 0) {
 			perror("Error in thread creation: ");
@@ -775,6 +812,11 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 	}
 	thread = 1;
+
+	if (encrypt_type) {
+		/* Erase encryption key bytes stored as a plain array. No longer reqd. */
+		crypto_clean_pkey(&crypto_ctx);
+	}
 
 	w.dary = dary;
 	w.wfd = uncompfd;
@@ -816,6 +858,7 @@ start_decompress(const char *filename, const char *to_filename)
 					    "file corrupt\n", chunk_num);
 				UNCOMP_BAIL;
 			}
+			tdat->len_cmp_be = tdat->len_cmp; // Needed for HMAC
 			tdat->len_cmp = htonll(tdat->len_cmp);
 
 			/*
@@ -1069,7 +1112,7 @@ plain_compress:
 	 */
 	if (encrypt_type) {
 		/*
-		 * Encryption algorithm should not change the size and
+		 * Encryption algorithm must not change the size and
 		 * encryption is in-place.
 		 */
 		rv = crypto_buf(&crypto_ctx, compressed_chunk, compressed_chunk,
@@ -1120,6 +1163,22 @@ plain_compress:
 	 */
 	*(tdat->compressed_chunk) = type;
 
+	/*
+	 * If encrypting, compute HMAC for entire chunk (hdr + data)
+	 */
+	if (encrypt_type) {
+		uchar_t *mac_ptr;
+		unsigned int hlen;
+		uchar_t chash[mac_bytes];
+
+		/* Clean out mac_bytes to 0 for stable hash. */
+		mac_ptr = tdat->cmp_seg + sizeof (tdat->len_cmp) + cksum_bytes;
+		memset(mac_ptr, 0, mac_bytes);
+		hmac_reinit(&tdat->chunk_hmac);
+		hmac_update(&tdat->chunk_hmac, tdat->cmp_seg, tdat->len_cmp);
+		hmac_final(&tdat->chunk_hmac, chash, &hlen);
+		serialize_checksum(chash, mac_ptr, hlen);
+	}
 cont:
 	sem_post(&tdat->cmp_done_sem);
 	goto redo;
@@ -1232,7 +1291,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		compressed_chunksize += mac_bytes;
 		if (!pwd_file) {
 			pw_len = get_pw_string(pw,
-				"Please enter encryption password");
+				"Please enter encryption password", 1);
 			if (pw_len == -1) {
 				err_exit(1, "Failed to get password.\n");
 			}
@@ -1408,6 +1467,12 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			tdat->rctx = NULL;
 		}
 
+		if (encrypt_type) {
+			if (hmac_init(&tdat->chunk_hmac, cksum, &crypto_ctx) == -1) {
+				fprintf(stderr, "Cannot initialize chunk hmac.\n");
+				COMP_BAIL;
+			}
+		}
 		if (pthread_create(&(tdat->thr), NULL, perform_compress,
 		    (void *)tdat) != 0) {
 			perror("Error in thread creation: ");
@@ -1465,6 +1530,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		hmac_update(&hdr_mac, cread_buf, pos - cread_buf);
 		hmac_final(&hdr_mac, hdr_hash, &hlen);
 		hmac_cleanup(&hdr_mac);
+
+		/* Erase encryption key bytes stored as a plain array. No longer reqd. */
+		crypto_clean_pkey(&crypto_ctx);
 
 		pos = cread_buf;
 		*((int *)pos) = htonl(crypto_ctx.saltlen);
@@ -1631,6 +1699,8 @@ comp_done:
 			sem_post(&tdat->start_sem);
 			sem_post(&tdat->cmp_done_sem);
 			pthread_join(tdat->thr, NULL);
+			if (encrypt_type)
+				hmac_cleanup(&tdat->chunk_hmac);
 		}
 		pthread_join(writer_thr, NULL);
 	}
