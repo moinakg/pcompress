@@ -292,8 +292,22 @@ redo:
 		goto cont;
 	}
 
+	cseg = tdat->compressed_chunk + cksum_bytes + mac_bytes;
+	HDR = *cseg;
+	cseg += CHUNK_FLAG_SZ;
+	_chunksize = tdat->chunksize;
+	if (HDR & CHSIZE_MASK) {
+		uchar_t *rseg;
+
+		tdat->rbytes -= ORIGINAL_CHUNKSZ;
+		tdat->len_cmp -= ORIGINAL_CHUNKSZ;
+		rseg = tdat->compressed_chunk + tdat->rbytes;
+		_chunksize = ntohll(*((ssize_t *)rseg));
+	}
+
 	/*
-	 * Verify HMAC first before anything else.
+	 * If this was encrypted:
+	 * Verify HMAC first before anything else and then decrypt compressed data.
 	 */
 	if (encrypt_type) {
 		unsigned int len;
@@ -304,7 +318,12 @@ redo:
 		hmac_reinit(&tdat->chunk_hmac);
 		hmac_update(&tdat->chunk_hmac, (uchar_t *)&tdat->len_cmp_be, sizeof (tdat->len_cmp_be));
 		hmac_update(&tdat->chunk_hmac, tdat->compressed_chunk,
-		    tdat->len_cmp + cksum_bytes + mac_bytes + CHUNK_FLAG_SZ);
+		    cksum_bytes + mac_bytes + CHUNK_FLAG_SZ);
+		if (HDR & CHSIZE_MASK) {
+			uchar_t *rseg;
+			rseg = tdat->compressed_chunk + tdat->rbytes;
+			hmac_update(&tdat->chunk_hmac, rseg, ORIGINAL_CHUNKSZ);
+		}
 		hmac_final(&tdat->chunk_hmac, tdat->checksum, &len);
 		if (memcmp(checksum, tdat->checksum, len) != 0) {
 			/*
@@ -316,27 +335,6 @@ redo:
 			sem_post(&tdat->cmp_done_sem);
 			return;
 		}
-	}
-
-	cseg = tdat->compressed_chunk + cksum_bytes + mac_bytes;
-	_chunksize = tdat->chunksize;
-	deserialize_checksum(tdat->checksum, tdat->compressed_chunk, cksum_bytes);
-	HDR = *cseg;
-	cseg += CHUNK_FLAG_SZ;
-	if (HDR & CHSIZE_MASK) {
-		uchar_t *rseg;
-
-		tdat->rbytes -= ORIGINAL_CHUNKSZ;
-		tdat->len_cmp -= ORIGINAL_CHUNKSZ;
-		rseg = tdat->compressed_chunk + tdat->rbytes;
-		_chunksize = ntohll(*((ssize_t *)rseg));
-	}
-
-	/*
-	 * Decrypt compressed data if necessary.
-	 */
-	if (encrypt_type) {
-		uchar_t hmac[CKSUM_MAX_BYTES];
 
 		/*
 		 * Encryption algorithm should not change the size and
@@ -353,6 +351,12 @@ redo:
 			return;
 		}
 	}
+
+	/*
+	 * Now that HMAC (if any) was verified, recover the stored message
+	 * digest.
+	 */
+	deserialize_checksum(tdat->checksum, tdat->compressed_chunk, cksum_bytes);
 
 	if ((enable_rabin_scan || enable_fixed_scan) && (HDR & CHUNK_FLAG_DEDUP)) {
 		uchar_t *cmpbuf, *ubuf;
@@ -1144,6 +1148,7 @@ plain_compress:
 	tdat->len_cmp += CHUNK_FLAG_SZ;
 	tdat->len_cmp += sizeof (len_cmp);
 	tdat->len_cmp += (cksum_bytes + mac_bytes);
+	rbytes = tdat->len_cmp - len_cmp; // HDR size for HMAC
 
 	if (adapt_mode)
 		type |= (rv << 4);
@@ -1164,18 +1169,22 @@ plain_compress:
 	*(tdat->compressed_chunk) = type;
 
 	/*
-	 * If encrypting, compute HMAC for entire chunk (hdr + data)
+	 * If encrypting, compute HMAC for chunk header and trailer.
 	 */
 	if (encrypt_type) {
 		uchar_t *mac_ptr;
 		unsigned int hlen;
 		uchar_t chash[mac_bytes];
 
-		/* Clean out mac_bytes to 0 for stable hash. */
+		/* Clean out mac_bytes to 0 for stable HMAC. */
 		mac_ptr = tdat->cmp_seg + sizeof (tdat->len_cmp) + cksum_bytes;
 		memset(mac_ptr, 0, mac_bytes);
 		hmac_reinit(&tdat->chunk_hmac);
-		hmac_update(&tdat->chunk_hmac, tdat->cmp_seg, tdat->len_cmp);
+		hmac_update(&tdat->chunk_hmac, tdat->cmp_seg, rbytes);
+		if (type & CHSIZE_MASK)
+			hmac_update(&tdat->chunk_hmac,
+			    tdat->cmp_seg + tdat->len_cmp - ORIGINAL_CHUNKSZ,
+			    ORIGINAL_CHUNKSZ);
 		hmac_final(&tdat->chunk_hmac, chash, &hlen);
 		serialize_checksum(chash, mac_ptr, hlen);
 	}
