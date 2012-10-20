@@ -1,3 +1,15 @@
+== 0.9.0 Major Release ==
+Implement HMAC verification for chunk header.
+Do not ask for decryption passwd twice.
+Refactor crypto utility functions in a separate file.
+Add HMAC verification for file header.
+Add a few extra input validation checks.
+Include space in chunk header for HMAC.
+Support for chunk-level encryption using AES and Scrypt based PBE.
+Couple of minor fixes.
+Incorporate SSE/AVX optimized Intel SHA-256 implementation.
+Add support for runtime cpuid detection.
+Add support for SHA256 and SHA512 digests from OpenSSL library.
 == 0.8.6 Update Release ==
 Fix polynomial computation.
 Fix incorrect block length when doing fixed-block dedupe.
