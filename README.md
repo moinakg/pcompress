@@ -162,6 +162,11 @@ of 1GB. Allow pcompress to detect the number of CPU cores and use as many thread
 
     pcompress -c lzma -l14 -s1g file.tar
 
+Compress "file.tar" using lz4 at max compression with LZ-Prediction pre-processing
+and encryption enabled. Chunksize is 100M:
+
+    pcompress -c lz4 -l3 -e -L -s100m file.tar
+
 Compression Algorithms
 ======================
 
