@@ -155,19 +155,19 @@ bytes_to_size(uint64_t bytes)
 	uint64_t terabyte = gigabyte * 1024;
 
 	if (bytes < kilobyte) {
-		sprintf(num, "%llu B", bytes);
+		sprintf(num, "%" PRIu64 " B", bytes);
 
 	} else if (bytes < megabyte) {
-		sprintf(num, "%llu KB", bytes / kilobyte);
+		sprintf(num, "%" PRIu64 " KB", bytes / kilobyte);
 
 	} else if (bytes < gigabyte) {
-		sprintf(num, "%llu MB", bytes / megabyte);
+		sprintf(num, "%" PRIu64 " MB", bytes / megabyte);
 
 	} else if (bytes < terabyte) {
-		sprintf(num, "%llu GB", bytes / gigabyte);
+		sprintf(num, "%" PRIu64 " GB", bytes / gigabyte);
 
 	} else {
-		sprintf(num, "%llu B", bytes);
+		sprintf(num, "%" PRIu64 " B", bytes);
 	}
 	return (num);
 }

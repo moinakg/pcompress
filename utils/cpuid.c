@@ -112,22 +112,22 @@ cpuid_basic_identify(processor_info_t *pc)
 		pc->proc_type = PROC_X64_INTEL;
 
 		pc->sse_level = 2;
-		if (raw.basic_cpuid[0][0] >= 1) {
-			// ECX has SSE 4.2 and AVX flags
-			// Bit 20 is SSE 4.2 and bit 28 indicates AVX
-			if (raw.basic_cpuid[1][2] & (1 << 20)) {
-				pc->sse_level = 4;
-			} else {
-				pc->sse_level = 3;
-			}
-			pc->avx_level = 0;
-			if (raw.basic_cpuid[1][2] & (1 << 28)) {
-				pc->avx_level = 1;
-			}
-		}
 	} else if (strcmp(raw.vendor_str, "AuthenticAMD") == 0) {
 		pc->proc_type = PROC_X64_AMD;
 		pc->sse_level = 2;
+	}
+	if (raw.basic_cpuid[0][0] >= 1) {
+		// ECX has SSE 4.2 and AVX flags
+		// Bit 20 is SSE 4.2 and bit 28 indicates AVX
+		if (raw.basic_cpuid[1][2] & (1 << 20)) {
+			pc->sse_level = 4;
+		} else {
+			pc->sse_level = 3;
+		}
+		pc->avx_level = 0;
+		if (raw.basic_cpuid[1][2] & (1 << 28)) {
+			pc->avx_level = 1;
+		}
 	}
 }
 

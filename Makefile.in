@@ -99,10 +99,12 @@ RM = rm -f
 COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
 	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I@OPENSSL_INCDIR@ \
-	-I./crypto/sha2 -I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@
+	-I./crypto/sha2 -I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ \
+	@LIBBZ2_INC@ @LIBZ_INC@
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
-LDLIBS = -ldl -lbz2 $(ZLIB_DIR) -lz -lm @LIBBSCLFLAGS@ -L@OPENSSL_LIBDIR@ -lcrypto -lrt
+LDLIBS = -ldl -L@LIBBZ2_DIR@ -lbz2 -L@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
+	-L@OPENSSL_LIBDIR@ -lcrypto -lrt
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) $(SKEIN_BLOCK_OBJ) \
 @SHA256ASM_OBJS@ @SHA256_OBJS@

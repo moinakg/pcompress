@@ -65,7 +65,7 @@ lz4_init(void **data, int *level, int nthreads, ssize_t chunksize)
 	int lev;
 
 	if (chunksize > LZ4_MAX_CHUNK) {
-		fprintf(stderr, "Max allowed chunk size for LZ4 is: %d \n",
+		fprintf(stderr, "Max allowed chunk size for LZ4 is: %ld \n",
 		    LZ4_MAX_CHUNK);
 		return (1);
 	}

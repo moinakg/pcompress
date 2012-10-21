@@ -141,7 +141,7 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 		} else {
 			tv = tp.tv_sec * 1000UL + tp.tv_nsec;
 		}
-		sprintf(num, "%llu", tv);
+		sprintf(num, "%" PRIu64, tv);
 		PKCS5_PBKDF2_HMAC(num, strlen(num), salt, saltlen, PBE_ROUNDS, EVP_sha256(), 32, IV);
 		ctx->nonce = lzma_crc64(IV, 32, 0) & 0xffffffff00000000ULL;
 		// Nullify stack components

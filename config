@@ -37,6 +37,8 @@ libbsccppflags=
 openssl_prefix=
 openssl_libdir=
 openssl_incdir=
+libbz2_libdir=
+libz_libdir=
 sha256asmobjs=
 sha256objs=
 keylen=
@@ -93,7 +95,7 @@ OS=$(uname)
 skeinblock='\$\(SKEIN_BLOCK_C\)'
 if [ "$OS" = "Linux" ]
 then
-	plat=$(uname -r)
+	plat=$(uname -m)
 elif [ "$OS" = "SunOS" ]
 then
 	plat=$(isainfo -v)
@@ -138,11 +140,13 @@ fi
 # Detect OpenSSL library
 for lib in "${openssl_prefix}/lib64" "${openssl_prefix}/usr/lib64" \
 	"${openssl_prefix}/lib" "${openssl_prefix}/usr/lib" \
-	"${openssl_prefix}/ssl/lib64" "${openssl_prefix}/ssl/lib"
+	"${openssl_prefix}/ssl/lib64" "${openssl_prefix}/ssl/lib" \
+	"${openssl_prefix}/lib/x86_64-linux-gnu" \
+	"${openssl_prefix}/usr/lib/x86_64-linux-gnu"
 do
 	if [ -d ${lib} ]
 	then
-		if [ -f "${lib}/libcrypto.so" ]
+		if [ -f "${lib}/libcrypto.so" -o -h "${lib}/libcrypto.so" ]
 		then
 			openssl_libdir=${lib}
 			break
@@ -182,11 +186,74 @@ then
 	echo "ERROR: OpenSSL header files not detected."
 	if [ "x${openssl_prefix}" = "x" ]
 	then
-		echo "Depending on your system you may need to install the openssl-devel package."
+		echo "Depending on your system you may need to install the openssl-devel or openssl-dev package."
 	fi
 	exit 1
 fi
 
+
+# Detect other library packages
+for libname in "libbz2" "libz"
+do
+	for lib in "/lib64" "/usr/lib64" "/lib" "/usr/lib" "/lib/x86_64-linux-gnu" \
+		"/usr/lib/x86_64-linux-gnu" \
+		"${prefix}/lib64" "${prefix}/lib" "${prefix}/lib/x86_64-linux-gnu"
+	do
+		if [ -d ${lib} ]
+		then
+			if [ -f "${lib}/${libname}.so" -o -h "${lib}/${libname}.so" ]
+			then
+				eval "${libname}_libdir=${lib}"
+				break
+			else
+				if [ -f "${lib}/${libname}.a" ]
+				then
+					eval "${libname}_libdir=${lib}"
+					break
+				fi
+			fi
+		fi
+	done
+done
+
+if [ "x${libbz2_libdir}" = "x" ]
+then
+	echo "ERROR: Libbz2 not detected."
+	echo "       You may have to install libbz2-devel or libbz2-dev"
+	exit 1
+fi
+
+if [ "x${libz_libdir}" = "x" ]
+then
+	echo "ERROR: Zlib not detected."
+	echo "       You may have to install libz-devel or libz-dev"
+	exit 1
+fi
+
+libbz2_inc=
+libz_inc=
+# Detect other library headers
+for hdr in "libbz2_inc:bzlib.h" "libz_inc:zlib.h"
+do
+	_OIFS="$IFS"
+	IFS=":"
+	set -- ${hdr}
+	var=$1
+	hdrf=$2
+	IFS="$_OIFS"
+
+	for inc in "${prefix}/include" "/usr/include"
+	do
+		if [ -d ${inc} ]
+		then
+			if [ -f "${inc}/${hdrf}" ]
+			then
+				eval "${var}=\"-I${inc}\""
+				break
+			fi
+		fi
+	done
+done
 
 linkvar="LINK"
 compilevar="COMPILE"
@@ -214,6 +281,10 @@ yasmvar="YASM"
 
 openssllibdirvar="OPENSSL_LIBDIR"
 opensslincdirvar="OPENSSL_INCDIR"
+libbz2libdirvar="LIBBZ2_DIR"
+libzlibdirvar="LIBZ_DIR"
+libbz2incvar="LIBBZ2_INC"
+libzincvar="LIBZ_INC"
 
 noslabcppflagsval=
 debugstatscppflagsval=
@@ -246,5 +317,9 @@ s#@${sha256asmobjsvar}@#${sha256asmobjs}#g
 s#@${sha256objsvar}@#${sha256objs}#g
 s#@${yasmvar}@#${yasm}#g
 s#@${keylenvar}@#${keylen}#g
+s#@${libbz2libdirvar}@#${libbz2_libdir}#g
+s#@${libzlibdirvar}@#${libz_libdir}#g
+s#@${libbz2incvar}@#${libbz2_inc}#g
+s#@${libzincvar}@#${libz_inc}#g
 " > Makefile
 

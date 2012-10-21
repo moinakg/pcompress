@@ -183,7 +183,7 @@ slab_cleanup(int quiet)
 		while (slab) {
 			if (slab->avail) {
 				if (!quiet) {
-					fprintf(stderr, "%21llu %21llu %21llu\n",slab->sz,
+					fprintf(stderr, "%21" PRIu64 " %21" PRIu64 " %21" PRIu64 "\n",slab->sz,
 					slab->allocs, slab->hits);
 				}
 				slab->allocs = 0;
@@ -201,10 +201,10 @@ slab_cleanup(int quiet)
 
 	if (!quiet) {
 		fprintf(stderr, "==================================================================\n");
-		fprintf(stderr, "Oversize Allocations  : %llu\n", oversize_allocs);
-		fprintf(stderr, "Total Requests        : %llu\n", total_allocs);
-		fprintf(stderr, "Hash collisions       : %llu\n", hash_collisions);
-		fprintf(stderr, "Leaked allocations    : %llu\n", hash_entries);
+		fprintf(stderr, "Oversize Allocations  : %" PRIu64 "\n", oversize_allocs);
+		fprintf(stderr, "Total Requests        : %" PRIu64 "\n", total_allocs);
+		fprintf(stderr, "Hash collisions       : %" PRIu64 "\n", hash_collisions);
+		fprintf(stderr, "Leaked allocations    : %" PRIu64 "\n", hash_entries);
 	}
 
 	if (hash_entries > 0) {
@@ -238,7 +238,7 @@ slab_cleanup(int quiet)
 				slab = &slabheads[i];
 				do {
 					if (slab->allocs > 0)
-						fprintf(stderr, "%21llu %21llu\n", \
+						fprintf(stderr, "%21" PRIu64 " %21" PRIu64 "\n", \
 						    slab->sz, slab->allocs);
 					slab = slab->next;
 				} while (slab);

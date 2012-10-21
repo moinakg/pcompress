@@ -27,6 +27,7 @@
 #include <arpa/nameser_compat.h>
 #include <sys/types.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 #ifdef	__cplusplus
 extern "C" {

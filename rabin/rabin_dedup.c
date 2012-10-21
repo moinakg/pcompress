@@ -164,7 +164,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	}
 
 	if (chunksize < RAB_MIN_CHUNK_SIZE) {
-		fprintf(stderr, "Minimum chunk size for Dedup must be %llu bytes\n",
+		fprintf(stderr, "Minimum chunk size for Dedup must be %" PRIu64 " bytes\n",
 		    RAB_MIN_CHUNK_SIZE);
 		return (NULL);
 	}
@@ -488,7 +488,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 
 process_blocks:
 	// If we found at least a few chunks, perform dedup.
-	DEBUG_STAT_EN(printf("Original size: %lld, blknum: %u\n", *size, blknum));
+	DEBUG_STAT_EN(printf("Original size: %" PRId64 ", blknum: %u\n", *size, blknum));
 	if (blknum > 2) {
 		ssize_t pos, matchlen, pos1;
 		int valid = 1;
@@ -700,7 +700,7 @@ cont:
 			entries[2] = htonll(pos1 - dedupe_index_sz - RABIN_HDR_SIZE);
 			*size = pos1;
 			ctx->valid = 1;
-			DEBUG_STAT_EN(printf("Deduped size: %lld, blknum: %u, delta_calls: %u, delta_fails: %u\n",
+			DEBUG_STAT_EN(printf("Deduped size: %" PRId64 ", blknum: %u, delta_calls: %u, delta_fails: %u\n",
 					     *size, blknum, delta_calls, delta_fails));
 			/*
 			 * Remaining header entries: size of compressed index and size of
