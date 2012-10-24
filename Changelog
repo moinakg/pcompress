@@ -1,3 +1,8 @@
+== 0.9.1 Minor update Release ==
+Portability to Debian based distros.
+Enable SSE4/AVX detection for AMD platforms (Bulldozer has both).
+Portable long long int print formatting to silence gcc 4.6 warnings.
+Add another example invocation.
 == 0.9.0 Major Release ==
 Implement HMAC verification for chunk header.
 Do not ask for decryption passwd twice.
