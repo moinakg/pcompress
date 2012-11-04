@@ -197,7 +197,7 @@ adapt_compress(void *src, size_t srclen, void *dst,
 		bzip2_count++;
 
 	} else {
-		if (tagcnt > ONE_PCT(srclen)) {
+		if (adat->bsc_data && tagcnt > ONE_PCT(srclen)) {
 			rv = libbsc_compress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data);
 			if (rv < 0)
 				return (rv);
@@ -237,7 +237,7 @@ adapt_decompress(void *src, size_t srclen, void *dst,
 		return (libbsc_decompress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data));
 
 	} else {
-		fprintf(stderr, "Unrecognized compression mode, file corrupt.\n");
+		fprintf(stderr, "Unrecognized compression mode: %d, file corrupt.\n", cmp_flags);
 	}
 	return (-1);
 }
