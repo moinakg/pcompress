@@ -72,6 +72,7 @@ extern "C" {
 #define	COMPRESS_LZMA	1
 #define	COMPRESS_BZIP2	2
 #define	COMPRESS_PPMD	3
+#define	COMPRESS_BSC	4
 #define	CHDR_ALGO_MASK	7
 
 extern uint32_t zlib_buf_extra(ssize_t buflen);

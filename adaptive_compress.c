@@ -36,10 +36,12 @@
 #include <allocator.h>
 
 #define	FIFTY_PCT(x)	(((x)/10) * 5)
-#define	TWENTY_PCT(x)	(((x)/10) * 2)
+#define	FORTY_PCT(x)	(((x)/10) * 4)
+#define	ONE_PCT(x)	((x)/100)
 
 static unsigned int lzma_count = 0;
 static unsigned int bzip2_count = 0;
+static unsigned int bsc_count = 0;
 static unsigned int ppmd_count = 0;
 
 extern int lzma_compress(void *src, size_t srclen, void *dst,
@@ -48,6 +50,8 @@ extern int bzip2_compress(void *src, size_t srclen, void *dst,
 	size_t *destlen, int level, uchar_t chdr, void *data);
 extern int ppmd_compress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
+extern int libbsc_compress(void *src, size_t srclen, void *dst,
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 
 extern int lzma_decompress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
@@ -55,15 +59,20 @@ extern int bzip2_decompress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
 extern int ppmd_decompress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
+extern int libbsc_decompress(void *src, size_t srclen, void *dst,
+	size_t *dstlen, int level, uchar_t chdr, void *data);
 
 extern int lzma_init(void **data, int *level, int nthreads, ssize_t chunksize);
 extern int lzma_deinit(void **data);
 extern int ppmd_init(void **data, int *level, int nthreads, ssize_t chunksize);
 extern int ppmd_deinit(void **data);
+extern int libbsc_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int libbsc_deinit(void **data);
 
 struct adapt_data {
 	void *lzma_data;
 	void *ppmd_data;
+	void *bsc_data;
 	int adapt_mode;
 };
 
@@ -73,11 +82,13 @@ adapt_stats(int show)
 	if (show) {
 		fprintf(stderr, "Adaptive mode stats:\n");
 		fprintf(stderr, "	BZIP2 chunk count: %u\n", bzip2_count);
+		fprintf(stderr, "	LIBBSC chunk count: %u\n", bsc_count);
 		fprintf(stderr, "	PPMd chunk count: %u\n", ppmd_count);
 		fprintf(stderr, "	LZMA chunk count: %u\n\n", lzma_count);
 	}
 	lzma_count = 0;
 	bzip2_count = 0;
+	bsc_count = 0;
 	ppmd_count = 0;
 }
 
@@ -92,12 +103,14 @@ adapt_init(void **data, int *level, int nthreads, ssize_t chunksize)
 		adat->adapt_mode = 1;
 		rv = ppmd_init(&(adat->ppmd_data), level, nthreads, chunksize);
 		adat->lzma_data = NULL;
+		adat->bsc_data = NULL;
 		*data = adat;
 		if (*level > 9) *level = 9;
 	}
 	lzma_count = 0;
 	bzip2_count = 0;
 	ppmd_count = 0;
+	bsc_count = 0;
 	return (rv);
 }
 
@@ -116,9 +129,16 @@ adapt2_init(void **data, int *level, int nthreads, ssize_t chunksize)
 		lv = *level;
 		if (rv == 0)
 			rv = lzma_init(&(adat->lzma_data), &lv, nthreads, chunksize);
+		lv = *level;
+		if (rv == 0)
+			rv = libbsc_init(&(adat->bsc_data), &lv, nthreads, chunksize);
 		*data = adat;
 		if (*level > 9) *level = 9;
 	}
+	lzma_count = 0;
+	bzip2_count = 0;
+	ppmd_count = 0;
+	bsc_count = 0;
 	return (rv);
 }
 
@@ -144,21 +164,25 @@ adapt_compress(void *src, size_t srclen, void *dst,
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t *src1 = (uchar_t *)src;
-	size_t i, tot8b;
-	int rv;
+	size_t i, tot8b, tagcnt;
+	int rv, tag;
 
 	/*
-	 * Count number of 8-bit binary bytes in source.
+	 * Count number of 8-bit binary bytes and XML tags in source.
 	 */
 	tot8b = 0;
-	for (i = 0; i < srclen; i++)
+	tagcnt = 0;
+	for (i = 0; i < srclen; i++) {
 		tot8b += (src1[i] >> 7);
+		tag = ((src1[i] == '<') | (src1[i] == '>'));
+		tagcnt += tag;
+	}
 
 	/*
 	 * Use PPMd if some percentage of source is 7-bit textual bytes, otherwise
 	 * use Bzip2 or LZMA.
 	 */
-	if (adat->adapt_mode == 2 && tot8b > TWENTY_PCT(srclen)) {
+	if (adat->adapt_mode == 2 && tot8b > FORTY_PCT(srclen)) {
 		rv = lzma_compress(src, srclen, dst, dstlen, level, chdr, adat->lzma_data);
 		if (rv < 0)
 			return (rv);
@@ -173,11 +197,19 @@ adapt_compress(void *src, size_t srclen, void *dst,
 		bzip2_count++;
 
 	} else {
-		rv = ppmd_compress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data);
-		if (rv < 0)
-			return (rv);
-		rv = COMPRESS_PPMD;
-		ppmd_count++;
+		if (tagcnt > ONE_PCT(srclen)) {
+			rv = libbsc_compress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data);
+			if (rv < 0)
+				return (rv);
+			rv = COMPRESS_BSC;
+			bsc_count++;
+		} else {
+			rv = ppmd_compress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data);
+			if (rv < 0)
+				return (rv);
+			rv = COMPRESS_PPMD;
+			ppmd_count++;
+		}
 	}
 
 	return (rv);
@@ -200,6 +232,9 @@ adapt_decompress(void *src, size_t srclen, void *dst,
 
 	} else if (cmp_flags == COMPRESS_PPMD) {
 		return (ppmd_decompress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data));
+
+	} else if (cmp_flags == COMPRESS_BSC) {
+		return (libbsc_decompress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data));
 
 	} else {
 		fprintf(stderr, "Unrecognized compression mode, file corrupt.\n");
