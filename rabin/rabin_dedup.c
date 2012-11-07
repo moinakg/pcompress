@@ -296,6 +296,8 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 	uint32_t *fplist;
 	rabin_blockentry_t **htab;
 	heap_t heap;
+	DEBUG_STAT_EN(uint32_t max_count);
+	DEBUG_STAT_EN(max_count = 0);
 
 	length = offset;
 	last_offset = 0;
@@ -428,6 +430,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 			ctx->blocks[blknum]->index = blknum; // Need to store for sorting
 			ctx->blocks[blknum]->length = length;
 
+			DEBUG_STAT_EN(if (length >= ctx->rabin_poly_max_block_size) max_count++);
 			/*
 			 * Reset the heap structure and find the K min values if Delta Compression
 			 * is enabled. We use a min heap mechanism taken from the heap based priority
@@ -489,6 +492,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 process_blocks:
 	// If we found at least a few chunks, perform dedup.
 	DEBUG_STAT_EN(printf("Original size: %" PRId64 ", blknum: %u\n", *size, blknum));
+	DEBUG_STAT_EN(printf("Number of maxlen blocks: %u\n", max_count));
 	if (blknum > 2) {
 		ssize_t pos, matchlen, pos1;
 		int valid = 1;
