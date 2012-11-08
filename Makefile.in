@@ -96,6 +96,7 @@ BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~ utils/*~ crypto/s
 	crypto/sha2/intel/*~ crypto/aes/*~ crypto/scrypt/*~ crypto/*~
 
 RM = rm -f
+RM_RF = rm -rf
 COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
 	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I@OPENSSL_INCDIR@ \
@@ -190,8 +191,13 @@ $(MAINOBJS): $(MAINSRCS) $(MAINHDRS)
 $(PROG): $(OBJS)
 	$(LINK) -o $@ $(OBJS) $(LDLIBS)
 
+test: all
+	(cd test; sh ./run_test.sh) 2>&1 | tee test.log
+
 clean:
 	$(RM) $(PROG) $(OBJS) $(BAKFILES)
+	$(RM) test.log
+	$(RM_RF) test/datafiles
 
 distclean: clean
 	$(RM) Makefile
