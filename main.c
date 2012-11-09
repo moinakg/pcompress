@@ -785,6 +785,7 @@ start_decompress(const char *filename, const char *to_filename)
 		tdat->decompress = _decompress_func;
 		tdat->cancel = 0;
 		tdat->level = level;
+		tdat->data = NULL;
 		sem_init(&(tdat->start_sem), 0, 0);
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
@@ -1115,13 +1116,15 @@ plain_compress:
 	 * Now perform encryption on the compressed data, if requested.
 	 */
 	if (encrypt_type) {
+		int ret;
+
 		/*
 		 * Encryption algorithm must not change the size and
 		 * encryption is in-place.
 		 */
-		rv = crypto_buf(&crypto_ctx, compressed_chunk, compressed_chunk,
+		ret = crypto_buf(&crypto_ctx, compressed_chunk, compressed_chunk,
 			tdat->len_cmp, tdat->id);
-		if (rv == -1) {
+		if (ret == -1) {
 			/*
 			 * Encryption failure is fatal.
 			 */
@@ -1168,6 +1171,7 @@ plain_compress:
 	 */
 	*(tdat->compressed_chunk) = type;
 
+printf("type: %d\n", type);
 	/*
 	 * If encrypting, compute HMAC for chunk header and trailer.
 	 */
@@ -1458,6 +1462,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		tdat->uncompressed_chunk = (uchar_t *)1;
 		tdat->cancel = 0;
 		tdat->level = level;
+		tdat->data = NULL;
 		sem_init(&(tdat->start_sem), 0, 0);
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
