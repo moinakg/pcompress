@@ -1108,6 +1108,7 @@ plain_compress:
 			memcpy(compressed_chunk, tdat->uncompressed_chunk, tdat->rbytes);
 		type = UNCOMPRESSED;
 		tdat->len_cmp = tdat->rbytes;
+		if (rv < 0) rv = COMPRESS_NONE;
 	} else {
 		type = COMPRESSED;
 	}

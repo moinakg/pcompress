@@ -135,7 +135,7 @@ lzma_deinit(void **data)
 }
 
 static void
-lzerr(int err)
+lzerr(int err, int cmp)
 {
 	switch (err) {
 	    case SZ_ERROR_MEM:
@@ -154,7 +154,9 @@ lzerr(int err)
 		fprintf(stderr, "LZMA: More compressed input bytes expected\n");
 		break;
 	    case SZ_ERROR_OUTPUT_EOF:
-		fprintf(stderr, "LZMA: Output buffer overflow\n");
+		/* This error is non-fatal during compression */
+		if (!cmp)
+			fprintf(stderr, "LZMA: Output buffer overflow\n");
 		break;
 	    case SZ_ERROR_UNSUPPORTED:
 		fprintf(stderr, "LZMA: Unsupported properties\n");
@@ -192,7 +194,7 @@ lzma_compress(void *src, size_t srclen, void *dst,
 	CLzmaEncProps *props = (CLzmaEncProps *)data;
 
 	if (*dstlen < LZMA_PROPS_SIZE) {
-		lzerr(SZ_ERROR_DESTLEN);
+		lzerr(SZ_ERROR_DESTLEN, 1);
 		return (-1);
 	}
 	props->level = level;
@@ -203,7 +205,7 @@ lzma_compress(void *src, size_t srclen, void *dst,
 	    props, _dst, &props_len, 0, NULL, &g_Alloc, &g_Alloc);
 
 	if (res != 0) {
-		lzerr(res);
+		lzerr(res, 1);
 		return (-1);
 	}
 
@@ -226,7 +228,7 @@ lzma_decompress(void *src, size_t srclen, void *dst,
 	if ((res = LzmaDecode((uchar_t *)dst, dstlen, _src, &_srclen,
 	    src, LZMA_PROPS_SIZE, LZMA_FINISH_ANY,
 	    &status, &g_Alloc)) != SZ_OK) {
-		lzerr(res);
+		lzerr(res, 0);
 		return (-1);
 	}
 	return (0);

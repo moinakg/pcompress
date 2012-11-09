@@ -69,6 +69,7 @@ extern "C" {
  * lower 3 bits in higher nibble indicate chunk compression algorithm
  * in adaptive modes.
  */
+#define	COMPRESS_NONE	0
 #define	COMPRESS_LZMA	1
 #define	COMPRESS_BZIP2	2
 #define	COMPRESS_PPMD	3

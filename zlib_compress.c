@@ -34,7 +34,7 @@
  */
 #define	SINGLE_CALL_MAX (2147483648UL)
 
-static void zerr(int ret);
+static void zerr(int ret, int cmp);
 
 static void *
 slab_alloc_ui(void *p, unsigned int items, unsigned int size) {
@@ -67,7 +67,7 @@ zlib_init(void **data, int *level, int nthreads, ssize_t chunksize)
 	if (*level > 9) *level = 9;
 	ret = deflateInit(zs, *level);
 	if (ret != Z_OK) {
-		zerr(ret);
+		zerr(ret, 0);
 		return (-1);
 	}
 
@@ -91,7 +91,7 @@ zlib_deinit(void **data)
 }
 
 static
-void zerr(int ret)
+void zerr(int ret, int cmp)
 {
 	switch (ret) {
 	    case Z_ERRNO:
@@ -110,7 +110,9 @@ void zerr(int ret)
 		fprintf(stderr, "Zlib: Version mismatch!\n");
 		break;
 	    case Z_BUF_ERROR:
-		fprintf(stderr, "Zlib: Buffer error decompression failed.\n");
+		/* This error is non-fatal during compression. */
+		if (!cmp)
+			fprintf(stderr, "Zlib: Buffer error decompression failed.\n");
 		break;
 	    case Z_NEED_DICT:
 		fprintf(stderr, "Zlib: Need present dictionary.\n");
@@ -154,7 +156,7 @@ zlib_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 			ret = deflate(zs, Z_NO_FLUSH);
 			if (ret != Z_OK) {
 				deflateReset(zs);
-				zerr(ret);
+				zerr(ret, 1);
 				return (-1);
 			}
 		} else {
@@ -162,9 +164,9 @@ zlib_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 			if (ret != Z_STREAM_END) {
 				deflateReset(zs);
 				if (ret == Z_OK)
-					zerr(Z_BUF_ERROR);
+					zerr(Z_BUF_ERROR, 1);
 				else
-					zerr(ret);
+					zerr(ret, 1);
 				return (-1);
 			}
 		}
@@ -177,7 +179,7 @@ zlib_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 	*dstlen = *dstlen - _dstlen;
 	ret = deflateReset(zs);
 	if (ret != Z_OK) {
-		zerr(ret);
+		zerr(ret, 1);
 		return (-1);
 	}
 	return (0);
@@ -200,7 +202,7 @@ zlib_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 	zs.opaque = NULL;
 
 	if ((err = inflateInit(&zs)) != Z_OK) {
-		zerr(err);
+		zerr(err, 0);
 		return (-1);
 	}
 
@@ -223,7 +225,7 @@ zlib_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 
 		err = inflate(&zs, Z_NO_FLUSH);
 		if (err != Z_OK && err != Z_STREAM_END) {
-			zerr(err);
+			zerr(err, 0);
 			return (-1);
 		}
 
@@ -234,7 +236,7 @@ zlib_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 
 		if (err == Z_STREAM_END) {
 			if (_srclen > 0) {
-				zerr(Z_DATA_ERROR);
+				zerr(Z_DATA_ERROR, 0);
 				return (-1);
 			} else {
 				break;
