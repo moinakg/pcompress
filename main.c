@@ -1171,7 +1171,6 @@ plain_compress:
 	 */
 	*(tdat->compressed_chunk) = type;
 
-printf("type: %d\n", type);
 	/*
 	 * If encrypting, compute HMAC for chunk header and trailer.
 	 */
@@ -2049,7 +2048,7 @@ main(int argc, char *argv[])
 		fprintf(stderr, "Encryption only makes sense when compressing!\n");
 		exit(1);
 
-	} else if (pipe_mode && !pwd_file) {
+	} else if (pipe_mode && encrypt_type && !pwd_file) {
 		fprintf(stderr, "Pipe mode requires password to be provided in a file.\n");
 		exit(1);
 	}

@@ -69,7 +69,7 @@ typedef struct
   UInt32 Code;
   UInt32 Low;
   Byte *buf;
-  UInt32 bufUsed, bufLen;
+  UInt32 bufUsed, bufLen, overflow;
 
   Byte Indx2Units[PPMD_NUM_INDEXES];
   Byte Units2Indx[128];

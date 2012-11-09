@@ -34,8 +34,8 @@ do
 					echo "${cmd} errored."
 					exit 1
 				fi
-				diff ${tf} ${tf}.1 | grep -i differ
-				if [ $? -eq 0 ]
+				diff ${tf} ${tf}.1 > /dev/null
+				if [ $? -ne 0 ]
 				then
 					echo "${cmd}: Decompression was not correct"
 					exit 1

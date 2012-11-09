@@ -2,7 +2,7 @@
 # Test crypto
 #
 echo "#################################################"
-echo "# Crypto tests"
+echo "# Pipe mode Crypto tests"
 echo "#################################################"
 
 for algo in lzfx adapt2
@@ -11,10 +11,10 @@ do
 	do
 		for feat in "-e" "-e -L" "-D -e" "-D -EE -L -e" "-e -S CRC64"
 		do
-			for seg in 2m 100m
+			for seg in 2m 5m
 			do
 				echo "sillypassword" > /tmp/pwf
-				cmd="../../pcompress -c ${algo} -l 3 -s ${seg} $feat -w /tmp/pwf ${tf}"
+				cmd="cat ${tf} | ../../pcompress -c${algo} -p -l3 -s${seg} $feat -w /tmp/pwf > ${tf}.pz"
 				echo "Running $cmd"
 				eval $cmd
 				if [ $? -ne 0 ]

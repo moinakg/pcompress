@@ -1,19 +1,22 @@
 #
-# Dedupe, Delta et al.
+# Simple compress and decompress
 #
 echo "#################################################"
-echo "# Test Deduplication, Delta Encoding and LZP"
+echo "# Simple pipe mode compress and decompress"
 echo "#################################################"
 
 for algo in lzfx lz4 adapt
 do
-	for tf in combined.dat comb_d.dat
+	../../pcompress 2>&1 | grep $algo > /dev/null
+	[ $? -ne 0 ] && continue
+
+	for level in 1 3
 	do
-		for feat in "-D" "-D -B3 -L" "-D -B4 -E" "-D -B2 -EE" "-D -B5 -EE -L" "-D -B2 -r"
+		for tf in combined.dat
 		do
-			for seg in 2m 100m
+			for seg in 1m 2m 3m
 			do
-				cmd="../../pcompress -c ${algo} -l 3 -s ${seg} $feat ${tf}"
+				cmd="cat ${tf} | ../../pcompress -p -c ${algo} -l ${level} -s ${seg} > ${tf}.pz"
 				echo "Running $cmd"
 				eval $cmd
 				if [ $? -ne 0 ]
@@ -29,7 +32,6 @@ do
 					echo "${cmd} errored."
 					exit 1
 				fi
-
 				diff ${tf} ${tf}.1 > /dev/null
 				if [ $? -ne 0 ]
 				then

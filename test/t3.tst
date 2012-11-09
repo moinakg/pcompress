@@ -3,7 +3,7 @@
 #
 
 clean() {
-	for algo in lzfx lz4 zlib bzip2 lzma lzmaMt libbsc
+	for algo in lzfx lz4 zlib bzip2 lzma lzmaMt libbsc ppmd adapt adapt2
 	do
 		for tf in bin.dat share.dat inc.dat
 		do
@@ -65,8 +65,8 @@ do
 					echo "${cmd} errored."
 					exit 1
 				fi
-				diff ${tf}.${algo} ${tf}.${algo}.1 | grep -i differ
-				if [ $? -eq 0 ]
+				diff ${tf}.${algo} ${tf}.${algo}.1 > /dev/null
+				if [ $? -ne 0 ]
 				then
 					echo "${cmd}: Decompression was not correct"
 					exit 1

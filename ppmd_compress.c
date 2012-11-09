@@ -111,11 +111,13 @@ ppmd_compress(void *src, size_t srclen, void *dst,
 	_ppmd->buf = (Byte *)dst;
 	_ppmd->bufLen = *dstlen;
 	_ppmd->bufUsed = 0;
+	_ppmd->overflow = 0;
 
 	Ppmd8_EncodeBuffer(_ppmd, _src, srclen);
 	Ppmd8_EncodeSymbol(_ppmd, -1);
 	Ppmd8_RangeEnc_FlushData(_ppmd);
 
+	if (_ppmd->overflow) return (-1);
 	*dstlen = _ppmd->bufUsed;
 	return (0);
 }
@@ -133,6 +135,7 @@ ppmd_decompress(void *src, size_t srclen, void *dst,
 	_ppmd->buf = (Byte *)_src;
 	_ppmd->bufLen = srclen;
 	_ppmd->bufUsed = 0;
+	_ppmd->overflow = 0;
 	Ppmd8_RangeDec_Init(_ppmd);
 	Ppmd8_Init(_ppmd, _ppmd->Order, PPMD8_RESTORE_METHOD_RESTART);
 
@@ -143,7 +146,7 @@ ppmd_decompress(void *src, size_t srclen, void *dst,
 		i++;
 	}
 
-	if (i < *dstlen)
+	if (i < *dstlen || _ppmd->overflow)
 		return (-1);
 	return (0);
 }
