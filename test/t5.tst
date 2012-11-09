@@ -9,7 +9,7 @@ for algo in lzfx adapt2
 do
 	for tf in comb_d.dat
 	do
-		for feat in "-e" "-e -L" "-D -e" "-D -EE -L -e" "-e -S CRC64"
+		for feat in "-e" "-e -L -S SHA256" "-D -e -S SHA512" "-D -EE -L -e -S SKEIN512" "-e -S CRC64"
 		do
 			for seg in 2m 100m
 			do
