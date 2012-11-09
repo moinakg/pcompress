@@ -1,3 +1,16 @@
+== 1.0.0 Stable Release ==
+Fix chunk flag setup when compression fails in adaptive mode.
+Prevent display of non-fatal errors during compression.
+Add buffer overflow check in Ppmd compression routines.
+Fix pipe mode encryption check.
+Change file difference check in tests.
+Fix encryption with adaptive modes.
+Add missing zero-out of algorithm data field.
+Add a functionality test suite.
+Tweak chunking parameters for better block size distribution and dedupe ratio.
+Add some more debug mode info.
+Minor fix for adapt mode.
+Use Libbsc for XML data in adapt2 mode.
 == 0.9.1 Minor update Release ==
 Portability to Debian based distros.
 Enable SSE4/AVX detection for AMD platforms (Bulldozer has both).

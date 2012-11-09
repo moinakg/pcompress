@@ -27,6 +27,21 @@ NOTE: Basic Installation does not enable support for Libbsc, a
       new block-sorting compressor (similar to but better than
       Bzip2). See below for details.
 
+Testing
+=======
+
+After running make as given above you can run:
+make test
+
+This will generate some data files from /usr/bin /usr/share and
+/usr/include directories and then run a whole lot of tests. These
+execute pcompress with a wide variety of combinations of options.
+For every test both compression and decompression are performed
+and after every decompression the decompressed file is verified
+byte for byte with the original using the diff utility.
+
+It takes a while to run all the tests.
+
 Custom Installation
 ===================
 The options to the config script are detailed below. Note that this is
