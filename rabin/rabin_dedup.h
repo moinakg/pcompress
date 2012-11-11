@@ -73,6 +73,7 @@
 #define	RAB_POLYNOMIAL_MIN_WIN_SIZE 8
 #define	RAB_POLYNOMIAL_MAX_WIN_SIZE 64
 #define	RAB_POLYNOMIAL_MAX_BLOCK_SIZE (128 * 1024)
+#define	RAB_BLK_MASK (((1 << RAB_BLK_MIN_BITS) - 1) >> 1)
 
 // Minimum practical chunk size when doing dedup
 #define	RAB_MIN_CHUNK_SIZE (1048576L)
