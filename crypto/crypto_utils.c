@@ -138,7 +138,7 @@ init_sha256(void)
 }
 
 /*
- * Check is either the given checksum name or id is valid and
+ * Check if either the given checksum name or id is valid and
  * return it's properties.
  */
 int
