@@ -39,41 +39,22 @@
         <ul></ul>
       </nav>
       <section>
-        <h1>Pcompress</h1>
+        <h1>Introduction</h1>
 
-<p>Copyright (C) 2012 Moinak Ghosh. All rights reserved.
-Use is subject to license terms.
-moinakg (_at) gma1l _dot com.
-Comments, suggestions, code, rants etc are welcome.</p>
+<p>Pcompress is an attempt to revisit <strong>Data Compression</strong> using unique combinations of existing and some new techniques. Both high compression ratio and performance are key goals along with the ability to leverage all the cores on a multi-core CPU. It also aims to bring to the table scalable, high-throughput Global <strong>Deduplication</strong> of archival storage. The deduplication capability is also available for single-file compression modes providing capabilities that probably no other data compression utility provides. Projects like <a href="http://ck.kolivas.org/apps/lrzip/">Lrzip</a> and <a href="http://www.exdupe.com/">eXdupe</a> provide similar capabilities but do not have all of the abilities that Pcompress provides.</p>
 
-<p>Pcompress is a utility to do compression and decompression in parallel by
-splitting input data into chunks. It has a modular structure and includes
-support for multiple algorithms like LZMA, Bzip2, PPMD, etc, with SKEIN
-checksums for data integrity. It can also do Lempel-Ziv pre-compression
-(derived from libbsc) to improve compression ratios across the board. SSE
-optimizations for the bundled LZMA are included. It also implements
-chunk-level Content-Aware Deduplication and Delta Compression features
-based on a Semi-Rabin Fingerprinting scheme. Delta Compression is done
-via the widely popular bsdiff algorithm. Similarity is detected using a
-custom hashing of maximal features of a block. When doing chunk-level
-dedupe it attempts to merge adjacent non-duplicate blocks index entries
-into a single larger entry to reduce metadata. In addition to all these it
-can internally split chunks at rabin boundaries to help dedupe and
-compression.</p>
+<p>Pcompress can do both compression and decompression in parallel by splitting input data into chunks. It has a modular structure and includes support for multiple algorithms like LZMA, Bzip2, PPMD, etc, with SKEIN/SHA checksums for data integrity. It can also do Lempel-Ziv-Prediction pre-compression (derived from libbsc) to improve compression ratios across the board. SSE optimizations for the bundled LZMA are included. It also implements chunk-level Content-Aware Deduplication and Delta Compression features
+based on a Rabin Fingerprinting style scheme. Other open-source deduplication software like <a href="http://opendedup.org/">OpenDedup</a> and <a href="http://www.lessfs.com/wordpress/">LessFS</a> use fixed block dedupe while <a href="http://backuppc.sourceforge.net/">BackupPC</a> does file-level dedupe only (single-instance storage). Of course OpenDedup and LessFS are Fuse based filesystems doing inline dedupe while Pcompress is only meant for archival storage as of today.</p>
 
-<p>It has low metadata overhead and overlaps I/O and compression to achieve
-maximum parallelism. It also bundles a simple slab allocator to speed
-repeated allocation of similar chunks. It can work in pipe mode, reading
-from stdin and writing to stdout. It also provides some adaptive compression
-modes in which multiple algorithms are tried per chunk to determine the best
-one for the given chunk. Finally it supports 14 compression levels to allow
-for ultra compression modes in some algorithms.</p>
+<p>Delta Compression is implemented via the widely popular bsdiff algorithm. Chunk Similarity is detected using an adaptation of <a href="http://en.wikipedia.org/wiki/MinHash">MinHashing</a>. It has low metadata overhead and overlaps I/O and compression to achieve maximum parallelism. It also bundles a simple slab allocator to speed repeated allocation of similar chunks. It can work in pipe mode, reading from stdin and writing to stdout. It also provides adaptive compression modes in which some simple data heuristics are applied to select a near-optimal algorithm per chunk.</p>
 
-<p>Pcompress also supports encryption via AES and uses Scrypt from Tarsnap
-for Password Based Key generation.</p>
+<p>Pcompress also supports encryption via AES and uses Scrypt from <a href="http://www.tarsnap.com/">Tarsnap</a> for secure Password Based Key generation.</p>
 
-<p>NOTE: This utility is Not an archiver. It compresses only single files or
-      datastreams. To archive use something else like tar, cpio or pax.</p>
+<p>NOTE: This utility is Not an archiver. It compresses only single files or datastreams. To archive use something else like tar, cpio or pax.</p>
+
+<h1>Blog articles</h1>
+
+<p>See <a href="https://moinakg.wordpress.com/tag/pcompress/">Pcompress blogs</a>.</p>
 
 <h1>Usage</h1>
 
@@ -185,27 +166,21 @@ Other flags:
 
 <h1>Environment Variables</h1>
 
-<p>Set ALLOCATOR_BYPASS=1 in the environment to avoid using the the built-in
-allocator. Due to the the way it rounds up an allocation request to the nearest
-slab the built-in allocator can allocate extra unused memory. In addition you
-may want to use a different allocator in your environment.</p>
+<p>Set ALLOCATOR_BYPASS=1 in the environment to avoid using the the built-in allocator. Due to the the way it rounds up an allocation request to the nearest slab the built-in allocator can allocate extra unused memory. In addition you may want to use a different allocator in your environment.</p>
 
 <h1>Examples</h1>
 
-<p>Compress "file.tar" using bzip2 level 6, 64MB chunk size and use 4 threads. In
-addition perform identity deduplication and delta compression prior to compression.</p>
+<p>Compress "file.tar" using bzip2 level 6, 64MB chunk size and use 4 threads. In addition perform identity deduplication and delta compression prior to compression.</p>
 
 <pre><code>pcompress -D -E -c bzip2 -l6 -s64m -t4 file.tar
 </code></pre>
 
-<p>Compress "file.tar" using extreme compression mode of LZMA and a chunk size of
-of 1GB. Allow pcompress to detect the number of CPU cores and use as many threads.</p>
+<p>Compress "file.tar" using extreme compression mode of LZMA and a chunk size of of 1GB. Allow pcompress to detect the number of CPU cores and use as many threads.</p>
 
 <pre><code>pcompress -c lzma -l14 -s1g file.tar
 </code></pre>
 
-<p>Compress "file.tar" using lz4 at max compression with LZ-Prediction pre-processing
-and encryption enabled. Chunksize is 100M:</p>
+<p>Compress "file.tar" using lz4 at max compression with LZ-Prediction pre-processing and encryption enabled. Chunksize is 100M:</p>
 
 <pre><code>pcompress -c lz4 -l3 -e -L -s100m file.tar
 </code></pre>
@@ -247,20 +222,13 @@ Adapt2  - Ultra slow synthetic mode. Both LZMA and PPMD are tried per chunk and
           dedupe, it uses upto 3.5GB physical RAM and requires 6GB of virtual
           memory space.</p>
 
-<p>It is possible for a single chunk to span the entire file if enough RAM is
-available. However for adaptive modes to be effective for large files, especially
-multi-file archives splitting into chunks is required so that best compression
-algorithm can be selected for textual and binary portions.</p>
+<p>It is possible for a single chunk to span the entire file if enough RAM is available. However for adaptive modes to be effective for large files, especially multi-file archives splitting into chunks is required so that best compression algorithm can be selected for textual and binary portions.</p>
 
 <h1>Caveats</h1>
 
-<p>This utility is not meant for resource constrained environments. Minimum memory
-usage (RES/RSS) with barely meaningful settings is around 10MB. This occurs when
-using the minimal LZFX compression algorithm at level 2 with a 1MB chunk size and
-running 2 threads.
-Normally this utility requires lots of RAM depending on compression algorithm,
-compression level, and dedupe being enabled. Larger chunk sizes can give
-better compression ratio but at the same time use more RAM.</p>
+<p>This utility is not meant for resource constrained environments. Minimum memory usage (RES/RSS) with barely meaningful settings is around 10MB. This occurs when using the minimal LZFX compression algorithm at level 2 with a 1MB chunk size and running 2 threads.</p>
+
+<p>Normally this utility requires lots of RAM depending on compression algorithm, compression level, and dedupe being enabled. Larger chunk sizes can give better compression ratio but at the same time use more RAM.</p>
       </section>
       <footer>
         <p>Project maintained by <a href="https://github.com/moinakg">moinakg</a></p>
@@ -268,6 +236,16 @@ better compression ratio but at the same time use more RAM.</p>
       </footer>
     </div>
     <!--[if !IE]><script>fixScale(document);</script><![endif]-->
-    
+              <script type="text/javascript">
+            var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+          </script>
+          <script type="text/javascript">
+            try {
+              var pageTracker = _gat._getTracker("UA-36422648-1");
+            pageTracker._trackPageview();
+            } catch(err) {}
+          </script>
+
   </body>
 </html>
