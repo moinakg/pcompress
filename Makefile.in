@@ -58,8 +58,9 @@ PPMDSRCS = lzma/Ppmd8.c lzma/Ppmd8Enc.c lzma/Ppmd8Dec.c
 PPMDHDRS = lzma/Ppmd.h lzma/Ppmd8.h
 PPMDOBJS = $(PPMDSRCS:.c=.o)
 
-CRCSRCS = lzma/crc64_fast.c lzma/crc64_table.c
-CRCHDRS = lzma/crc64_table_le.h lzma/crc64_table_be.h lzma/crc_macros.h
+CRCSRCS = lzma/crc64_fast.c lzma/crc64_table.c lzma/crc32_fast.c lzma/crc32_table.c
+CRCHDRS = lzma/crc64_table_le.h lzma/crc64_table_be.h lzma/crc_macros.h \
+	lzma/crc32_table_le.h lzma/crc32_table_be.h
 CRCOBJS = $(CRCSRCS:.c=.o)
 
 LZPSRCS = lzp/lzp.c

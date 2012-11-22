@@ -63,6 +63,7 @@ struct wdata {
 
 static void * writer_thread(void *dat);
 static int init_algo(const char *algo, int bail);
+extern uint32_t lzma_crc32(const uint8_t *buf, size_t size, uint32_t crc);
 
 static compress_func_ptr _compress_func;
 static compress_func_ptr _decompress_func;
@@ -345,6 +346,33 @@ redo:
 			/*
 			 * Decryption failure is fatal.
 			 */
+			main_cancel = 1;
+			tdat->len_cmp = 0;
+			sem_post(&tdat->cmp_done_sem);
+			return;
+		}
+	} else {
+		/*
+		 * Verify header CRC32 in non-crypto mode.
+		 */
+		uint32_t crc1, crc2;
+
+		crc1 = htonl(*((uint32_t *)(tdat->compressed_chunk + cksum_bytes)));
+		memset(tdat->compressed_chunk + cksum_bytes, 0, mac_bytes);
+		crc2 = lzma_crc32((uchar_t *)&tdat->len_cmp_be, sizeof (tdat->len_cmp_be), 0);
+		crc2 = lzma_crc32(tdat->compressed_chunk,
+		    cksum_bytes + mac_bytes + CHUNK_FLAG_SZ, crc2);
+		if (HDR & CHSIZE_MASK) {
+			uchar_t *rseg;
+			rseg = tdat->compressed_chunk + tdat->rbytes;
+			crc2 = lzma_crc32(rseg, ORIGINAL_CHUNKSZ, crc2);
+		}
+
+		if (crc1 != crc2) {
+			/*
+			 * Header CRC32 verification failure is fatal.
+			 */
+			fprintf(stderr, "Chunk %d, Header CRC verification failed\n", tdat->id);
 			main_cancel = 1;
 			tdat->len_cmp = 0;
 			sem_post(&tdat->cmp_done_sem);
@@ -752,7 +780,35 @@ start_decompress(const char *filename, const char *to_filename)
 			err_exit(0, "Header verification failed! File tampered or wrong password.\n");
 		}
 	} else {
-		mac_bytes = 0;
+		uint32_t crc1, crc2;
+		unsigned int hlen;
+		unsigned short d1;
+		unsigned int d2;
+		uint64_t ch;
+
+		/*
+		 * Verify file header CRC32 in non-crypto mode.
+		 */
+		if (Read(compfd, &crc1, sizeof (crc1)) < sizeof (crc1)) {
+			perror("Read: ");
+			UNCOMP_BAIL;
+		}
+		crc1 = htonl(crc1);
+		mac_bytes = sizeof (uint32_t);
+
+		crc2 = lzma_crc32((uchar_t *)algo, ALGO_SZ, 0);
+		d1 = htons(version);
+		crc2 = lzma_crc32((uchar_t *)&d1, sizeof (version), crc2);
+		d1 = htons(flags);
+		crc2 = lzma_crc32((uchar_t *)&d1, sizeof (version), crc2);
+		ch = htonll(chunksize);
+		crc2 = lzma_crc32((uchar_t *)&ch, sizeof (ch), crc2);
+		d2 = htonl(level);
+		crc2 = lzma_crc32((uchar_t *)&d2, sizeof (level), crc2);
+		if (crc1 != crc2) {
+			close(uncompfd); unlink(to_filename);
+			err_exit(0, "Header verification failed! File tampered or wrong password.\n");
+		}
 	}
 
 	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
@@ -1193,7 +1249,24 @@ plain_compress:
 			    ORIGINAL_CHUNKSZ);
 		hmac_final(&tdat->chunk_hmac, chash, &hlen);
 		serialize_checksum(chash, mac_ptr, hlen);
+	} else {
+		/*
+		 * Compute header CRC32 in non-crypto mode.
+		 */
+		uchar_t *mac_ptr;
+		unsigned int hlen;
+		uint32_t crc;
+
+		/* Clean out mac_bytes to 0 for stable HMAC. */
+		mac_ptr = tdat->cmp_seg + sizeof (tdat->len_cmp) + cksum_bytes;
+		memset(mac_ptr, 0, mac_bytes);
+		crc = lzma_crc32(tdat->cmp_seg, rbytes, 0);
+		if (type & CHSIZE_MASK)
+			crc = lzma_crc32(tdat->cmp_seg + tdat->len_cmp - ORIGINAL_CHUNKSZ,
+			    ORIGINAL_CHUNKSZ, crc);
+		*((uint32_t *)mac_ptr) = htonl(crc);
 	}
+	
 cont:
 	sem_post(&tdat->cmp_done_sem);
 	goto redo;
@@ -1560,6 +1633,16 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		serialize_checksum(hdr_hash, pos, hlen);
 		pos += hlen;
 		if (Write(compfd, cread_buf, pos - cread_buf) != pos - cread_buf) {
+			perror("Write ");
+			COMP_BAIL;
+		}
+	} else {
+		/*
+		 * Compute header CRC32 and store that. Only archive version 5 and above.
+		 */
+		uint32_t crc = lzma_crc32(cread_buf, pos - cread_buf, 0);
+		*((uint32_t *)cread_buf) = htonl(crc);
+		if (Write(compfd, cread_buf, sizeof (uint32_t)) != sizeof (uint32_t)) {
 			perror("Write ");
 			COMP_BAIL;
 		}
@@ -2103,7 +2186,7 @@ main(int argc, char *argv[])
 		get_checksum_props(DEFAULT_CKSUM, &cksum, &cksum_bytes, &mac_bytes);
 
 	if (!encrypt_type)
-		mac_bytes = 0;
+		mac_bytes = sizeof (uint32_t); // CRC32 in non-crypto mode
 	/*
 	 * Start the main routines.
 	 */
