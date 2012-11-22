@@ -59,7 +59,8 @@ lz4_props(algo_props_t *data, int level, ssize_t chunksize) {
 }
 
 int
-lz4_init(void **data, int *level, int nthreads, ssize_t chunksize)
+lz4_init(void **data, int *level, int nthreads, ssize_t chunksize,
+	 int file_version, compress_op_t op)
 {
 	struct lz4_params *lzdat;
 	int lev;

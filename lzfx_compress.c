@@ -40,7 +40,8 @@ lz_fx_stats(int show)
 }
 
 int
-lz_fx_init(void **data, int *level, int nthreads, ssize_t chunksize)
+lz_fx_init(void **data, int *level, int nthreads, ssize_t chunksize,
+	   int file_version, compress_op_t op)
 {
 	struct lzfx_params *lzdat;
 	int lev;

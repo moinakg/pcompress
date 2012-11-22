@@ -49,7 +49,8 @@ bzip2_stats(int show)
 }
 
 int
-bzip2_init(void **data, int *level, int nthreads, ssize_t chunksize)
+bzip2_init(void **data, int *level, int nthreads, ssize_t chunksize,
+	   int file_version, compress_op_t op)
 {
 	if (*level > 9) *level = 9;
 	return (0);

@@ -54,7 +54,8 @@ zlib_buf_extra(ssize_t buflen)
 }
 
 int
-zlib_init(void **data, int *level, int nthreads, ssize_t chunksize)
+zlib_init(void **data, int *level, int nthreads, ssize_t chunksize,
+	  int file_version, compress_op_t op)
 {
 	z_stream *zs;
 	int ret;
@@ -65,7 +66,15 @@ zlib_init(void **data, int *level, int nthreads, ssize_t chunksize)
 	zs->opaque = NULL;
 
 	if (*level > 9) *level = 9;
-	ret = deflateInit(zs, *level);
+	if (op == COMPRESS) {
+		ret = deflateInit2(zs, *level, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY);
+	} else {
+		if (file_version < 5) {
+			ret = inflateInit(zs);
+		} else {
+			ret = inflateInit2(zs, -15);
+		}
+	}
 	if (ret != Z_OK) {
 		zerr(ret, 0);
 		return (-1);
@@ -189,22 +198,13 @@ int
 zlib_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 		int level, uchar_t chdr, void *data)
 {
-	z_stream zs;
 	int err;
 	unsigned int slen, dlen;
 	size_t _srclen = srclen;
 	size_t _dstlen = *dstlen;
 	uchar_t *dst1 = dst;
 	uchar_t *src1 = src;
-
-	zs.zalloc = slab_alloc_ui;
-	zs.zfree = slab_free;
-	zs.opaque = NULL;
-
-	if ((err = inflateInit(&zs)) != Z_OK) {
-		zerr(err, 0);
-		return (-1);
-	}
+	z_stream *zs = (z_stream *)data;
 
 	while (_srclen > 0) {
 		if (_srclen > SINGLE_CALL_MAX) {
@@ -218,21 +218,21 @@ zlib_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 			dlen = _dstlen;
 		}
 
-		zs.next_in = src1;
-		zs.avail_in = slen;
-		zs.next_out = dst1;
-		zs.avail_out = dlen;
+		zs->next_in = src1;
+		zs->avail_in = slen;
+		zs->next_out = dst1;
+		zs->avail_out = dlen;
 
-		err = inflate(&zs, Z_NO_FLUSH);
+		err = inflate(zs, Z_NO_FLUSH);
 		if (err != Z_OK && err != Z_STREAM_END) {
 			zerr(err, 0);
 			return (-1);
 		}
 
-		dst1 += (dlen - zs.avail_out);
-		_dstlen -= (dlen - zs.avail_out);
-		src1 += (slen - zs.avail_in);
-		_srclen -= (slen - zs.avail_in);
+		dst1 += (dlen - zs->avail_out);
+		_dstlen -= (dlen - zs->avail_out);
+		src1 += (slen - zs->avail_in);
+		_srclen -= (slen - zs->avail_in);
 
 		if (err == Z_STREAM_END) {
 			if (_srclen > 0) {
@@ -245,6 +245,10 @@ zlib_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
 	}
 
 	*dstlen = *dstlen - _dstlen;
-	inflateEnd(&zs);
+	err = inflateReset(zs);
+	if (err != Z_OK) {
+		zerr(err, 1);
+		return (-1);
+	}
 	return (0);
 }

@@ -82,7 +82,8 @@ libbsc_props(algo_props_t *data, int level, ssize_t chunksize) {
 }
 
 int
-libbsc_init(void **data, int *level, int nthreads, ssize_t chunksize)
+libbsc_init(void **data, int *level, int nthreads, ssize_t chunksize,
+	    int file_version, compress_op_t op)
 {
 	struct libbsc_params *bscdat;
 	int rv;

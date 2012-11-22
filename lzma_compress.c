@@ -65,9 +65,10 @@ lzma_props(algo_props_t *data, int level, ssize_t chunksize) {
  * The two functions below are not thread-safe, by design.
  */
 int
-lzma_init(void **data, int *level, int nthreads, ssize_t chunksize)
+lzma_init(void **data, int *level, int nthreads, ssize_t chunksize,
+	  int file_version, compress_op_t op)
 {
-	if (!p) {
+	if (!p && op == COMPRESS) {
 		p = (CLzmaEncProps *)slab_alloc(NULL, sizeof (CLzmaEncProps));
 		LzmaEncProps_Init(p);
 		/*

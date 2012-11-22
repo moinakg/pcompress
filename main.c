@@ -770,7 +770,7 @@ start_decompress(const char *filename, const char *to_filename)
 	slab_cache_add(chunksize);
 	slab_cache_add(sizeof (struct cmp_data));
 
-	dary = (struct cmp_data **)slab_alloc(NULL, sizeof (struct cmp_data *) * nprocs);
+	dary = (struct cmp_data **)slab_calloc(NULL, nprocs, sizeof (struct cmp_data *));
 	for (i = 0; i < nprocs; i++) {
 		dary[i] = (struct cmp_data *)slab_alloc(NULL, sizeof (struct cmp_data));
 		if (!dary[i]) {
@@ -790,13 +790,14 @@ start_decompress(const char *filename, const char *to_filename)
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
 		if (_init_func) {
-			if (_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize) != 0) {
+			if (_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize,
+			    version, DECOMPRESS) != 0) {
 				UNCOMP_BAIL;
 			}
 		}
 		if (enable_rabin_scan || enable_fixed_scan) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
-			    algo, enable_delta_encode, enable_fixed_scan);
+			    algo, enable_delta_encode, enable_fixed_scan, version, DECOMPRESS);
 			if (tdat->rctx == NULL) {
 				UNCOMP_BAIL;
 			}
@@ -963,6 +964,7 @@ uncomp_done:
 		perror("Chown ");
 	if (dary != NULL) {
 		for (i = 0; i < nprocs; i++) {
+			if (!dary[i]) continue;
 			if (dary[i]->uncompressed_chunk)
 				slab_free(NULL, dary[i]->uncompressed_chunk);
 			if (dary[i]->compressed_chunk)
@@ -1467,13 +1469,13 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
 		if (_init_func) {
-			if (_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize) != 0) {
+			if (_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize, VERSION, COMPRESS) != 0) {
 				COMP_BAIL;
 			}
 		}
 		if (enable_rabin_scan || enable_fixed_scan) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
-			    algo, enable_delta_encode, enable_fixed_scan);
+			    algo, enable_delta_encode, enable_fixed_scan, VERSION, COMPRESS);
 			if (tdat->rctx == NULL) {
 				COMP_BAIL;
 			}
@@ -1580,7 +1582,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 */
 	if (enable_rabin_split) {
 		rctx = create_dedupe_context(chunksize, 0, 0, algo, enable_delta_encode,
-		    enable_fixed_scan);
+		    enable_fixed_scan, VERSION, COMPRESS);
 		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 	} else {
 		rbytes = Read(uncompfd, cread_buf, chunksize);

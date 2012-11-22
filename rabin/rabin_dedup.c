@@ -71,7 +71,8 @@
 #define	FIFTY_PCNT(x) ((x) >> 1)
 #define	SIXTY_PCNT(x) (((x) >> 1) + ((x) >> 3))
 
-extern int lzma_init(void **data, int *level, ssize_t chunksize);
+extern int lzma_init(void **data, int *level, int nthreads, ssize_t chunksize,
+		     int file_version, compress_op_t op);
 extern int lzma_compress(void *src, size_t srclen, void *dst,
 	size_t *destlen, int level, uchar_t chdr, void *data);
 extern int lzma_decompress(void *src, size_t srclen, void *dst,
@@ -110,9 +111,8 @@ dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta
  */
 dedupe_context_t *
 create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz,
-    const char *algo, int delta_flag, int fixed_flag) {
+    const char *algo, int delta_flag, int fixed_flag, int file_version, compress_op_t op) {
 	dedupe_context_t *ctx;
-	unsigned char *current_window_data;
 	uint32_t i;
 
 	if (rab_blk_sz < 1 || rab_blk_sz > 5)
@@ -213,13 +213,14 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		destroy_dedupe_context(ctx);
 		return (NULL);
 	}
-	current_window_data = slab_alloc(NULL, RAB_POLYNOMIAL_WIN_SIZE);
+	ctx->current_window_data = slab_alloc(NULL, RAB_POLYNOMIAL_WIN_SIZE);
 	ctx->blocks = NULL;
 	if (real_chunksize > 0) {
 		ctx->blocks = (rabin_blockentry_t **)slab_calloc(NULL,
 			ctx->blknum, sizeof (rabin_blockentry_t *));
 	}
-	if(ctx == NULL || current_window_data == NULL || (ctx->blocks == NULL && real_chunksize > 0)) {
+	if(ctx == NULL || ctx->current_window_data == NULL ||
+	    (ctx->blocks == NULL && real_chunksize > 0)) {
 		fprintf(stderr,
 		    "Could not allocate rabin polynomial context, out of memory\n");
 		destroy_dedupe_context(ctx);
@@ -229,27 +230,18 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx->lzma_data = NULL;
 	ctx->level = 14;
 	if (real_chunksize > 0) {
-		lzma_init(&(ctx->lzma_data), &(ctx->level), chunksize);
-		if (!(ctx->lzma_data)) {
+		lzma_init(&(ctx->lzma_data), &(ctx->level), 1, chunksize, file_version, op);
+
+		// The lzma_data member is not needed during decompression
+		if (!(ctx->lzma_data) && op == COMPRESS) {
 			fprintf(stderr,
 			    "Could not initialize LZMA data for dedupe index, out of memory\n");
 			destroy_dedupe_context(ctx);
 			return (NULL);
 		}
 	}
-	/*
-	 * We should compute the power for the window size.
-	 * static uint64_t polynomial_pow;
-	 * polynomial_pow = 1;
-	 * for(index=0; index<RAB_POLYNOMIAL_WIN_SIZE; index++) {
-	 *     polynomial_pow *= RAB_POLYNOMIAL_CONST;
-	 * }
-	 * But since RAB_POLYNOMIAL_CONST == 2, any expression of the form
-	 * x * polynomial_pow can we written as x << RAB_POLYNOMIAL_WIN_SIZE
-	 */
 
 	slab_cache_add(sizeof (rabin_blockentry_t));
-	ctx->current_window_data = current_window_data;
 	ctx->real_chunksize = real_chunksize;
 	reset_dedupe_context(ctx);
 	return (ctx);

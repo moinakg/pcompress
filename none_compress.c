@@ -37,7 +37,8 @@ none_stats(int show)
 }
 
 int
-none_init(void **data, int *level, int nthreads, ssize_t chunksize)
+none_init(void **data, int *level, int nthreads, ssize_t chunksize,
+	  int file_version, compress_op_t op)
 {
 	return (0);
 }

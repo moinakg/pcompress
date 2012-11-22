@@ -62,11 +62,14 @@ extern int ppmd_decompress(void *src, size_t srclen, void *dst,
 extern int libbsc_decompress(void *src, size_t srclen, void *dst,
 	size_t *dstlen, int level, uchar_t chdr, void *data);
 
-extern int lzma_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int lzma_init(void **data, int *level, int nthreads, ssize_t chunksize,
+		     int file_version, compress_op_t op);
 extern int lzma_deinit(void **data);
-extern int ppmd_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int ppmd_init(void **data, int *level, int nthreads, ssize_t chunksize,
+		     int file_version, compress_op_t op);
 extern int ppmd_deinit(void **data);
-extern int libbsc_init(void **data, int *level, int nthreads, ssize_t chunksize);
+extern int libbsc_init(void **data, int *level, int nthreads, ssize_t chunksize,
+		       int file_version, compress_op_t op);
 extern int libbsc_deinit(void **data);
 
 struct adapt_data {
@@ -93,7 +96,8 @@ adapt_stats(int show)
 }
 
 int
-adapt_init(void **data, int *level, int nthreads, ssize_t chunksize)
+adapt_init(void **data, int *level, int nthreads, ssize_t chunksize,
+	   int file_version, compress_op_t op)
 {
 	struct adapt_data *adat = (struct adapt_data *)(*data);
 	int rv;
@@ -101,7 +105,7 @@ adapt_init(void **data, int *level, int nthreads, ssize_t chunksize)
 	if (!adat) {
 		adat = (struct adapt_data *)slab_alloc(NULL, sizeof (struct adapt_data));
 		adat->adapt_mode = 1;
-		rv = ppmd_init(&(adat->ppmd_data), level, nthreads, chunksize);
+		rv = ppmd_init(&(adat->ppmd_data), level, nthreads, chunksize, file_version, op);
 		adat->lzma_data = NULL;
 		adat->bsc_data = NULL;
 		*data = adat;
@@ -115,7 +119,8 @@ adapt_init(void **data, int *level, int nthreads, ssize_t chunksize)
 }
 
 int
-adapt2_init(void **data, int *level, int nthreads, ssize_t chunksize)
+adapt2_init(void **data, int *level, int nthreads, ssize_t chunksize,
+	    int file_version, compress_op_t op)
 {
 	struct adapt_data *adat = (struct adapt_data *)(*data);
 	int rv, lv;
@@ -125,13 +130,13 @@ adapt2_init(void **data, int *level, int nthreads, ssize_t chunksize)
 		adat->adapt_mode = 2;
 		adat->ppmd_data = NULL;
 		lv = *level;
-		rv = ppmd_init(&(adat->ppmd_data), &lv, nthreads, chunksize);
+		rv = ppmd_init(&(adat->ppmd_data), &lv, nthreads, chunksize, file_version, op);
 		lv = *level;
 		if (rv == 0)
-			rv = lzma_init(&(adat->lzma_data), &lv, nthreads, chunksize);
+			rv = lzma_init(&(adat->lzma_data), &lv, nthreads, chunksize, file_version, op);
 		lv = *level;
 		if (rv == 0)
-			rv = libbsc_init(&(adat->bsc_data), &lv, nthreads, chunksize);
+			rv = libbsc_init(&(adat->bsc_data), &lv, nthreads, chunksize, file_version, op);
 		*data = adat;
 		if (*level > 9) *level = 9;
 	}

@@ -147,8 +147,14 @@ extern uint64_t get_total_ram();
 typedef int (*compress_func_ptr)(void *src, size_t srclen, void *dst,
 	size_t *destlen, int level, uchar_t chdr, void *data);
 
+typedef enum {
+	COMPRESS,
+	DECOMPRESS
+} compress_op_t;
+
 /* Pointer type for algo specific init/deinit/stats functions. */
-typedef int (*init_func_ptr)(void **data, int *level, int nthreads, ssize_t chunksize);
+typedef int (*init_func_ptr)(void **data, int *level, int nthreads, ssize_t chunksize,
+			     int file_version, compress_op_t op);
 typedef int (*deinit_func_ptr)(void **data);
 typedef void (*stats_func_ptr)(int show);
 typedef void (*props_func_ptr)(algo_props_t *data, int level, ssize_t chunksize);
