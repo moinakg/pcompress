@@ -350,7 +350,7 @@ redo:
 			sem_post(&tdat->cmp_done_sem);
 			return;
 		}
-	} else {
+	} else if (mac_bytes > 0) {
 		/*
 		 * Verify header CRC32 in non-crypto mode.
 		 */
@@ -652,6 +652,9 @@ start_decompress(const char *filename, const char *to_filename)
 		UNCOMP_BAIL;
 	}
 
+	if (version < 5)
+		mac_bytes = 0;
+
 	/*
 	 * If encryption is enabled initialize crypto.
 	 */
@@ -785,7 +788,7 @@ start_decompress(const char *filename, const char *to_filename)
 			close(uncompfd); unlink(to_filename);
 			err_exit(0, "Header verification failed! File tampered or wrong password.\n");
 		}
-	} else {
+	} else if (version >= 5) {
 		uint32_t crc1, crc2;
 		unsigned int hlen;
 		unsigned short d1;
