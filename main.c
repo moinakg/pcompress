@@ -318,8 +318,7 @@ redo:
 		memset(tdat->compressed_chunk + cksum_bytes, 0, mac_bytes);
 		hmac_reinit(&tdat->chunk_hmac);
 		hmac_update(&tdat->chunk_hmac, (uchar_t *)&tdat->len_cmp_be, sizeof (tdat->len_cmp_be));
-		hmac_update(&tdat->chunk_hmac, tdat->compressed_chunk,
-		    cksum_bytes + mac_bytes + CHUNK_FLAG_SZ);
+		hmac_update(&tdat->chunk_hmac, tdat->compressed_chunk, tdat->rbytes);
 		if (HDR & CHSIZE_MASK) {
 			uchar_t *rseg;
 			rseg = tdat->compressed_chunk + tdat->rbytes;
@@ -378,13 +377,13 @@ redo:
 			sem_post(&tdat->cmp_done_sem);
 			return;
 		}
-	}
 
-	/*
-	 * Now that HMAC (if any) was verified, recover the stored message
-	 * digest.
-	 */
-	deserialize_checksum(tdat->checksum, tdat->compressed_chunk, cksum_bytes);
+		/*
+		 * Now that header CRC32 was verified, recover the stored message
+		 * digest.
+		 */
+		deserialize_checksum(tdat->checksum, tdat->compressed_chunk, cksum_bytes);
+	}
 
 	if ((enable_rabin_scan || enable_fixed_scan) && (HDR & CHUNK_FLAG_DEDUP)) {
 		uchar_t *cmpbuf, *ubuf;
@@ -471,15 +470,17 @@ redo:
 		tdat->cmp_seg = tdat->uncompressed_chunk;
 	}
 
-	/*
-	 * Re-compute checksum of original uncompressed chunk.
-	 * If it does not match we set length of chunk to 0 to indicate
-	 * exit to the writer thread.
-	 */
-	compute_checksum(checksum, cksum, tdat->uncompressed_chunk, _chunksize);
-	if (memcmp(checksum, tdat->checksum, cksum_bytes) != 0) {
-		tdat->len_cmp = 0;
-		fprintf(stderr, "ERROR: Chunk %d, checksums do not match.\n", tdat->id);
+	if (!encrypt_type) {
+		/*
+		 * Re-compute checksum of original uncompressed chunk.
+		 * If it does not match we set length of chunk to 0 to indicate
+		 * exit to the writer thread.
+		 */
+		compute_checksum(checksum, cksum, tdat->uncompressed_chunk, _chunksize);
+		if (memcmp(checksum, tdat->checksum, cksum_bytes) != 0) {
+			tdat->len_cmp = 0;
+			fprintf(stderr, "ERROR: Chunk %d, checksums do not match.\n", tdat->id);
+		}
 	}
 
 cont:
@@ -666,6 +667,11 @@ start_decompress(const char *filename, const char *to_filename)
 		unsigned short d1;
 		unsigned int d2;
 
+		/*
+		 * In encrypted files we do not have a normal digest. The HMAC
+		 * is computed over header and encrypted data.
+		 */
+		cksum_bytes = 0;
 		compressed_chunksize += mac_bytes;
 		encrypt_type = flags & MASK_CRYPTO_ALG;
 		if (Read(compfd, &saltlen, sizeof (saltlen)) < sizeof (saltlen)) {
@@ -758,7 +764,7 @@ start_decompress(const char *filename, const char *to_filename)
 		memset(pw, 0, MAX_PW_LEN);
 
 		/*
-		 * Verify header HMAC.
+		 * Verify file header HMAC.
 		 */
 		if (hmac_init(&hdr_mac, cksum, &crypto_ctx) == -1) {
 			close(uncompfd); unlink(to_filename);
@@ -1071,7 +1077,8 @@ redo:
 		 * into uncompressed_chunk so that compress transforms uncompressed_chunk
 		 * back into cmp_seg. Avoids an extra memcpy().
 		 */
-		compute_checksum(tdat->checksum, cksum, tdat->cmp_seg, tdat->rbytes);
+		if (!encrypt_type)
+			compute_checksum(tdat->checksum, cksum, tdat->cmp_seg, tdat->rbytes);
 
 		rctx = tdat->rctx;
 		reset_dedupe_context(tdat->rctx);
@@ -1085,7 +1092,8 @@ redo:
 		/*
 		 * Compute checksum of original uncompressed chunk.
 		 */
-		compute_checksum(tdat->checksum, cksum, tdat->uncompressed_chunk, tdat->rbytes);
+		if (!encrypt_type)
+			compute_checksum(tdat->checksum, cksum, tdat->uncompressed_chunk, tdat->rbytes);
 	}
 
 	/*
@@ -1206,7 +1214,8 @@ plain_compress:
 	 */
 	len_cmp = tdat->len_cmp;
 	*((typeof (len_cmp) *)(tdat->cmp_seg)) = htonll(tdat->len_cmp);
-	serialize_checksum(tdat->checksum, tdat->cmp_seg + sizeof (tdat->len_cmp), cksum_bytes);
+	if (!encrypt_type)
+		serialize_checksum(tdat->checksum, tdat->cmp_seg + sizeof (tdat->len_cmp), cksum_bytes);
 	tdat->len_cmp += CHUNK_FLAG_SZ;
 	tdat->len_cmp += sizeof (len_cmp);
 	tdat->len_cmp += (cksum_bytes + mac_bytes);
@@ -1231,7 +1240,7 @@ plain_compress:
 	*(tdat->compressed_chunk) = type;
 
 	/*
-	 * If encrypting, compute HMAC for chunk header and trailer.
+	 * If encrypting, compute HMAC for full chunk including header.
 	 */
 	if (encrypt_type) {
 		uchar_t *mac_ptr;
@@ -1242,11 +1251,7 @@ plain_compress:
 		mac_ptr = tdat->cmp_seg + sizeof (tdat->len_cmp) + cksum_bytes;
 		memset(mac_ptr, 0, mac_bytes);
 		hmac_reinit(&tdat->chunk_hmac);
-		hmac_update(&tdat->chunk_hmac, tdat->cmp_seg, rbytes);
-		if (type & CHSIZE_MASK)
-			hmac_update(&tdat->chunk_hmac,
-			    tdat->cmp_seg + tdat->len_cmp - ORIGINAL_CHUNKSZ,
-			    ORIGINAL_CHUNKSZ);
+		hmac_update(&tdat->chunk_hmac, tdat->cmp_seg, tdat->len_cmp);
 		hmac_final(&tdat->chunk_hmac, chash, &hlen);
 		serialize_checksum(chash, mac_ptr, hlen);
 	} else {
@@ -1257,7 +1262,7 @@ plain_compress:
 		unsigned int hlen;
 		uint32_t crc;
 
-		/* Clean out mac_bytes to 0 for stable HMAC. */
+		/* Clean out mac_bytes to 0 for stable CRC32. */
 		mac_ptr = tdat->cmp_seg + sizeof (tdat->len_cmp) + cksum_bytes;
 		memset(mac_ptr, 0, mac_bytes);
 		crc = lzma_crc32(tdat->cmp_seg, rbytes, 0);
@@ -2185,8 +2190,19 @@ main(int argc, char *argv[])
 	if (cksum == 0)
 		get_checksum_props(DEFAULT_CKSUM, &cksum, &cksum_bytes, &mac_bytes);
 
-	if (!encrypt_type)
+	if (!encrypt_type) {
+		/*
+		 * If not encrypting we compute a header CRC32.
+		 */
 		mac_bytes = sizeof (uint32_t); // CRC32 in non-crypto mode
+	} else {
+		/*
+		 * When encrypting we do not compute a normal digest. The HMAC
+		 * is computed over header and encrypted data.
+		 */
+		cksum_bytes = 0;
+	}
+
 	/*
 	 * Start the main routines.
 	 */
