@@ -190,6 +190,10 @@ deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes)
 	}
 }
 
+/*
+ * Perform keyed hashing. With Skein, HMAC is not used, rather Skein's
+ * native MAC is used which is more optimal than HMAC.
+ */
 int
 hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 {

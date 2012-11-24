@@ -524,7 +524,7 @@ cont:
  */
 #define UNCOMP_BAIL err = 1; goto uncomp_done
 
-static void
+static int
 start_decompress(const char *filename, const char *to_filename)
 {
 	char tmpfile[MAXPATHLEN];
@@ -543,6 +543,7 @@ start_decompress(const char *filename, const char *to_filename)
 	err = 0;
 	flags = 0;
 	thread = 0;
+	dary = NULL;
 	init_algo_props(&props);
 
 	/*
@@ -555,7 +556,7 @@ start_decompress(const char *filename, const char *to_filename)
 		if (fstat(compfd, &sbuf) == -1)
 			err_exit(1, "Cannot stat: %s", filename);
 		if (sbuf.st_size == 0)
-			return;
+			return (1);
 
 		if ((uncompfd = open(to_filename, O_WRONLY|O_CREAT|O_TRUNC, 0)) == -1) {
 			close(compfd);
@@ -1050,6 +1051,8 @@ uncomp_done:
 
 	if (!hide_cmp_stats) show_compression_stats(chunksize);
 	slab_cleanup(hide_mem_stats);
+
+	return (err);
 }
 
 static void *
@@ -1201,7 +1204,7 @@ plain_compress:
 			main_cancel = 1;
 			tdat->len_cmp = 0;
 			sem_post(&tdat->cmp_done_sem);
-			return;
+			return (0);
 		}
 	}
 
@@ -1327,7 +1330,7 @@ do_cancel:
  */
 #define COMP_BAIL err = 1; goto comp_done
 
-void
+static int
 start_compress(const char *filename, uint64_t chunksize, int level)
 {
 	struct wdata w;
@@ -1434,6 +1437,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	err = 0;
 	thread = 0;
 	single_chunk = 0;
+	rctx = NULL;
 	slab_cache_add(chunksize);
 	slab_cache_add(compressed_chunksize);
 	slab_cache_add(sizeof (struct cmp_data));
@@ -1461,7 +1465,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 
 		if (sbuf.st_size == 0) {
 			close(uncompfd);
-			return;
+			return (1);
 		}
 
 		/*
@@ -1875,6 +1879,8 @@ comp_done:
 	if (!hide_cmp_stats) show_compression_stats(chunksize);
 	_stats_func(!hide_cmp_stats);
 	slab_cleanup(hide_mem_stats);
+
+	return (err);
 }
 
 /*
@@ -1996,7 +2002,7 @@ main(int argc, char *argv[])
 	char *filename = NULL;
 	char *to_filename = NULL;
 	ssize_t chunksize = DEFAULT_CHUNKSIZE;
-	int opt, level, num_rem;
+	int opt, level, num_rem, err;
 
 	exec_name = get_execname(argv[0]);
 	level = 6;
@@ -2210,13 +2216,13 @@ main(int argc, char *argv[])
 	 * Start the main routines.
 	 */
 	if (do_compress)
-		start_compress(filename, chunksize, level);
+		err = start_compress(filename, chunksize, level);
 	else if (do_uncompress)
-		start_decompress(filename, to_filename);
+		err = start_decompress(filename, to_filename);
 
 	if (pwd_file)
 		free(pwd_file);
 	free(filename);
 	free((void *)exec_name);
-	return (0);
+	return (err);
 }

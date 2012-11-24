@@ -1,0 +1,91 @@
+#
+# Out of range parameters
+#
+echo "#################################################"
+echo "# Test out of range parameters"
+echo "#################################################"
+
+for feat in "-L" "-L -D" "-L -D -E" "-L -B5" "-L -D -E -B2" "-F" "-F -L"
+do
+	cmd="../../pcompress -c dummy -l4 -s1m $feat combined.dat"
+	echo "Running $cmd"
+	eval $cmd
+	if [ $? -eq 0 ]
+	then
+		echo "${cmd} DID NOT ERROR where expected"
+		exit 1
+	fi
+done
+
+for feat in "-B8 -s2m -l1" "-B0 -s2m -l1" "-D -s10k -l1" "-D -F -s2m -l1" "-p -e -s2m -l1" "-s2m -l15"
+do
+	for algo in lzfx lz4 zlib bzip2 libbsc ppmd lzma
+	do
+		cmd="../../pcompress -c lzfx $feat combined.dat"
+		echo "Running $cmd"
+		eval $cmd
+		if [ $? -eq 0 ]
+		then
+			echo "${cmd} DID NOT ERROR where expected"
+			rm -f combined.dat.pz
+			exit 1
+		fi
+	done
+done
+
+for feat in "-S CRC64" "-S SKEIN256" "-S SKEIN512" "-S SHA256" "-S SHA512"
+do
+	rm -f combined.dat.pz
+	rm -f combined.dat.1
+
+	cmd="../../pcompress -c lzfx -l3 -s1m $feat combined.dat"
+	echo "Running $cmd"
+	eval $cmd
+	if [ $? -ne 0 ]
+	then
+		echo "${cmd} errored."
+		rm -f combined.dat.pz
+		exit 1
+	fi
+
+	echo "Corrupting file header ..."
+	dd if=/dev/urandom of=combined.dat.pz bs=4 seek=1 count=1
+	cmd="../../pcompress -d combined.dat.pz combined.dat.1"
+	eval $cmd
+	if [ $? -eq 0 ]
+	then
+		echo "${cmd} DID NOT ERROR where expected."
+		rm -f combined.dat.pz
+		rm -f combined.dat.1
+		exit 1
+	fi
+
+	rm -f combined.dat.pz
+	rm -f combined.dat.1
+
+	cmd="../../pcompress -c zlib -l3 -s1m $feat combined.dat"
+	echo "Running $cmd"
+	eval $cmd
+	if [ $? -ne 0 ]
+	then
+		echo "${cmd} errored."
+		rm -f combined.dat.pz
+		exit 1
+	fi
+
+	echo "Corrupting file ..."
+	dd if=/dev/urandom of=combined.dat.pz bs=4 seek=100 count=1
+	cmd="../../pcompress -d combined.dat.pz combined.dat.1"
+	eval $cmd
+	if [ $? -eq 0 ]
+	then
+		echo "${cmd} DID NOT ERROR where expected."
+		rm -f combined.dat.pz
+		rm -f combined.dat.1
+		exit 1
+	fi
+done
+
+echo "#################################################"
+echo ""
+

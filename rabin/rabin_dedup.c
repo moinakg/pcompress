@@ -177,6 +177,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx = (dedupe_context_t *)slab_alloc(NULL, sizeof (dedupe_context_t));
 	ctx->rabin_poly_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
 
+	ctx->current_window_data = NULL;
 	ctx->fixed_flag = fixed_flag;
 	ctx->rabin_break_patt = 0;
 	ctx->rabin_poly_avg_block_size = RAB_BLK_AVG_SZ(rab_blk_sz);
