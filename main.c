@@ -91,7 +91,7 @@ static const char *algo = NULL;
 static int do_compress = 0;
 static int do_uncompress = 0;
 static int cksum_bytes, mac_bytes;
-static int cksum = 0;
+static int cksum = 0, t_errored = 0;
 static int rab_blk_size = 0;
 static dedupe_context_t *rctx;
 static crypto_ctx_t crypto_ctx;
@@ -332,6 +332,7 @@ redo:
 			fprintf(stderr, "Chunk %d, HMAC verification failed\n", tdat->id);
 			main_cancel = 1;
 			tdat->len_cmp = 0;
+			t_errored = 1;
 			sem_post(&tdat->cmp_done_sem);
 			return;
 		}
@@ -374,6 +375,7 @@ redo:
 			fprintf(stderr, "Chunk %d, Header CRC verification failed\n", tdat->id);
 			main_cancel = 1;
 			tdat->len_cmp = 0;
+			t_errored = 1;
 			sem_post(&tdat->cmp_done_sem);
 			return;
 		}
@@ -412,6 +414,7 @@ redo:
 			if (rv == -1) {
 				tdat->len_cmp = 0;
 				fprintf(stderr, "ERROR: Chunk %d, decompression failed.\n", tdat->id);
+				t_errored = 1;
 				goto cont;
 			}
 		} else {
@@ -446,6 +449,7 @@ redo:
 	if (rv == -1) {
 		tdat->len_cmp = 0;
 		fprintf(stderr, "ERROR: Chunk %d, decompression failed.\n", tdat->id);
+		t_errored = 1;
 		goto cont;
 	}
 	/* Rebuild chunk from dedup blocks. */
@@ -461,6 +465,7 @@ redo:
 			fprintf(stderr, "ERROR: Chunk %d, dedup recovery failed.\n", tdat->id);
 			rv = -1;
 			tdat->len_cmp = 0;
+			t_errored = 1;
 			goto cont;
 		}
 		_chunksize = tdat->len_cmp;
@@ -480,6 +485,7 @@ redo:
 		if (memcmp(checksum, tdat->checksum, cksum_bytes) != 0) {
 			tdat->len_cmp = 0;
 			fprintf(stderr, "ERROR: Chunk %d, checksums do not match.\n", tdat->id);
+			t_errored = 1;
 		}
 	}
 
@@ -1010,6 +1016,7 @@ start_decompress(const char *filename, const char *to_filename)
 		thread = 0;
 	}
 uncomp_done:
+	if (t_errored) err = t_errored;
 	if (thread) {
 		for (i = 0; i < nprocs; i++) {
 			tdat = dary[i];
@@ -1203,6 +1210,7 @@ plain_compress:
 			 */
 			main_cancel = 1;
 			tdat->len_cmp = 0;
+			t_errored = 1;
 			sem_post(&tdat->cmp_done_sem);
 			return (0);
 		}
@@ -1802,6 +1810,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	}
 
 comp_done:
+	if (t_errored) err = t_errored;
 	if (thread) {
 		for (i = 0; i < nprocs; i++) {
 			tdat = dary[i];

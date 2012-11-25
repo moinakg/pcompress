@@ -35,6 +35,7 @@ done
 
 for feat in "-S CRC64" "-S SKEIN256" "-S SKEIN512" "-S SHA256" "-S SHA512"
 do
+	rm -f combined.dat.1.pz
 	rm -f combined.dat.pz
 	rm -f combined.dat.1
 
@@ -49,7 +50,7 @@ do
 	fi
 
 	echo "Corrupting file header ..."
-	dd if=/dev/urandom of=combined.dat.pz bs=4 seek=1 count=1
+	dd if=/dev/urandom conv=notrunc of=combined.dat.pz bs=4 seek=1 count=1
 	cmd="../../pcompress -d combined.dat.pz combined.dat.1"
 	eval $cmd
 	if [ $? -eq 0 ]
@@ -73,8 +74,9 @@ do
 		exit 1
 	fi
 
+	cp combined.dat.pz combined.dat.1.pz
 	echo "Corrupting file ..."
-	dd if=/dev/urandom of=combined.dat.pz bs=4 seek=100 count=1
+	dd if=/dev/urandom conv=notrunc of=combined.dat.pz bs=4 seek=100 count=1
 	cmd="../../pcompress -d combined.dat.pz combined.dat.1"
 	eval $cmd
 	if [ $? -eq 0 ]
@@ -82,9 +84,29 @@ do
 		echo "${cmd} DID NOT ERROR where expected."
 		rm -f combined.dat.pz
 		rm -f combined.dat.1
+		rm -f combined.dat.1.pz
+		exit 1
+	fi
+
+	rm -f combined.dat.1
+	cp combined.dat.1.pz combined.dat.pz
+	echo "Corrupting file ..."
+	dd if=/dev/urandom conv=notrunc of=combined.dat.1.pz bs=4 seek=51 count=1
+	cmd="../../pcompress -d combined.dat.1.pz combined.dat.1"
+	eval $cmd
+	if [ $? -eq 0 ]
+	then
+		echo "${cmd} DID NOT ERROR where expected."
+		rm -f combined.dat.pz
+		rm -f combined.dat.1
+		rm -f combined.dat.1.pz
 		exit 1
 	fi
 done
+
+rm -f combined.dat.1.pz
+rm -f combined.dat.pz
+rm -f combined.dat.1
 
 echo "#################################################"
 echo ""
