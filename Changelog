@@ -1,3 +1,19 @@
+== 1.1.0 Stable Release ==
+Fix building without Libbsc support.
+Add more tests for corrupted encrypted files.
+Fix thread error reporting.
+Update error condition tests to not truncate archive.
+Fix issues with error handling.
+Add new tests for out of range values and corrupted file.
+Avoid CRC32 when decompressing older version archives.
+Use HMAC on header and encrypted data, avoid regular digest when encrypting.
+Add CRC32 header checksums in non-cryptographic mode.
+Zlib optimizations. Use raw deflate streams to avoid unnecessary adler32.
+Change some function signatures to improve algo init function behavior.
+Fix corner case dedupe bug in error handling flow.
+Bump archive version signature.
+Work in progress global dedupe config loader.
+Use fixed rolling-hash mask for better block size approximation.
 == 1.0.0 Stable Release ==
 Fix chunk flag setup when compression fails in adaptive mode.
 Prevent display of non-fatal errors during compression.
