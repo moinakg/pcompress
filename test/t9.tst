@@ -1,9 +1,9 @@
 #
 # Out of range parameters
 #
-echo "#################################################"
-echo "# Test out of range parameters"
-echo "#################################################"
+echo "####################################################"
+echo "# Test out of range parameters and error conditions."
+echo "####################################################"
 
 for feat in "-L" "-L -D" "-L -D -E" "-L -B5" "-L -D -E -B2" "-F" "-F -L"
 do
@@ -102,11 +102,62 @@ do
 		rm -f combined.dat.1.pz
 		exit 1
 	fi
+
+	rm -f combined.dat.1 combined.dat.1.pz combined.dat.pz
+	echo "plainpass" > /tmp/pwf
+	cmd="../../pcompress -c zlib -l3 -s1m -e -w /tmp/pwf $feat combined.dat"
+	echo "Running $cmd"
+	eval $cmd
+	if [ $? -ne 0 ]
+	then
+		echo "${cmd} errored."
+		rm -f combined.dat.pz
+		exit 1
+	fi
+	pw=`cat /tmp/pwf`
+	if [ "$pw" = "plainpasswd" ]
+	then
+		echo "ERROR: Password file was not zeroed"
+		rm -f /tmp/pwf combined.dat.pz
+		exit 1
+	fi
+
+	cp combined.dat.pz combined.dat.1.pz
+	echo "Corrupting file ..."
+	dd if=/dev/urandom conv=notrunc of=combined.dat.pz bs=4 seek=115 count=1
+	echo "plainpass" > /tmp/pwf
+	cmd="../../pcompress -d -w /tmp/pwf combined.dat.pz combined.dat.1"
+	eval $cmd
+	if [ $? -eq 0 ]
+	then
+		echo "${cmd} DID NOT ERROR where expected."
+		rm -f combined.dat.pz
+		rm -f combined.dat.1
+		rm -f combined.dat.1.pz
+		exit 1
+	fi
+
+	cp combined.dat.1.pz combined.dat.pz
+	rm -f combined.dat.1
+	echo "Corrupting file header ..."
+	dd if=/dev/urandom conv=notrunc of=combined.dat.pz bs=4 seek=10 count=1
+	echo "plainpass" > /tmp/pwf
+	cmd="../../pcompress -d -w /tmp/pwf combined.dat.pz combined.dat.1"
+	eval $cmd
+	if [ $? -eq 0 ]
+	then
+		echo "${cmd} DID NOT ERROR where expected."
+		rm -f combined.dat.pz
+		rm -f combined.dat.1
+		rm -f combined.dat.1.pz
+		exit 1
+	fi
 done
 
 rm -f combined.dat.1.pz
 rm -f combined.dat.pz
 rm -f combined.dat.1
+rm -f /tmp/pwf
 
 echo "#################################################"
 echo ""

@@ -129,14 +129,17 @@ adapt2_init(void **data, int *level, int nthreads, ssize_t chunksize,
 		adat = (struct adapt_data *)slab_alloc(NULL, sizeof (struct adapt_data));
 		adat->adapt_mode = 2;
 		adat->ppmd_data = NULL;
+		adat->bsc_data = NULL;
 		lv = *level;
 		rv = ppmd_init(&(adat->ppmd_data), &lv, nthreads, chunksize, file_version, op);
 		lv = *level;
 		if (rv == 0)
 			rv = lzma_init(&(adat->lzma_data), &lv, nthreads, chunksize, file_version, op);
 		lv = *level;
+#ifdef ENABLE_PC_LIBBSC
 		if (rv == 0)
 			rv = libbsc_init(&(adat->bsc_data), &lv, nthreads, chunksize, file_version, op);
+#endif
 		*data = adat;
 		if (*level > 9) *level = 9;
 	}
@@ -203,11 +206,13 @@ adapt_compress(void *src, size_t srclen, void *dst,
 
 	} else {
 		if (adat->bsc_data && tagcnt > ONE_PCT(srclen)) {
+#ifdef ENABLE_PC_LIBBSC
 			rv = libbsc_compress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data);
 			if (rv < 0)
 				return (rv);
 			rv = COMPRESS_BSC;
 			bsc_count++;
+#endif
 		} else {
 			rv = ppmd_compress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data);
 			if (rv < 0)
@@ -239,7 +244,12 @@ adapt_decompress(void *src, size_t srclen, void *dst,
 		return (ppmd_decompress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data));
 
 	} else if (cmp_flags == COMPRESS_BSC) {
+#ifdef ENABLE_PC_LIBBSC
 		return (libbsc_decompress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data));
+#else
+		fprintf(stderr, "Cannot decompress chunk. Libbsc support not present.\n");
+		return (-1);
+#endif
 
 	} else {
 		fprintf(stderr, "Unrecognized compression mode: %d, file corrupt.\n", cmp_flags);
