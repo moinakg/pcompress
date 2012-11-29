@@ -94,7 +94,7 @@ LIBBSCGEN_OPT = -fopenmp
 LIBBSCCPPFLAGS = -I$(LIBBSCDIR)/libbsc -DENABLE_PC_LIBBSC
 
 BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~ utils/*~ crypto/sha2/*~ \
-	crypto/sha2/intel/*~ crypto/aes/*~ crypto/scrypt/*~ crypto/*~
+	crypto/sha2/intel/*~ crypto/aes/*~ crypto/scrypt/*~ crypto/*~ rabin/global/*~
 
 RM = rm -f
 RM_RF = rm -rf

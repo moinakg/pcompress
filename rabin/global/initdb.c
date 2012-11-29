@@ -32,7 +32,19 @@
 
 #include "initdb.h"
 
-int
+archive_config_t *
 init_global_db(char *configfile)
 {
+	archive_config_t *cfg;
+	int rv;
+
+	cfg = calloc(1, sizeof (archive_config_t));
+	if (!cfg) {
+		fprintf(stderr, "Memory allocation failure\n");
+		return (NULL);
+	}
+
+	rv = read_config(configfile, cfg);
+	if (rv != 0)
+		return (NULL);
 }
