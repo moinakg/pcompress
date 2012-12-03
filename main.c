@@ -210,6 +210,13 @@ preproc_compress(compress_func_ptr cmp_func, void *src, size_t srclen, void *dst
 		return (-1);
 	}
 
+	_dstlen = srclen;
+	result = delta2_encode(src, srclen, dst, &_dstlen, 150);
+	if (result != -1) {
+		memcpy(src, dst, _dstlen);
+		srclen = _dstlen;
+	}
+
 	*dest = type;
 	*((int64_t *)(dest + 1)) = htonll(srclen);
 	_dstlen = srclen;
@@ -220,6 +227,7 @@ preproc_compress(compress_func_ptr cmp_func, void *src, size_t srclen, void *dst
 	} else {
 		result = -1;
 	}
+	result = 0;
 	return (result);
 }
 
@@ -229,6 +237,7 @@ preproc_decompress(compress_func_ptr dec_func, void *src, size_t srclen, void *d
 {
 	uchar_t *sorc = (uchar_t *)src, type;
 	ssize_t result;
+	uint64_t _dstlen = *dstlen;
 
 	type = *sorc;
 	sorc++;
@@ -241,6 +250,14 @@ preproc_decompress(compress_func_ptr dec_func, void *src, size_t srclen, void *d
 		if (result < 0) return (result);
 		memcpy(src, dst, *dstlen);
 		srclen = *dstlen;
+	}
+
+	result = delta2_decode(src, srclen, dst, &_dstlen);
+	if (result != -1) {
+		memcpy(src, dst, _dstlen);
+		srclen = _dstlen;
+	} else {
+		return (result);
 	}
 
 	if (type & PREPROC_TYPE_LZP) {
