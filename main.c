@@ -80,6 +80,7 @@ static int hide_mem_stats = 1;
 static int hide_cmp_stats = 1;
 static int enable_rabin_scan = 0;
 static int enable_delta_encode = 0;
+static int enable_delta2_encode = 0;
 static int enable_rabin_split = 1;
 static int enable_fixed_scan = 0;
 static int lzp_preprocess = 0;
@@ -148,6 +149,8 @@ usage(void)
 	    "7) Other flags:\n"
 	    "   '-L'    - Enable LZP pre-compression. This improves compression ratio of all\n"
 	    "             algorithms with some extra CPU and very low RAM overhead.\n"
+	    "   '-P'    - Enable Adaptive Delta Encoding. This implies '-L' as well. It improves\n"
+	    "             compresion ratio further at the cost of more CPU overhead.\n"
 	    "   '-S' <cksum>\n"
 	    "           - Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512, SHA256 and\n"
 	    "             SHA512. Default one is SKEIN256.\n"
@@ -188,7 +191,7 @@ show_compression_stats(uint64_t chunksize)
  */
 int
 preproc_compress(compress_func_ptr cmp_func, void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data)
+	size_t *dstlen, int level, uchar_t chdr, void *data, algo_props_t *props)
 {
 	uchar_t *dest = (uchar_t *)dst, type = 0;
 	ssize_t result, _dstlen;
@@ -210,11 +213,14 @@ preproc_compress(compress_func_ptr cmp_func, void *src, size_t srclen, void *dst
 		return (-1);
 	}
 
-	_dstlen = srclen;
-	result = delta2_encode(src, srclen, dst, &_dstlen, 150);
-	if (result != -1) {
-		memcpy(src, dst, _dstlen);
-		srclen = _dstlen;
+	if (enable_delta2_encode && props->delta2_stride > 0) {
+		_dstlen = srclen;
+		result = delta2_encode(src, srclen, dst, &_dstlen, props->delta2_stride);
+		if (result != -1) {
+			memcpy(src, dst, _dstlen);
+			srclen = _dstlen;
+			type |= PREPROC_TYPE_DELTA2;
+		}
 	}
 
 	*dest = type;
@@ -225,15 +231,17 @@ preproc_compress(compress_func_ptr cmp_func, void *src, size_t srclen, void *dst
 		*dest |= PREPROC_COMPRESSED;
 		*dstlen = _dstlen + 9;
 	} else {
-		result = -1;
+		memcpy(dest+1, src, srclen);
+		*dstlen = srclen + 1;
+		result = 0;
 	}
-	result = 0;
+
 	return (result);
 }
 
 int
 preproc_decompress(compress_func_ptr dec_func, void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data)
+	size_t *dstlen, int level, uchar_t chdr, void *data, algo_props_t *props)
 {
 	uchar_t *sorc = (uchar_t *)src, type;
 	ssize_t result;
@@ -252,12 +260,14 @@ preproc_decompress(compress_func_ptr dec_func, void *src, size_t srclen, void *d
 		srclen = *dstlen;
 	}
 
-	result = delta2_decode(src, srclen, dst, &_dstlen);
-	if (result != -1) {
-		memcpy(src, dst, _dstlen);
-		srclen = _dstlen;
-	} else {
-		return (result);
+	if (type & PREPROC_TYPE_DELTA2) {
+		result = delta2_decode(src, srclen, dst, &_dstlen);
+		if (result != -1) {
+			memcpy(src, dst, _dstlen);
+			srclen = _dstlen;
+		} else {
+			return (result);
+		}
 	}
 
 	if (type & PREPROC_TYPE_LZP) {
@@ -423,7 +433,7 @@ redo:
 		if (HDR & COMPRESSED) {
 			if (HDR & CHUNK_FLAG_PREPROC) {
 				rv = preproc_decompress(tdat->decompress, cmpbuf, dedupe_data_sz_cmp,
-				    ubuf, &_chunksize, tdat->level, HDR, tdat->data);
+				    ubuf, &_chunksize, tdat->level, HDR, tdat->data, tdat->props);
 			} else {
 				rv = tdat->decompress(cmpbuf, dedupe_data_sz_cmp, ubuf, &_chunksize,
 				    tdat->level, HDR, tdat->data);
@@ -452,7 +462,8 @@ redo:
 		if (HDR & COMPRESSED) {
 			if (HDR & CHUNK_FLAG_PREPROC) {
 				rv = preproc_decompress(tdat->decompress, cseg, tdat->len_cmp,
-				    tdat->uncompressed_chunk, &_chunksize, tdat->level, HDR, tdat->data);
+				    tdat->uncompressed_chunk, &_chunksize, tdat->level, HDR, tdat->data,
+				    tdat->props);
 			} else {
 				rv = tdat->decompress(cseg, tdat->len_cmp, tdat->uncompressed_chunk,
 				    &_chunksize, tdat->level, HDR, tdat->data);
@@ -875,6 +886,7 @@ start_decompress(const char *filename, const char *to_filename)
 		tdat->cancel = 0;
 		tdat->level = level;
 		tdat->data = NULL;
+		tdat->props = &props;
 		sem_init(&(tdat->start_sem), 0, 0);
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
@@ -1155,7 +1167,7 @@ redo:
 				rv = preproc_compress(tdat->compress,
 				    tdat->uncompressed_chunk + dedupe_index_sz,
 				    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
-				    tdat->level, 0, tdat->data);
+				    tdat->level, 0, tdat->data, tdat->props);
 			} else {
 				rv = tdat->compress(tdat->uncompressed_chunk + dedupe_index_sz,
 				    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
@@ -1185,7 +1197,8 @@ plain_compress:
 		if (lzp_preprocess) {
 			rv = preproc_compress(tdat->compress,
 			    tdat->uncompressed_chunk, tdat->rbytes,
-			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data);
+			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data,
+			    tdat->props);
 		} else {
 			rv = tdat->compress(tdat->uncompressed_chunk, tdat->rbytes,
 			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data);
@@ -1575,6 +1588,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		tdat->cancel = 0;
 		tdat->level = level;
 		tdat->data = NULL;
+		tdat->props = &props;
 		sem_init(&(tdat->start_sem), 0, 0);
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
@@ -1927,6 +1941,7 @@ init_algo(const char *algo, int bail)
 		_init_func = zlib_init;
 		_deinit_func = zlib_deinit;
 		_stats_func = zlib_stats;
+		_props_func = zlib_props;
 		rv = 0;
 
 	} else if (memcmp(algorithm, "lzmaMt", 6) == 0) {
@@ -1953,6 +1968,7 @@ init_algo(const char *algo, int bail)
 		_init_func = bzip2_init;
 		_deinit_func = NULL;
 		_stats_func = bzip2_stats;
+		_props_func = bzip2_props;
 		rv = 0;
 
 	} else if (memcmp(algorithm, "ppmd", 4) == 0) {
@@ -1961,6 +1977,7 @@ init_algo(const char *algo, int bail)
 		_init_func = ppmd_init;
 		_deinit_func = ppmd_deinit;
 		_stats_func = ppmd_stats;
+		_props_func = ppmd_props;
 		rv = 0;
 
 	} else if (memcmp(algorithm, "lzfx", 4) == 0) {
@@ -1969,6 +1986,7 @@ init_algo(const char *algo, int bail)
 		_init_func = lz_fx_init;
 		_deinit_func = lz_fx_deinit;
 		_stats_func = lz_fx_stats;
+		_props_func = lz_fx_props;
 		rv = 0;
 
 	} else if (memcmp(algorithm, "lz4", 3) == 0) {
@@ -1995,6 +2013,7 @@ init_algo(const char *algo, int bail)
 		_init_func = adapt2_init;
 		_deinit_func = adapt_deinit;
 		_stats_func = adapt_stats;
+		_props_func = adapt_props;
 		adapt_mode = 1;
 		rv = 0;
 
@@ -2004,6 +2023,7 @@ init_algo(const char *algo, int bail)
 		_init_func = adapt_init;
 		_deinit_func = adapt_deinit;
 		_stats_func = adapt_stats;
+		_props_func = adapt_props;
 		adapt_mode = 1;
 		rv = 0;
 #ifdef ENABLE_PC_LIBBSC
@@ -2034,7 +2054,7 @@ main(int argc, char *argv[])
 	level = 6;
 	slab_init();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEew:rLS:B:F")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEew:rLPS:B:F")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -2122,6 +2142,11 @@ main(int argc, char *argv[])
 
 		    case 'L':
 			lzp_preprocess = 1;
+			break;
+
+		    case 'P':
+			lzp_preprocess = 1;
+			enable_delta2_encode = 1;
 			break;
 
 		    case 'r':

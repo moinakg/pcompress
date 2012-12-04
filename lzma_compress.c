@@ -52,6 +52,7 @@ lzma_mt_props(algo_props_t *data, int level, ssize_t chunksize) {
 	data->decompress_mt_capable = 0;
 	data->buf_extra = 0;
 	data->c_max_threads = 2;
+	data->delta2_stride = 150;
 }
 
 void
@@ -59,6 +60,7 @@ lzma_props(algo_props_t *data, int level, ssize_t chunksize) {
 	data->compress_mt_capable = 0;
 	data->decompress_mt_capable = 0;
 	data->buf_extra = 0;
+	data->delta2_stride = 150;
 }
 
 /*

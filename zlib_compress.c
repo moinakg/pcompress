@@ -89,6 +89,11 @@ zlib_stats(int show)
 {
 }
 
+void
+zlib_props(algo_props_t *data, int level, ssize_t chunksize) {
+	data->delta2_stride = 50;
+}
+
 int
 zlib_deinit(void **data)
 {

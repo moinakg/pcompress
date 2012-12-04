@@ -95,6 +95,12 @@ adapt_stats(int show)
 	ppmd_count = 0;
 }
 
+void
+adapt_props(algo_props_t *data, int level, ssize_t chunksize)
+{
+	data->delta2_stride = 200;
+}
+
 int
 adapt_init(void **data, int *level, int nthreads, ssize_t chunksize,
 	   int file_version, compress_op_t op)

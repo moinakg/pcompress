@@ -79,6 +79,7 @@ libbsc_props(algo_props_t *data, int level, ssize_t chunksize) {
 	data->buf_extra = 0;
 	data->c_max_threads = 8;
 	data->d_max_threads = 8;
+	data->delta2_stride = 150;
 }
 
 int

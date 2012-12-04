@@ -48,6 +48,11 @@ bzip2_stats(int show)
 {
 }
 
+void
+bzip2_props(algo_props_t *data, int level, ssize_t chunksize) {
+	data->delta2_stride = 200;
+}
+
 int
 bzip2_init(void **data, int *level, int nthreads, ssize_t chunksize,
 	   int file_version, compress_op_t op)

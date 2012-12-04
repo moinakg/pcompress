@@ -61,6 +61,11 @@ ppmd_stats(int show)
 {
 }
 
+void
+ppmd_props(algo_props_t *data, int level, ssize_t chunksize) {
+	data->delta2_stride = 100;
+}
+
 int
 ppmd_init(void **data, int *level, int nthreads, ssize_t chunksize,
 	  int file_version, compress_op_t op)

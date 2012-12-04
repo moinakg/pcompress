@@ -56,6 +56,7 @@ extern "C" {
 #define	COMP_EXTN	".pz"
 
 #define	PREPROC_TYPE_LZP	1
+#define	PREPROC_TYPE_DELTA2	2
 #define	PREPROC_COMPRESSED	128
 
 /*
@@ -135,6 +136,11 @@ extern int none_init(void **data, int *level, int nthreads, ssize_t chunksize,
 extern void lzma_props(algo_props_t *data, int level, ssize_t chunksize);
 extern void lzma_mt_props(algo_props_t *data, int level, ssize_t chunksize);
 extern void lz4_props(algo_props_t *data, int level, ssize_t chunksize);
+extern void zlib_props(algo_props_t *data, int level, ssize_t chunksize);
+extern void ppmd_props(algo_props_t *data, int level, ssize_t chunksize);
+extern void lz_fx_props(algo_props_t *data, int level, ssize_t chunksize);
+extern void bzip2_props(algo_props_t *data, int level, ssize_t chunksize);
+extern void adapt_props(algo_props_t *data, int level, ssize_t chunksize);
 
 extern int zlib_deinit(void **data);
 extern int adapt_deinit(void **data);
@@ -188,6 +194,7 @@ struct cmp_data {
 	void *data;
 	pthread_t thr;
 	mac_ctx_t chunk_hmac;
+	algo_props_t *props;
 };
 
 #ifdef	__cplusplus

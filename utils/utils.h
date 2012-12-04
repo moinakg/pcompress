@@ -111,6 +111,7 @@ typedef struct {
 	int nthreads;
 	int c_max_threads;
 	int d_max_threads;
+	int delta2_stride;
 } algo_props_t;
 
 typedef enum {
@@ -205,6 +206,7 @@ init_algo_props(algo_props_t *props)
 	props->nthreads = 1;
 	props->c_max_threads = 1;
 	props->d_max_threads = 1;
+	props->delta2_stride = 0;
 }
 
 #ifdef	__cplusplus
