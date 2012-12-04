@@ -100,6 +100,11 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
        '-L' -     Enable LZP pre-compression. This improves compression ratio of all
                   algorithms with some extra CPU and very low RAM overhead. Using
                   delta encoding in conjunction with this may not always be beneficial.
+                  However Adaptive Delta Encoding is beneficial along with this.
+
+       '-P' -     Enable Adaptive Delta Encoding. This implies '-L' as well. It improves
+                  compresion ratio further at the cost of more CPU overhead.
+
        '-S' <cksum>
             -     Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512, SHA256 and
                   SHA512. Default one is SKEIN256. The implementation actually uses SKEIN
