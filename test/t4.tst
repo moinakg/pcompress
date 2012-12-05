@@ -9,7 +9,7 @@ for algo in lzfx lz4 adapt
 do
 	for tf in combined.dat comb_d.dat
 	do
-		for feat in "-D" "-D -B3 -L" "-D -B4 -E" "-D -B2 -EE" "-D -B5 -EE -L" "-D -B2 -r"
+		for feat in "-D" "-D -B3 -L" "-D -B4 -E" "-D -B2 -EE" "-D -B5 -EE -L" "-D -B2 -r" "-P" "-D -P" "-D -E -P"
 		do
 			for seg in 2m 100m
 			do
