@@ -42,6 +42,7 @@ extern "C" {
 #define	CRYPTO_ALG_AES	0x10
 #define	MAX_SALTLEN	64
 
+#define	KECCAK_MAX_SEG	(2305843009213693950ULL)
 /*
  * Public checksum properties. CKSUM_MAX_BYTES must be updated if a
  * newer larger checksum is added to the list.
@@ -51,7 +52,9 @@ typedef enum {
 	CKSUM_SKEIN256 = 0x200,
 	CKSUM_SKEIN512 = 0x300,
 	CKSUM_SHA256 = 0x400,
-	CKSUM_SHA512 = 0x500
+	CKSUM_SHA512 = 0x500,
+	CKSUM_KECCAK256 = 0x600,
+	CKSUM_KECCAK512 = 0x700
 } cksum_t;
 
 typedef struct {

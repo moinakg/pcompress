@@ -97,9 +97,30 @@ LIBBSCLIB = @LIBBSCLIB@
 LIBBSCGEN_OPT = -fopenmp
 LIBBSCCPPFLAGS = -I$(LIBBSCDIR)/libbsc -DENABLE_PC_LIBBSC
 
+KECCAK_SRC_COMMON = crypto/keccak/genKAT.c crypto/keccak/KeccakDuplex.c \
+	crypto/keccak/KeccakNISTInterface.c crypto/keccak/KeccakSponge.c
+KECCAK_SRC_OPT64 = $(KECCAK_SRC_COMMON) crypto/keccak/KeccakF-1600-opt64.c
+KECCAK_SRC_OPT64_ASM1 = $(KECCAK_SRC_COMMON) crypto/keccak/KeccakF-1600-x86-64-asm.c
+KECCAK_SRC_OPT64_ASM2 = crypto/keccak/KeccakF-1600-x86-64-gas.s
+
+KECCAK_HDRS_COMMON = crypto/keccak/KeccakDuplex.h crypto/keccak/KeccakNISTInterface.h \
+	crypto/keccak/KeccakSponge.h crypto/keccak/KeccakF-1600-interface.h
+KECCAK_HDRS_OPT = $(KECCAK_HDRS_COMMON) \
+	crypto/keccak/brg_endian.h crypto/keccak/KeccakF-1600-unrolling.macros
+KECCAK_HDRS_OPT64 = $(KECCAK_HDRS_OPT)  crypto/keccak/KeccakF-1600-opt64-settings.h \
+	crypto/keccak/KeccakF-1600-64.macros  crypto/keccak/KeccakF-1600-simd64.macros \
+	crypto/keccak/KeccakF-1600-simd128.macros
+KECCAK_HDRS_OPT64_ASM = $(KECCAK_HDRS_OPT64)
+
+KECCAK_SRCS = @KECCAK_SRCS@
+KECCAK_SRCS_ASM = @KECCAK_SRCS_ASM@
+KECCAK_HDRS = @KECCAK_HDRS@
+KECCAK_OBJS = $(KECCAK_SRCS:.c=.o)
+KECCAK_OBJS_ASM = $(KECCAK_SRCS_ASM:.s=.o)
+
 BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~ utils/*~ crypto/sha2/*~ \
 	crypto/sha2/intel/*~ crypto/aes/*~ crypto/scrypt/*~ crypto/*~ rabin/global/*~ \
-	delta2/*~
+	delta2/*~ crypto/keccak/*~
 
 RM = rm -f
 RM_RF = rm -rf
@@ -107,14 +128,14 @@ COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
 	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I@OPENSSL_INCDIR@ \
 	-I./crypto/sha2 -I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ \
-	@LIBBZ2_INC@ @LIBZ_INC@
+	@LIBBZ2_INC@ @LIBZ_INC@ -I./crypto/keccak
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -L@LIBBZ2_DIR@ -lbz2 -L@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
 	-L@OPENSSL_LIBDIR@ -lcrypto -lrt
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
-$(SKEIN_BLOCK_OBJ) @SHA256ASM_OBJS@ @SHA256_OBJS@
+$(SKEIN_BLOCK_OBJ) @SHA256ASM_OBJS@ @SHA256_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM)
 
 DEBUG_LINK = g++ -m64 -pthread -msse3 @LIBBSCGEN_OPT@
 DEBUG_COMPILE = gcc -m64 -g -msse3 -c
@@ -124,6 +145,7 @@ DEBUG_LOOP_OPTFLAGS =
 DEBUG_GEN_OPT = -O -fno-omit-frame-pointer @LIBBSCGEN_OPT@
 DEBUG_RABIN_OPT = -O -fno-omit-frame-pointer
 DEBUG_CPPFLAGS = $(COMMON_CPPFLAGS)
+DEBUG_FPTR_FLAG = 
 
 RELEASE_LINK = g++ -m64 -pthread -msse3 @LIBBSCGEN_OPT@
 RELEASE_COMPILE = gcc -m64 -msse3 -c
@@ -133,6 +155,7 @@ RELEASE_LOOP_OPTFLAGS = $(COMMON_LOOP_OPTFLAGS)
 RELEASE_CPPFLAGS = $(COMMON_CPPFLAGS) -DNDEBUG
 RELEASE_GEN_OPT = -O3 @LIBBSCGEN_OPT@
 RELEASE_RABIN_OPT = -O2
+RELEASE_FPTR_FLAG = -fomit-frame-pointer
 
 NO_SLAB_CPPFLAGS = -DDEBUG_NO_SLAB
 DEBUG_STATS_CPPFLAGS = -DDEBUG_STATS
@@ -146,6 +169,10 @@ CPPFLAGS = @CPPFLAGS@ @NO_SLAB_CPPFLAGS@ @DEBUG_STATS_CPPFLAGS@
 GEN_OPT = @GEN_OPT@
 RABIN_OPT = @RABIN_OPT@
 PREFIX=@PREFIX@
+
+SKEIN_FLAGS = $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) @FPTR_FLAG@
+SHA256_FLAGS = $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) @FPTR_FLAG@
+KECCAK_FLAGS = $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) @FPTR_FLAG@
 
 all: $(PROG)
 
@@ -177,16 +204,22 @@ $(DELTA2OBJS): $(DELTA2SRCS) $(DELTA2HDRS)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(SKEIN_BLOCK_OBJ): $(SKEIN_BLOCK_SRC)
-	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(SKEIN_BLOCK_SRC) -o $@
+	$(COMPILE) $(SKEIN_FLAGS) $(SKEIN_BLOCK_SRC) -o $@
 
 $(SKEINOBJS): $(SKEINSRCS) $(SKEINHDRS)
-	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(SKEIN_FLAGS) $(@:.o=.c) -o $@
 
 $(SHA256_OBJS): $(SHA256_SRCS) $(SHA256_HDRS)
-	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(SHA256_FLAGS) $(@:.o=.c) -o $@
 
 $(SHA256ASM_OBJS): $(SHA256ASM_SRCS)
 	$(YASM)	-o $@ $(@:.o=.asm)
+
+$(KECCAK_OBJS): $(KECCAK_SRCS) $(KECCAK_HDRS)
+	$(COMPILE) $(KECCAK_FLAGS) $(@:.o=.c) -o $@
+
+$(KECCAK_OBJS_ASM): $(KECCAK_SRCS_ASM) $(KECCAK_HDRS)
+	$(COMPILE) $(KECCAK_FLAGS) $(@:.o=.s) -o $@
 
 $(LIBBSCLIB):
 	(cd $(LIBBSCDIR); make)

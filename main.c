@@ -812,8 +812,8 @@ start_decompress(const char *filename, const char *to_filename)
 		d1 = htons(version);
 		hmac_update(&hdr_mac, (uchar_t *)&d1, sizeof (version));
 		d1 = htons(flags);
-		hmac_update(&hdr_mac, (uchar_t *)&d1, sizeof (version));
-		nonce = htonll(chunksize);
+		hmac_update(&hdr_mac, (uchar_t *)&d1, sizeof (flags));
+		nonce = htonll(chunksize); 
 		hmac_update(&hdr_mac, (uchar_t *)&nonce, sizeof (nonce));
 		d2 = htonl(level);
 		hmac_update(&hdr_mac, (uchar_t *)&d2, sizeof (level));
@@ -1430,7 +1430,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			pw_len = get_pw_string(pw,
 				"Please enter encryption password", 1);
 			if (pw_len == -1) {
-				err_exit(1, "Failed to get password.\n");
+				err_exit(0, "Failed to get password.\n");
 			}
 		} else {
 			int fd, len;
@@ -1459,7 +1459,6 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 				}
 			}
 			if (pw_len == -1) {
-				perror(" ");
 				err_exit(1, "Failed to get password.\n");
 			}
 			close(fd);
@@ -1467,7 +1466,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		if (init_crypto(&crypto_ctx, pw, pw_len, encrypt_type, NULL,
 		    0, 0, ENCRYPT_FLAG) == -1) {
 			memset(pw, 0, MAX_PW_LEN);
-			err_exit(1, "Failed to initialize crypto\n");
+			err_exit(0, "Failed to initialize crypto\n");
 		}
 		memset(pw, 0, MAX_PW_LEN);
 	}

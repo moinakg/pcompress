@@ -38,6 +38,7 @@
 #include <openssl/hmac.h>
 #include <sha256.h>
 #include <crypto_aes.h>
+#include <KeccakNISTInterface.h>
 
 #include "crypto_utils.h"
 #include "cpuid.h"
@@ -57,11 +58,13 @@ static struct {
 	int	bytes, mac_bytes;
 	ckinit_func_ptr init_func;
 } cksum_props[] = {
-	{"CRC64",	CKSUM_CRC64,	8,	32,	NULL},
-	{"SKEIN256",	CKSUM_SKEIN256,	32,	32,	NULL},
-	{"SKEIN512",	CKSUM_SKEIN512,	64,	64,	NULL},
-	{"SHA256",	CKSUM_SHA256,	32,	32,	init_sha256},
-	{"SHA512",	CKSUM_SHA512,	64,	64,	NULL}
+	{"CRC64",	CKSUM_CRC64,		8,	32,	NULL},
+	{"SKEIN256",	CKSUM_SKEIN256,		32,	32,	NULL},
+	{"SKEIN512",	CKSUM_SKEIN512,		64,	64,	NULL},
+	{"SHA256",	CKSUM_SHA256,		32,	32,	init_sha256},
+	{"SHA512",	CKSUM_SHA512,		64,	64,	NULL},
+	{"KECCAK256",	CKSUM_KECCAK256,	32,	32,	NULL},
+	{"KECCAK512",	CKSUM_KECCAK512,	64,	64,	NULL}
 };
 
 static int cksum_provider = PROVIDER_OPENSSL, ossl_inited = 0;
@@ -111,6 +114,14 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, ssize_t bytes)
 		SHA512_Init(&ctx);
 		SHA512_Update(&ctx, buf, bytes);
 		SHA512_Final(cksum_buf, &ctx);
+
+	} else if (cksum == CKSUM_KECCAK256) {
+		if (Keccak_Hash(256, buf, bytes, cksum_buf) != 0)
+			return (-1);
+
+	} else if (cksum == CKSUM_KECCAK512) {
+		if (Keccak_Hash(512, buf, bytes, cksum_buf) != 0)
+			return (-1);
 	} else {
 		return (-1);
 	}
@@ -279,6 +290,29 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 			return (-1);
 		}
 		mctx->mac_ctx_reinit = ctx;
+
+	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
+		hashState *ctx = malloc(sizeof (hashState));
+		if (!ctx) return (-1);
+
+		if (cksum == CKSUM_KECCAK256) {
+			if (Keccak_Init(ctx, 256) != 0)
+				return (-1);
+		} else {
+			if (Keccak_Init(ctx, 512) != 0)
+				return (-1);
+		}
+		if (Keccak_Update(ctx, actx->pkey, KEYLEN << 3) != 0)
+			return (-1);
+		mctx->mac_ctx = ctx;
+
+		ctx = malloc(sizeof (hashState));
+		if (!ctx) {
+			free(mctx->mac_ctx);
+			return (-1);
+		}
+		memcpy(ctx, mctx->mac_ctx, sizeof (hashState));
+		mctx->mac_ctx_reinit = ctx;
 	} else {
 		return (-1);
 	}
@@ -301,6 +335,9 @@ hmac_reinit(mac_ctx_t *mctx)
 		}
 	} else if (cksum == CKSUM_SHA512) {
 		HMAC_CTX_copy(mctx->mac_ctx, mctx->mac_ctx_reinit);
+
+	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
+		memcpy(mctx->mac_ctx, mctx->mac_ctx_reinit, sizeof (hashState));
 	} else {
 		return (-1);
 	}
@@ -324,6 +361,19 @@ hmac_update(mac_ctx_t *mctx, uchar_t *data, size_t len)
 		}
 	} else if (cksum == CKSUM_SHA512) {
 		if (HMAC_Update(mctx->mac_ctx, data, len) == 0)
+			return (-1);
+
+	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
+		// Keccak takes data length in bits so we have to scale
+		while (len > KECCAK_MAX_SEG) {
+			uint64_t blen;
+
+			blen = KECCAK_MAX_SEG;
+			if (Keccak_Update(mctx->mac_ctx, data, blen << 3) != 0)
+				return (-1);
+			len -= KECCAK_MAX_SEG;
+		}
+		if (Keccak_Update(mctx->mac_ctx, data, len << 3) != 0)
 			return (-1);
 	} else {
 		return (-1);
@@ -353,6 +403,14 @@ hmac_final(mac_ctx_t *mctx, uchar_t *hash, unsigned int *len)
 		}
 	} else if (cksum == CKSUM_SHA512) {
 		HMAC_Final(mctx->mac_ctx, hash, len);
+
+	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
+		if (Keccak_Final(mctx->mac_ctx, hash) != 0)
+			return (-1);
+		if (cksum == CKSUM_KECCAK256)
+			*len = 32;
+		else
+			*len = 64;
 	} else {
 		return (-1);
 	}
@@ -379,6 +437,10 @@ hmac_cleanup(mac_ctx_t *mctx)
 	} else if (cksum == CKSUM_SHA512) {
 		HMAC_CTX_cleanup(mctx->mac_ctx);
 		HMAC_CTX_cleanup(mctx->mac_ctx_reinit);
+
+	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
+		memset(mctx->mac_ctx, 0, sizeof (hashState));
+		memset(mctx->mac_ctx_reinit, 0, sizeof (hashState));
 	} else {
 		return (-1);
 	}

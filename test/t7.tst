@@ -19,14 +19,14 @@ do
 				eval $cmd
 				if [ $? -ne 0 ]
 				then
-					echo "${cmd} errored."
+					echo "FATAL: Compression errored."
 					exit 1
 				fi
 
 				pw=`cat /tmp/pwf`
 				if [ "$pw" = "sillypassword" ]
 				then
-					echo "ERROR: Password file /tmp/pwf not zeroed!"
+					echo "FATAL: Password file /tmp/pwf not zeroed!"
 					exit 1
 				fi
 
@@ -36,21 +36,21 @@ do
 				eval $cmd
 				if [ $? -ne 0 ]
 				then
-					echo "${cmd} errored."
+					echo "FATAL: Decompression errored."
 					exit 1
 				fi
 
 				diff ${tf} ${tf}.1 > /dev/null
 				if [ $? -ne 0 ]
 				then
-					echo "${cmd}: Decompression was not correct"
+					echo "FATAL: Decompression was not correct"
 					exit 1
 				fi
 
 				pw=`cat /tmp/pwf`
 				if [ "$pw" = "sillypassword" ]
 				then
-					echo "ERROR: Password file /tmp/pwf not zeroed!"
+					echo "FATAL: Password file /tmp/pwf not zeroed!"
 					exit 1
 				fi
 				rm -f ${tf}.pz ${tf}.1

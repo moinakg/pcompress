@@ -23,7 +23,7 @@ do
 				eval $cmd
 				if [ $? -ne 0 ]
 				then
-					echo "${cmd} errored."
+					echo "FATAL: Compression failed."
 					exit 1
 				fi
 				cmd="../../pcompress -d ${tf}.pz ${tf}.1"
@@ -31,13 +31,13 @@ do
 				eval $cmd
 				if [ $? -ne 0 ]
 				then
-					echo "${cmd} errored."
+					echo "FATAL: Decompression failed."
 					exit 1
 				fi
 				diff ${tf} ${tf}.1 > /dev/null
 				if [ $? -ne 0 ]
 				then
-					echo "${cmd}: Decompression was not correct"
+					echo "FATAL: Decompression was not correct"
 					exit 1
 				fi
 				rm -f ${tf}.pz ${tf}.1

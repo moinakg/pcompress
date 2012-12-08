@@ -29,7 +29,7 @@ do
 		eval $cmd
 		if [ $? -ne 0 ]
 		then
-			echo "${cmd} errored."
+			echo "FATAL: ${cmd} errored."
 			exit 1
 		fi
 		mv ${tf}.pz ${tf}.${algo}
@@ -62,13 +62,13 @@ do
 				eval $cmd
 				if [ $? -ne 0 ]
 				then
-					echo "${cmd} errored."
+					echo "FATAL: Decompression failed."
 					exit 1
 				fi
 				diff ${tf}.${algo} ${tf}.${algo}.1 > /dev/null
 				if [ $? -ne 0 ]
 				then
-					echo "${cmd}: Decompression was not correct"
+					echo "FATAL: Decompression was not correct"
 					exit 1
 				fi
 				rm -f ${tf}.${algo}.pz ${tf}.${algo}.1

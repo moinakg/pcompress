@@ -12,7 +12,7 @@ do
 	eval $cmd
 	if [ $? -eq 0 ]
 	then
-		echo "${cmd} DID NOT ERROR where expected"
+		echo "FATAL: Compression DID NOT ERROR where expected"
 		exit 1
 	fi
 done
@@ -26,14 +26,14 @@ do
 		eval $cmd
 		if [ $? -eq 0 ]
 		then
-			echo "${cmd} DID NOT ERROR where expected"
+			echo "FATAL: Compression DID NOT ERROR where expected"
 			rm -f combined.dat.pz
 			exit 1
 		fi
 	done
 done
 
-for feat in "-S CRC64" "-S SKEIN256" "-S SKEIN512" "-S SHA256" "-S SHA512"
+for feat in "-S CRC64" "-S SKEIN256" "-S SKEIN512" "-S SHA256" "-S SHA512" "-S KECCAK256" "-S KECCAK512"
 do
 	rm -f combined.dat.1.pz
 	rm -f combined.dat.pz
@@ -44,7 +44,7 @@ do
 	eval $cmd
 	if [ $? -ne 0 ]
 	then
-		echo "${cmd} errored."
+		echo "FATAL: Compression errored."
 		rm -f combined.dat.pz
 		exit 1
 	fi
@@ -55,7 +55,7 @@ do
 	eval $cmd
 	if [ $? -eq 0 ]
 	then
-		echo "${cmd} DID NOT ERROR where expected."
+		echo "FATAL: Decompression DID NOT ERROR where expected."
 		rm -f combined.dat.pz
 		rm -f combined.dat.1
 		exit 1
@@ -69,7 +69,7 @@ do
 	eval $cmd
 	if [ $? -ne 0 ]
 	then
-		echo "${cmd} errored."
+		echo "FATAL: Compression errored."
 		rm -f combined.dat.pz
 		exit 1
 	fi
@@ -81,7 +81,7 @@ do
 	eval $cmd
 	if [ $? -eq 0 ]
 	then
-		echo "${cmd} DID NOT ERROR where expected."
+		echo "FATAL: Decompression DID NOT ERROR where expected."
 		rm -f combined.dat.pz
 		rm -f combined.dat.1
 		rm -f combined.dat.1.pz
@@ -96,7 +96,7 @@ do
 	eval $cmd
 	if [ $? -eq 0 ]
 	then
-		echo "${cmd} DID NOT ERROR where expected."
+		echo "FATAL: Decompression DID NOT ERROR where expected."
 		rm -f combined.dat.pz
 		rm -f combined.dat.1
 		rm -f combined.dat.1.pz
@@ -110,14 +110,14 @@ do
 	eval $cmd
 	if [ $? -ne 0 ]
 	then
-		echo "${cmd} errored."
+		echo "FATAL: Compression errored."
 		rm -f combined.dat.pz
 		exit 1
 	fi
 	pw=`cat /tmp/pwf`
 	if [ "$pw" = "plainpasswd" ]
 	then
-		echo "ERROR: Password file was not zeroed"
+		echo "FATAL: Password file was not zeroed"
 		rm -f /tmp/pwf combined.dat.pz
 		exit 1
 	fi
@@ -130,7 +130,7 @@ do
 	eval $cmd
 	if [ $? -eq 0 ]
 	then
-		echo "${cmd} DID NOT ERROR where expected."
+		echo "FATAL: Decompression DID NOT ERROR where expected."
 		rm -f combined.dat.pz
 		rm -f combined.dat.1
 		rm -f combined.dat.1.pz
@@ -146,7 +146,7 @@ do
 	eval $cmd
 	if [ $? -eq 0 ]
 	then
-		echo "${cmd} DID NOT ERROR where expected."
+		echo "FATAL: Decompression DID NOT ERROR where expected."
 		rm -f combined.dat.pz
 		rm -f combined.dat.1
 		rm -f combined.dat.1.pz

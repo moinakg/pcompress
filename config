@@ -43,6 +43,44 @@ sha256asmobjs=
 sha256objs=
 keylen=
 yasm=yasm
+keccak_srcs=
+keccak_hdrs=
+keccak_srcs_asm=
+
+# Try a simple compilation
+cat << _EOF > tst.c
+#include <stdio.h>
+
+int
+main(void)
+{
+	long l;
+	printf("%d\n", sizeof (l));
+	return (0);
+}
+_EOF
+
+gcc tst.c -o tst
+if [ $? -ne 0 ]
+then
+	echo "ERROR:"
+	echo "Cannot compile a simple program. GCC 4.1 and above is required"
+	echo "to build this program. Please include installation bindir of GCC in the PATH."
+	echo ""
+	rm -f tst.c
+	exit 1
+fi
+
+# Check bitness of system
+bitness=`./tst`
+rm -f tst tst.c
+if [ $bitness -lt 8 ]
+then
+	echo "ERROR:"
+	echo "Only 64-bit platforms are supported."
+	echo ""
+	exit 1
+fi
 
 while [ "${arg1}" != "" ]
 do
@@ -104,6 +142,21 @@ else
 	exit 1
 fi
 
+# Check GCC version
+vers=`gcc -dumpversion`
+OIFS="$IFS"
+IFS=.
+set -- ${vers}
+IFS="$OIFS"
+
+if [ $1 -lt 4 -o $2 -lt 1 ]
+then
+	echo "ERROR:"
+	echo "GCC version 4.1 or above is required."
+	echo ""
+	exit 1
+fi
+
 echo $plat | egrep 'x86_64|amd64' > /dev/null
 if [ $? -eq 0 ]
 then
@@ -135,6 +188,18 @@ then
 		echo "Yasm version 1.1 or later is required to build on x64 platforms"
 		exit 1
 	fi
+
+	if [ $debug -eq 1 ]
+	then
+		keccak_srcs='\$\(KECCAK_SRC_OPT64\)'
+		keccak_hdrs='\$\(KECCAK_HDRS_OPT64\)'
+	else
+		keccak_srcs='\$\(KECCAK_SRC_OPT64_ASM1\)'
+		keccak_srcs_asm='\$\(KECCAK_SRC_OPT64_ASM2\)'
+		keccak_hdrs='\$\(KECCAK_HDRS_OPT64_ASM\)'
+	fi
+else
+	keccak_srcs='\$\(KECCAK_SRC_OPT64\)'
 fi
 
 # Detect OpenSSL library
@@ -278,6 +343,7 @@ libbsccppflagsvar="LIBBSCCPPFLAGS"
 sha256asmobjsvar="SHA256ASM_OBJS"
 sha256objsvar="SHA256_OBJS"
 yasmvar="YASM"
+fptr_flag_var="FPTR_FLAG"
 
 openssllibdirvar="OPENSSL_LIBDIR"
 opensslincdirvar="OPENSSL_INCDIR"
@@ -285,6 +351,10 @@ libbz2libdirvar="LIBBZ2_DIR"
 libzlibdirvar="LIBZ_DIR"
 libbz2incvar="LIBBZ2_INC"
 libzincvar="LIBZ_INC"
+
+keccak_srcs_var="KECCAK_SRCS"
+keccak_hdrs_var="KECCAK_HDRS"
+keccak_srcs_asm_var="KECCAK_SRCS_ASM"
 
 noslabcppflagsval=
 debugstatscppflagsval=
@@ -301,6 +371,7 @@ s#@${loopoptflagsvar}@#\\\$\\(${typ}_${loopoptflagsvar}\\)#g
 s#@${cppflagsvar}@#\\\$\\(${typ}_${cppflagsvar}\\)#g
 s#@${genoptvar}@#\\\$\\(${typ}_${genoptvar}\\)#g
 s#@${rabinoptvar}@#\\\$\\(${typ}_${rabinoptvar}\\)#g
+s#@${fptr_flag_var}@#\\\$\\(${typ}_${fptr_flag_var}\\)#g
 s#@${noslabcppflagsvar}@#${noslabcppflagsval}#g
 s#@${debugstatscppflagsvar}@#${debugstatscppflagsval}#g
 s#@${prefixvar}@#${prefix}#g
@@ -321,5 +392,9 @@ s#@${libbz2libdirvar}@#${libbz2_libdir}#g
 s#@${libzlibdirvar}@#${libz_libdir}#g
 s#@${libbz2incvar}@#${libbz2_inc}#g
 s#@${libzincvar}@#${libz_inc}#g
+s#@${keccak_srcs_var}@#${keccak_srcs}#g
+s#@${keccak_hdrs_var}@#${keccak_hdrs}#g
+s#@${keccak_srcs_var}@#${keccak_srcs}#g
+s#@${keccak_srcs_asm_var}@#${keccak_srcs_asm}#g
 " > Makefile
 
