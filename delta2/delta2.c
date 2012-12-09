@@ -60,7 +60,7 @@
 #define	DELTA_HDR	(1 + (sizeof (uint64_t)) * 3)
 
 int
-delta2_encode(uchar_t *src, size_t srclen, uchar_t *dst, size_t *dstlen, int rle_thresh)
+delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh)
 {
 	uint64_t snum, gtot1, gtot2, tot;
 	uint64_t cnt, val, sval;
@@ -234,7 +234,7 @@ delta2_encode(uchar_t *src, size_t srclen, uchar_t *dst, size_t *dstlen, int rle
 }
 
 int
-delta2_decode(uchar_t *src, size_t srclen, uchar_t *dst, size_t *dstlen)
+delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 {
 	uchar_t *pos, *pos1, *last;
 	uint64_t olen, val, sval, delta, rcnt, cnt, out;

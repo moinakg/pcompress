@@ -49,7 +49,7 @@ See also the bsc and libbsc web site:
 #define LZP_MATCH_FLAG 	0xf2
 
 static
-inline int bsc_lzp_num_blocks(ssize_t n)
+inline int bsc_lzp_num_blocks(int64_t n)
 {
     int nb;
 
@@ -231,7 +231,7 @@ int bsc_lzp_decode_block(const unsigned char * input, const unsigned char * inpu
 }
 
 static
-ssize_t bsc_lzp_compress_serial(const unsigned char * input, unsigned char * output, ssize_t n, int hashSize, int minLen)
+int64_t bsc_lzp_compress_serial(const unsigned char * input, unsigned char * output, int64_t n, int hashSize, int minLen)
 {
     if (bsc_lzp_num_blocks(n) == 1)
     {
@@ -244,7 +244,7 @@ ssize_t bsc_lzp_compress_serial(const unsigned char * input, unsigned char * out
     int nBlocks   = bsc_lzp_num_blocks(n);
     int chunkSize;
     int blockId;
-    ssize_t outputPtr = 1 + 8 * nBlocks;
+    int64_t outputPtr = 1 + 8 * nBlocks;
 
     if (n > LZP_MAX_BLOCK)
         chunkSize = LZP_MAX_BLOCK;
@@ -254,7 +254,7 @@ ssize_t bsc_lzp_compress_serial(const unsigned char * input, unsigned char * out
     output[0] = nBlocks;
     for (blockId = 0; blockId < nBlocks; ++blockId)
     {
-        ssize_t inputStart  = blockId * chunkSize;
+        int64_t inputStart  = blockId * chunkSize;
         int inputSize   = blockId != nBlocks - 1 ? chunkSize : n - inputStart;
         int outputSize  = inputSize; if (outputSize > n - outputPtr) outputSize = n - outputPtr;
 
@@ -277,7 +277,7 @@ ssize_t bsc_lzp_compress_serial(const unsigned char * input, unsigned char * out
 #ifdef LZP_OPENMP
 
 static
-int bsc_lzp_compress_parallel(const unsigned char * input, unsigned char * output, ssize_t n, int hashSize, int minLen)
+int bsc_lzp_compress_parallel(const unsigned char * input, unsigned char * output, int64_t n, int hashSize, int minLen)
 {
     if (unsigned char * buffer = (unsigned char *)bsc_malloc(n * sizeof(unsigned char)))
     {
@@ -356,7 +356,7 @@ int bsc_lzp_compress_parallel(const unsigned char * input, unsigned char * outpu
 
 #endif
 
-ssize_t lzp_compress(const unsigned char * input, unsigned char * output, ssize_t n, int hashSize, int minLen, int features)
+int64_t lzp_compress(const unsigned char * input, unsigned char * output, int64_t n, int hashSize, int minLen, int features)
 {
 
 #ifdef LZP_OPENMP
@@ -371,7 +371,7 @@ ssize_t lzp_compress(const unsigned char * input, unsigned char * output, ssize_
     return bsc_lzp_compress_serial(input, output, n, hashSize, minLen);
 }
 
-ssize_t lzp_decompress(const unsigned char * input, unsigned char * output, ssize_t n, int hashSize, int minLen, int features)
+int64_t lzp_decompress(const unsigned char * input, unsigned char * output, int64_t n, int hashSize, int minLen, int features)
 {
     int nBlocks = input[0];
 
@@ -416,8 +416,8 @@ ssize_t lzp_decompress(const unsigned char * input, unsigned char * output, ssiz
 
         for (blockId = 0; blockId < nBlocks; ++blockId)
         {
-            ssize_t inputPtr = 0;  for (p = 0; p < blockId; ++p) inputPtr  += *(int *)(input + 1 + 8 * p + 4);
-            ssize_t outputPtr = 0; for (p = 0; p < blockId; ++p) outputPtr += *(int *)(input + 1 + 8 * p + 0);
+            int64_t inputPtr = 0;  for (p = 0; p < blockId; ++p) inputPtr  += *(int *)(input + 1 + 8 * p + 4);
+            int64_t outputPtr = 0; for (p = 0; p < blockId; ++p) outputPtr += *(int *)(input + 1 + 8 * p + 0);
 
             inputPtr += 1 + 8 * nBlocks;
 
@@ -435,7 +435,7 @@ ssize_t lzp_decompress(const unsigned char * input, unsigned char * output, ssiz
         }
     }
 
-    ssize_t dataSize = 0;
+    int64_t dataSize = 0;
     int result = LZP_NO_ERROR;
     int blockId;
     for (blockId = 0; blockId < nBlocks; ++blockId)

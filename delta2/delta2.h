@@ -30,8 +30,8 @@
 extern "C" {
 #endif
 
-int delta2_encode(uchar_t *src, size_t srclen, uchar_t *dst, size_t *dstlen, int rle_thresh);
-int delta2_decode(uchar_t *src, size_t srclen, uchar_t *dst, size_t *dstlen);
+int delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh);
+int delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen);
 
 #define	ULL_MAX (18446744073709551615ULL)
 

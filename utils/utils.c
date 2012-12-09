@@ -96,13 +96,13 @@ get_execname(const char *argv0)
  * m - Megabyte
  * g - Gigabyte
  *
- * The number should fit in an ssize_t data type.
+ * The number should fit in an int64_t data type.
  * Numeric overflow is also checked. The routine parse_numeric() returns
  * 1 if there was a numeric overflow.
  */
 static int
-raise_by_multiplier(ssize_t *val, int mult, int power) {
-	ssize_t result;
+raise_by_multiplier(int64_t *val, int mult, int power) {
+	int64_t result;
 
 	while (power-- > 0) {
 		result = *val * mult;
@@ -114,7 +114,7 @@ raise_by_multiplier(ssize_t *val, int mult, int power) {
 }
 
 int
-parse_numeric(ssize_t *val, const char *str)
+parse_numeric(int64_t *val, const char *str)
 {
 	int i, ovr;
 	char *mult;
@@ -178,10 +178,10 @@ bytes_to_size(uint64_t bytes)
  * Additionally can be given an offset in the buf where the data
  * should be inserted.
  */
-ssize_t
-Read(int fd, void *buf, size_t count)
+int64_t
+Read(int fd, void *buf, uint64_t count)
 {
-	ssize_t rcount, rem;
+	int64_t rcount, rem;
 	uchar_t *cbuf;
 	va_list args;
 
@@ -203,11 +203,11 @@ Read(int fd, void *buf, size_t count)
  * The request buffer may have some data at the beginning carried over from
  * after the previous rabin boundary.
  */
-ssize_t
-Read_Adjusted(int fd, uchar_t *buf, size_t count, ssize_t *rabin_count, void *ctx)
+int64_t
+Read_Adjusted(int fd, uchar_t *buf, uint64_t count, int64_t *rabin_count, void *ctx)
 {
         char *buf2;
-        ssize_t rcount;
+        int64_t rcount;
         dedupe_context_t *rctx = (dedupe_context_t *)ctx;
 
         if (!ctx)  return (Read(fd, buf, count));
@@ -230,10 +230,10 @@ Read_Adjusted(int fd, uchar_t *buf, size_t count, ssize_t *rabin_count, void *ct
         return (rcount);
 }
 
-ssize_t
-Write(int fd, const void *buf, size_t count)
+int64_t
+Write(int fd, const void *buf, uint64_t count)
 {
-	ssize_t wcount, rem;
+	int64_t wcount, rem;
 	uchar_t *cbuf;
 
 	rem = count;

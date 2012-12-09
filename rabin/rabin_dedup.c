@@ -71,12 +71,12 @@
 #define	FIFTY_PCNT(x) ((x) >> 1)
 #define	SIXTY_PCNT(x) (((x) >> 1) + ((x) >> 3))
 
-extern int lzma_init(void **data, int *level, int nthreads, ssize_t chunksize,
+extern int lzma_init(void **data, int *level, int nthreads, int64_t chunksize,
 		     int file_version, compress_op_t op);
-extern int lzma_compress(void *src, size_t srclen, void *dst,
-	size_t *destlen, int level, uchar_t chdr, void *data);
-extern int lzma_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data);
+extern int lzma_compress(void *src, uint64_t srclen, void *dst,
+	uint64_t *destlen, int level, uchar_t chdr, void *data);
+extern int lzma_decompress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data);
 extern int lzma_deinit(void **data);
 extern int bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
        u_char *diff, u_char *scratch, bsize_t scratchsize);
@@ -279,9 +279,9 @@ destroy_dedupe_context(dedupe_context_t *ctx)
  * from 4K-128K.
  */
 uint32_t
-dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offset, ssize_t *rabin_pos)
+dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, int64_t *size, int64_t offset, int64_t *rabin_pos)
 {
-	ssize_t i, last_offset, j, ary_sz;
+	int64_t i, last_offset, j, ary_sz;
 	uint32_t blknum;
 	char *buf1 = (char *)buf;
 	uint32_t length;
@@ -379,7 +379,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 	j = 0;
 
 	for (i=offset; i<*size; i++) {
-		ssize_t pc[4];
+		int64_t pc[4];
 		uchar_t cur_byte = buf1[i];
 		uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
 		ctx->current_window_data[ctx->window_pos] = cur_byte;
@@ -460,7 +460,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size, ssize_t offs
 
 		if (ctx->delta_flag) {
 			uint64_t cur_sketch;
-			ssize_t pc[3];
+			int64_t pc[3];
 
 			if (j > 1) {
 				pc[1] = SIXTY_PCNT(j);
@@ -487,10 +487,10 @@ process_blocks:
 	DEBUG_STAT_EN(printf("Original size: %" PRId64 ", blknum: %u\n", *size, blknum));
 	DEBUG_STAT_EN(printf("Number of maxlen blocks: %u\n", max_count));
 	if (blknum > 2) {
-		ssize_t pos, matchlen, pos1;
+		int64_t pos, matchlen, pos1;
 		int valid = 1;
 		uint32_t *dedupe_index;
-		ssize_t dedupe_index_sz;
+		int64_t dedupe_index_sz;
 		rabin_blockentry_t *be;
 		DEBUG_STAT_EN(uint32_t delta_calls, delta_fails, merge_count, hash_collisions);
 		DEBUG_STAT_EN(delta_calls = 0);
@@ -607,7 +607,7 @@ process_blocks:
 		}
 		DEBUG_STAT_EN(printf("Total Hashtable bucket collisions: %u\n", hash_collisions));
 
-		dedupe_index_sz = (ssize_t)blknum * RABIN_ENTRY_SIZE;
+		dedupe_index_sz = (int64_t)blknum * RABIN_ENTRY_SIZE;
 		if (matchlen < dedupe_index_sz) {
 			ctx->valid = 0;
 			return;
@@ -645,7 +645,7 @@ process_blocks:
 		 * Final pass update dedupe index and copy data.
 		 */
 		blknum = pos;
-		dedupe_index_sz = (ssize_t)blknum * RABIN_ENTRY_SIZE;
+		dedupe_index_sz = (int64_t)blknum * RABIN_ENTRY_SIZE;
 		pos1 = dedupe_index_sz + RABIN_HDR_SIZE;
 		matchlen = ctx->real_chunksize - *size;
 		for (i=0; i<blknum; i++) {
@@ -687,11 +687,11 @@ process_blocks:
 cont:
 		if (valid) {
 			uchar_t *cbuf = ctx->cbuf;
-			ssize_t *entries;
+			int64_t *entries;
 
 			*((uint32_t *)cbuf) = htonl(blknum);
 			cbuf += sizeof (uint32_t);
-			entries = (ssize_t *)cbuf;
+			entries = (int64_t *)cbuf;
 			entries[0] = htonll(*size);
 			entries[1] = 0;
 			entries[2] = htonll(pos1 - dedupe_index_sz - RABIN_HDR_SIZE);
@@ -710,41 +710,41 @@ cont:
 }
 
 void
-update_dedupe_hdr(uchar_t *buf, ssize_t dedupe_index_sz_cmp, ssize_t dedupe_data_sz_cmp)
+update_dedupe_hdr(uchar_t *buf, int64_t dedupe_index_sz_cmp, int64_t dedupe_data_sz_cmp)
 {
-	ssize_t *entries;
+	int64_t *entries;
 
 	buf += sizeof (uint32_t);
-	entries = (ssize_t *)buf;
+	entries = (int64_t *)buf;
 	entries[1] = htonll(dedupe_index_sz_cmp);
 	entries[3] = htonll(dedupe_data_sz_cmp);
 }
 
 void
-parse_dedupe_hdr(uchar_t *buf, uint32_t *blknum, ssize_t *dedupe_index_sz,
-		ssize_t *dedupe_data_sz, ssize_t *dedupe_index_sz_cmp,
-		ssize_t *dedupe_data_sz_cmp, ssize_t *deduped_size)
+parse_dedupe_hdr(uchar_t *buf, uint32_t *blknum, int64_t *dedupe_index_sz,
+		int64_t *dedupe_data_sz, int64_t *dedupe_index_sz_cmp,
+		int64_t *dedupe_data_sz_cmp, int64_t *deduped_size)
 {
-	ssize_t *entries;
+	int64_t *entries;
 
 	*blknum = ntohl(*((uint32_t *)(buf)));
 	buf += sizeof (uint32_t);
 
-	entries = (ssize_t *)buf;
+	entries = (int64_t *)buf;
 	*dedupe_data_sz = ntohll(entries[0]);
-	*dedupe_index_sz = (ssize_t)(*blknum) * RABIN_ENTRY_SIZE;
+	*dedupe_index_sz = (int64_t)(*blknum) * RABIN_ENTRY_SIZE;
 	*dedupe_index_sz_cmp =  ntohll(entries[1]);
 	*deduped_size = ntohll(entries[2]);
 	*dedupe_data_sz_cmp = ntohll(entries[3]);
 }
 
 void
-dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size)
+dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, int64_t *size)
 {
 	uint32_t blknum, blk, oblk, len;
 	uint32_t *dedupe_index;
-	ssize_t data_sz, sz, indx_cmp, data_sz_cmp, deduped_sz;
-	ssize_t dedupe_index_sz, pos1, i;
+	int64_t data_sz, sz, indx_cmp, data_sz_cmp, deduped_sz;
+	int64_t dedupe_index_sz, pos1, i;
 	uchar_t *pos2;
 
 	parse_dedupe_hdr(buf, &blknum, &dedupe_index_sz, &data_sz, &indx_cmp, &data_sz_cmp, &deduped_sz);
@@ -837,7 +837,7 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, ssize_t *size)
  * TODO: Consolidate rabin dedup and compression/decompression in functions here rather than
  * messy code in main program.
 int
-rabin_compress(dedupe_context_t *ctx, uchar_t *from, ssize_t fromlen, uchar_t *to, ssize_t *tolen,
+rabin_compress(dedupe_context_t *ctx, uchar_t *from, int64_t fromlen, uchar_t *to, int64_t *tolen,
     int level, char chdr, void *data, compress_func_ptr cmp)
 {
 }

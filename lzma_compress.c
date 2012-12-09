@@ -47,7 +47,7 @@ lzma_stats(int show)
 }
 
 void
-lzma_mt_props(algo_props_t *data, int level, ssize_t chunksize) {
+lzma_mt_props(algo_props_t *data, int level, int64_t chunksize) {
 	data->compress_mt_capable = 1;
 	data->decompress_mt_capable = 0;
 	data->buf_extra = 0;
@@ -56,7 +56,7 @@ lzma_mt_props(algo_props_t *data, int level, ssize_t chunksize) {
 }
 
 void
-lzma_props(algo_props_t *data, int level, ssize_t chunksize) {
+lzma_props(algo_props_t *data, int level, int64_t chunksize) {
 	data->compress_mt_capable = 0;
 	data->decompress_mt_capable = 0;
 	data->buf_extra = 0;
@@ -67,7 +67,7 @@ lzma_props(algo_props_t *data, int level, ssize_t chunksize) {
  * The two functions below are not thread-safe, by design.
  */
 int
-lzma_init(void **data, int *level, int nthreads, ssize_t chunksize,
+lzma_init(void **data, int *level, int nthreads, int64_t chunksize,
 	  int file_version, compress_op_t op)
 {
 	if (!p && op == COMPRESS) {
@@ -188,10 +188,10 @@ lzerr(int err, int cmp)
  * our chunk header.
  */
 int
-lzma_compress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data)
+lzma_compress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data)
 {
-	size_t props_len = LZMA_PROPS_SIZE;
+	uint64_t props_len = LZMA_PROPS_SIZE;
 	SRes res;
 	Byte *_dst;
 	CLzmaEncProps *props = (CLzmaEncProps *)data;
@@ -217,10 +217,10 @@ lzma_compress(void *src, size_t srclen, void *dst,
 }
 
 int
-lzma_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data)
+lzma_decompress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data)
 {
-	size_t _srclen;
+	uint64_t _srclen;
 	const uchar_t *_src;
 	SRes res;
 	ELzmaStatus status;

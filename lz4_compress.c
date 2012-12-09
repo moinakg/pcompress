@@ -44,7 +44,7 @@ lz4_stats(int show)
 }
 
 int
-lz4_buf_extra(ssize_t buflen)
+lz4_buf_extra(int64_t buflen)
 {
 	if (buflen > LZ4_MAX_CHUNK)
 		buflen = LZ4_MAX_CHUNK;
@@ -52,7 +52,7 @@ lz4_buf_extra(ssize_t buflen)
 }
 
 void
-lz4_props(algo_props_t *data, int level, ssize_t chunksize) {
+lz4_props(algo_props_t *data, int level, int64_t chunksize) {
 	data->compress_mt_capable = 0;
 	data->decompress_mt_capable = 0;
 	data->buf_extra = lz4_buf_extra(chunksize);
@@ -60,7 +60,7 @@ lz4_props(algo_props_t *data, int level, ssize_t chunksize) {
 }
 
 int
-lz4_init(void **data, int *level, int nthreads, ssize_t chunksize,
+lz4_init(void **data, int *level, int nthreads, int64_t chunksize,
 	 int file_version, compress_op_t op)
 {
 	struct lz4_params *lzdat;
@@ -95,7 +95,7 @@ lz4_deinit(void **data)
 }
 
 int
-lz4_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
+lz4_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	       int level, uchar_t chdr, void *data)
 {
 	int rv;
@@ -131,7 +131,7 @@ lz4_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 }
 
 int
-lz4_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
+lz4_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 		 int level, uchar_t chdr, void *data)
 {
 	int rv;

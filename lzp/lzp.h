@@ -63,7 +63,7 @@ extern "C" {
     * @param features   - the set of additional features.
     * @return The length of preprocessed memory block if no error occurred, error code otherwise.
     */
-    ssize_t lzp_compress(const unsigned char * input, unsigned char * output, ssize_t n, int hashSize, int minLen, int features);
+    int64_t lzp_compress(const unsigned char * input, unsigned char * output, int64_t n, int hashSize, int minLen, int features);
 
     /**
     * Reconstructs the original memory block after LZP algorithm.
@@ -75,7 +75,7 @@ extern "C" {
     * @param features   - the set of additional features.
     * @return The length of original memory block if no error occurred, error code otherwise.
     */
-    ssize_t lzp_decompress(const unsigned char * input, unsigned char * output, ssize_t n, int hashSize, int minLen, int features);
+    int64_t lzp_decompress(const unsigned char * input, unsigned char * output, int64_t n, int hashSize, int minLen, int features);
 
     int lzp_hash_size(int level);
 #ifdef __cplusplus

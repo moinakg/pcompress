@@ -74,7 +74,7 @@ typedef struct {
 /*
  * Generic message digest functions.
  */
-int compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, ssize_t bytes);
+int compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, int64_t bytes);
 int get_checksum_props(char *name, int *cksum, int *cksum_bytes, int *mac_bytes);
 void serialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
 void deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
@@ -84,7 +84,7 @@ void deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
  */
 int init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 	       uchar_t *salt, int saltlen, uint64_t nonce, int enc_dec);
-int crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, ssize_t bytes, uint64_t id);
+int crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, int64_t bytes, uint64_t id);
 uint64_t crypto_nonce(crypto_ctx_t *cctx);
 void crypto_clean_pkey(crypto_ctx_t *cctx);
 void cleanup_crypto(crypto_ctx_t *cctx);
@@ -95,7 +95,7 @@ int get_pw_string(char pw[MAX_PW_LEN], char *prompt, int twice);
  */
 int hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx);
 int hmac_reinit(mac_ctx_t *mctx);
-int hmac_update(mac_ctx_t *mctx, uchar_t *data, size_t len);
+int hmac_update(mac_ctx_t *mctx, uchar_t *data, uint64_t len);
 int hmac_cleanup(mac_ctx_t *mctx);
 
 #ifdef	__cplusplus

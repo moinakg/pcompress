@@ -72,7 +72,7 @@ libbsc_stats(int show)
  * when compressing entire file in a single chunk.
  */
 void
-libbsc_props(algo_props_t *data, int level, ssize_t chunksize) {
+libbsc_props(algo_props_t *data, int level, int64_t chunksize) {
 	data->compress_mt_capable = 0;
 	data->decompress_mt_capable = 0;
 	data->single_chunk_mt_capable = 1;
@@ -83,7 +83,7 @@ libbsc_props(algo_props_t *data, int level, ssize_t chunksize) {
 }
 
 int
-libbsc_init(void **data, int *level, int nthreads, ssize_t chunksize,
+libbsc_init(void **data, int *level, int nthreads, int64_t chunksize,
 	    int file_version, compress_op_t op)
 {
 	struct libbsc_params *bscdat;
@@ -141,7 +141,7 @@ libbsc_deinit(void **data)
 }
 
 int
-libbsc_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
+libbsc_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	       int level, uchar_t chdr, void *data)
 {
 	int rv;
@@ -158,7 +158,7 @@ libbsc_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 }
 
 int
-libbsc_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
+libbsc_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 		 int level, uchar_t chdr, void *data)
 {
 	int rv;

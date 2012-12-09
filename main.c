@@ -57,13 +57,13 @@ struct wdata {
 	struct cmp_data **dary;
 	int wfd;
 	int nprocs;
-	ssize_t chunksize;
+	int64_t chunksize;
 };
 
 
 static void * writer_thread(void *dat);
 static int init_algo(const char *algo, int bail);
-extern uint32_t lzma_crc32(const uint8_t *buf, size_t size, uint32_t crc);
+extern uint32_t lzma_crc32(const uint8_t *buf, uint64_t size, uint32_t crc);
 
 static compress_func_ptr _compress_func;
 static compress_func_ptr _decompress_func;
@@ -190,11 +190,11 @@ show_compression_stats(uint64_t chunksize)
  * is not allowed.
  */
 int
-preproc_compress(compress_func_ptr cmp_func, void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data, algo_props_t *props)
+preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data, algo_props_t *props)
 {
 	uchar_t *dest = (uchar_t *)dst, type = 0;
-	ssize_t result, _dstlen;
+	int64_t result, _dstlen;
 
 	if (lzp_preprocess) {
 		int hashsize;
@@ -240,11 +240,11 @@ preproc_compress(compress_func_ptr cmp_func, void *src, size_t srclen, void *dst
 }
 
 int
-preproc_decompress(compress_func_ptr dec_func, void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data, algo_props_t *props)
+preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data, algo_props_t *props)
 {
 	uchar_t *sorc = (uchar_t *)src, type;
-	ssize_t result;
+	int64_t result;
 	uint64_t _dstlen = *dstlen;
 
 	type = *sorc;
@@ -296,8 +296,8 @@ static void *
 perform_decompress(void *dat)
 {
 	struct cmp_data *tdat = (struct cmp_data *)dat;
-	ssize_t _chunksize;
-	ssize_t dedupe_index_sz, dedupe_data_sz, dedupe_index_sz_cmp, dedupe_data_sz_cmp;
+	int64_t _chunksize;
+	int64_t dedupe_index_sz, dedupe_data_sz, dedupe_index_sz_cmp, dedupe_data_sz_cmp;
 	int type, rv;
 	unsigned int blknum;
 	uchar_t checksum[CKSUM_MAX_BYTES];
@@ -330,7 +330,7 @@ redo:
 		tdat->rbytes -= ORIGINAL_CHUNKSZ;
 		tdat->len_cmp -= ORIGINAL_CHUNKSZ;
 		rseg = tdat->compressed_chunk + tdat->rbytes;
-		_chunksize = ntohll(*((ssize_t *)rseg));
+		_chunksize = ntohll(*((int64_t *)rseg));
 	}
 
 	/*
@@ -569,7 +569,7 @@ start_decompress(const char *filename, const char *to_filename)
 	int uncompfd = -1, err, np, bail;
 	int nprocs, thread = 0, level;
 	short version, flags;
-	ssize_t chunksize, compressed_chunksize;
+	int64_t chunksize, compressed_chunksize;
 	struct cmp_data **dary, *tdat;
 	pthread_t writer_thr;
 	algo_props_t props;
@@ -944,7 +944,7 @@ start_decompress(const char *filename, const char *to_filename)
 	np = 0;
 	bail = 0;
 	while (!bail) {
-		ssize_t rb;
+		int64_t rb;
 
 		if (main_cancel) break;
 		for (p = 0; p < nprocs; p++) {
@@ -1097,7 +1097,7 @@ perform_compress(void *dat) {
 	typeof (tdat->chunksize) _chunksize, len_cmp, dedupe_index_sz, index_size_cmp;
 	int type, rv;
 	uchar_t *compressed_chunk;
-	ssize_t rbytes;
+	int64_t rbytes;
 
 redo:
 	sem_wait(&tdat->start_sem);
@@ -1326,7 +1326,7 @@ writer_thread(void *dat) {
 	int p;
 	struct wdata *w = (struct wdata *)dat;
 	struct cmp_data *tdat;
-	ssize_t wbytes;
+	int64_t wbytes;
 
 repeat:
 	for (p = 0; p < w->nprocs; p++) {
@@ -1374,8 +1374,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	struct wdata w;
 	char tmpfile1[MAXPATHLEN];
 	char to_filename[MAXPATHLEN];
-	ssize_t compressed_chunksize;
-	ssize_t n_chunksize, rbytes, rabin_count;
+	int64_t compressed_chunksize;
+	int64_t n_chunksize, rbytes, rabin_count;
 	short version, flags;
 	struct stat sbuf;
 	int compfd = -1, uncompfd = -1, err;
@@ -2046,7 +2046,7 @@ main(int argc, char *argv[])
 {
 	char *filename = NULL;
 	char *to_filename = NULL;
-	ssize_t chunksize = DEFAULT_CHUNKSIZE;
+	int64_t chunksize = DEFAULT_CHUNKSIZE;
 	int opt, level, num_rem, err;
 
 	exec_name = get_execname(argv[0]);

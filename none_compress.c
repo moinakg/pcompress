@@ -37,7 +37,7 @@ none_stats(int show)
 }
 
 int
-none_init(void **data, int *level, int nthreads, ssize_t chunksize,
+none_init(void **data, int *level, int nthreads, int64_t chunksize,
 	  int file_version, compress_op_t op)
 {
 	return (0);
@@ -50,7 +50,7 @@ none_deinit(void **data)
 }
 
 int
-none_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
+none_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	       int level, uchar_t chdr, void *data)
 {
 	memcpy(dst, src, srclen);
@@ -58,7 +58,7 @@ none_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 }
 
 int
-none_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
+none_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 		 int level, uchar_t chdr, void *data)
 {
 	memcpy(dst, src, srclen);

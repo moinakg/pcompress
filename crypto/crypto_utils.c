@@ -69,12 +69,12 @@ static struct {
 
 static int cksum_provider = PROVIDER_OPENSSL, ossl_inited = 0;
 
-extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
-extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, size_t size,
+extern uint64_t lzma_crc64(const uint8_t *buf, uint64_t size, uint64_t crc);
+extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, uint64_t size,
 	uint64_t crc, uint64_t *cnt);
 
 int
-compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, ssize_t bytes)
+compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, int64_t bytes)
 {
 	if (cksum == CKSUM_CRC64) {
 		uint64_t *ck = (uint64_t *)cksum_buf;
@@ -345,7 +345,7 @@ hmac_reinit(mac_ctx_t *mctx)
 }
 
 int
-hmac_update(mac_ctx_t *mctx, uchar_t *data, size_t len)
+hmac_update(mac_ctx_t *mctx, uchar_t *data, uint64_t len)
 {
 	int cksum = mctx->mac_cksum;
 
@@ -529,7 +529,7 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 }
 
 int
-crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, ssize_t bytes, uint64_t id)
+crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, int64_t bytes, uint64_t id)
 {
 	if (cctx->crypto_alg == CRYPTO_ALG_AES) {
 		if (cctx->enc_dec == ENCRYPT_FLAG) {
@@ -569,9 +569,9 @@ static int
 geturandom_bytes(uchar_t rbytes[32])
 {
 	int fd;
-	ssize_t lenread;
+	int64_t lenread;
 	uchar_t * buf = rbytes;
-	size_t buflen = 32;
+	uint64_t buflen = 32;
 
 	/* Open /dev/urandom. */
 	if ((fd = open("/dev/urandom", O_RDONLY)) == -1)

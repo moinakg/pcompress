@@ -40,12 +40,12 @@ lz_fx_stats(int show)
 }
 
 void
-lz_fx_props(algo_props_t *data, int level, ssize_t chunksize) {
+lz_fx_props(algo_props_t *data, int level, int64_t chunksize) {
 	data->delta2_stride = 50;
 }
 
 int
-lz_fx_init(void **data, int *level, int nthreads, ssize_t chunksize,
+lz_fx_init(void **data, int *level, int nthreads, int64_t chunksize,
 	   int file_version, compress_op_t op)
 {
 	struct lzfx_params *lzdat;
@@ -100,7 +100,7 @@ lz_fx_err(int err)
 }
 
 int
-lz_fx_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
+lz_fx_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	       int level, uchar_t chdr, void *data)
 {
 	int rv;
@@ -120,7 +120,7 @@ lz_fx_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 }
 
 int
-lz_fx_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
+lz_fx_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 		 int level, uchar_t chdr, void *data)
 {
 	int rv;

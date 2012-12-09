@@ -50,7 +50,7 @@ extern "C" {
 #       endif
 #endif
 typedef unsigned long uintptr_t;
-typedef ssize_t bsize_t;
+typedef int64_t bsize_t;
 
 #undef WORDS_BIGENDIAN
 #if BYTE_ORDER == BIG_ENDIAN
@@ -134,19 +134,19 @@ typedef struct {
 
 extern void err_exit(int show_errno, const char *format, ...);
 extern const char *get_execname(const char *);
-extern int parse_numeric(ssize_t *val, const char *str);
+extern int parse_numeric(int64_t *val, const char *str);
 extern char *bytes_to_size(uint64_t bytes);
-extern ssize_t Read(int fd, void *buf, size_t count);
-extern ssize_t Read_Adjusted(int fd, uchar_t *buf, size_t count,
-	ssize_t *rabin_count, void *ctx);
-extern ssize_t Write(int fd, const void *buf, size_t count);
+extern int64_t Read(int fd, void *buf, uint64_t count);
+extern int64_t Read_Adjusted(int fd, uchar_t *buf, uint64_t count,
+	int64_t *rabin_count, void *ctx);
+extern int64_t Write(int fd, const void *buf, uint64_t count);
 extern void set_threadcounts(algo_props_t *props, int *nthreads, int nprocs,
 	algo_threads_type_t typ);
 extern uint64_t get_total_ram();
 
 /* Pointer type for compress and decompress functions. */
-typedef int (*compress_func_ptr)(void *src, size_t srclen, void *dst,
-	size_t *destlen, int level, uchar_t chdr, void *data);
+typedef int (*compress_func_ptr)(void *src, uint64_t srclen, void *dst,
+	uint64_t *destlen, int level, uchar_t chdr, void *data);
 
 typedef enum {
 	COMPRESS,
@@ -154,11 +154,11 @@ typedef enum {
 } compress_op_t;
 
 /* Pointer type for algo specific init/deinit/stats functions. */
-typedef int (*init_func_ptr)(void **data, int *level, int nthreads, ssize_t chunksize,
+typedef int (*init_func_ptr)(void **data, int *level, int nthreads, int64_t chunksize,
 			     int file_version, compress_op_t op);
 typedef int (*deinit_func_ptr)(void **data);
 typedef void (*stats_func_ptr)(int show);
-typedef void (*props_func_ptr)(algo_props_t *data, int level, ssize_t chunksize);
+typedef void (*props_func_ptr)(algo_props_t *data, int level, int64_t chunksize);
 
 
 /*

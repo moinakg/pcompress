@@ -44,31 +44,31 @@ static unsigned int bzip2_count = 0;
 static unsigned int bsc_count = 0;
 static unsigned int ppmd_count = 0;
 
-extern int lzma_compress(void *src, size_t srclen, void *dst,
-	size_t *destlen, int level, uchar_t chdr, void *data);
-extern int bzip2_compress(void *src, size_t srclen, void *dst,
-	size_t *destlen, int level, uchar_t chdr, void *data);
-extern int ppmd_compress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data);
-extern int libbsc_compress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data);
+extern int lzma_compress(void *src, uint64_t srclen, void *dst,
+	uint64_t *destlen, int level, uchar_t chdr, void *data);
+extern int bzip2_compress(void *src, uint64_t srclen, void *dst,
+	uint64_t *destlen, int level, uchar_t chdr, void *data);
+extern int ppmd_compress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+extern int libbsc_compress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data);
 
-extern int lzma_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data);
-extern int bzip2_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data);
-extern int ppmd_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data);
-extern int libbsc_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data);
+extern int lzma_decompress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+extern int bzip2_decompress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+extern int ppmd_decompress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+extern int libbsc_decompress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data);
 
-extern int lzma_init(void **data, int *level, int nthreads, ssize_t chunksize,
+extern int lzma_init(void **data, int *level, int nthreads, int64_t chunksize,
 		     int file_version, compress_op_t op);
 extern int lzma_deinit(void **data);
-extern int ppmd_init(void **data, int *level, int nthreads, ssize_t chunksize,
+extern int ppmd_init(void **data, int *level, int nthreads, int64_t chunksize,
 		     int file_version, compress_op_t op);
 extern int ppmd_deinit(void **data);
-extern int libbsc_init(void **data, int *level, int nthreads, ssize_t chunksize,
+extern int libbsc_init(void **data, int *level, int nthreads, int64_t chunksize,
 		       int file_version, compress_op_t op);
 extern int libbsc_deinit(void **data);
 
@@ -96,13 +96,13 @@ adapt_stats(int show)
 }
 
 void
-adapt_props(algo_props_t *data, int level, ssize_t chunksize)
+adapt_props(algo_props_t *data, int level, int64_t chunksize)
 {
 	data->delta2_stride = 200;
 }
 
 int
-adapt_init(void **data, int *level, int nthreads, ssize_t chunksize,
+adapt_init(void **data, int *level, int nthreads, int64_t chunksize,
 	   int file_version, compress_op_t op)
 {
 	struct adapt_data *adat = (struct adapt_data *)(*data);
@@ -125,7 +125,7 @@ adapt_init(void **data, int *level, int nthreads, ssize_t chunksize,
 }
 
 int
-adapt2_init(void **data, int *level, int nthreads, ssize_t chunksize,
+adapt2_init(void **data, int *level, int nthreads, int64_t chunksize,
 	    int file_version, compress_op_t op)
 {
 	struct adapt_data *adat = (struct adapt_data *)(*data);
@@ -173,12 +173,12 @@ adapt_deinit(void **data)
 }
 
 int
-adapt_compress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data)
+adapt_compress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t *src1 = (uchar_t *)src;
-	size_t i, tot8b, tagcnt;
+	uint64_t i, tot8b, tagcnt;
 	int rv, tag;
 
 	/*
@@ -232,8 +232,8 @@ adapt_compress(void *src, size_t srclen, void *dst,
 }
 
 int
-adapt_decompress(void *src, size_t srclen, void *dst,
-	size_t *dstlen, int level, uchar_t chdr, void *data)
+adapt_decompress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t cmp_flags;

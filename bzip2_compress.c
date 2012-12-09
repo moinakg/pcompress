@@ -37,7 +37,7 @@
 static void *
 slab_alloc_i(void *p, int items, int size) {
 	void *ptr;
-	size_t tot = (size_t)items * (size_t)size;
+	uint64_t tot = (uint64_t)items * (uint64_t)size;
 
 	ptr = slab_alloc(p, tot);
 	return (ptr);
@@ -49,12 +49,12 @@ bzip2_stats(int show)
 }
 
 void
-bzip2_props(algo_props_t *data, int level, ssize_t chunksize) {
+bzip2_props(algo_props_t *data, int level, int64_t chunksize) {
 	data->delta2_stride = 200;
 }
 
 int
-bzip2_init(void **data, int *level, int nthreads, ssize_t chunksize,
+bzip2_init(void **data, int *level, int nthreads, int64_t chunksize,
 	   int file_version, compress_op_t op)
 {
 	if (*level > 9) *level = 9;
@@ -92,14 +92,14 @@ bzerr(int err)
 }
 
 int
-bzip2_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
+bzip2_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	       int level, uchar_t chdr, void *data)
 {
 	bz_stream bzs;
 	int ret, ending;
 	unsigned int slen, dlen;
-	size_t _srclen = srclen;
-	size_t _dstlen = *dstlen;
+	uint64_t _srclen = srclen;
+	uint64_t _dstlen = *dstlen;
 	uchar_t *dst1 = dst;
 	uchar_t *src1 = src;
 
@@ -161,14 +161,14 @@ bzip2_compress(void *src, size_t srclen, void *dst, size_t *dstlen,
 }
 
 int
-bzip2_decompress(void *src, size_t srclen, void *dst, size_t *dstlen,
+bzip2_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 		 int level, uchar_t chdr, void *data)
 {
 	bz_stream bzs;
 	int ret;
 	unsigned int slen, dlen;
-	size_t _srclen = srclen;
-	size_t _dstlen = *dstlen;
+	uint64_t _srclen = srclen;
+	uint64_t _dstlen = *dstlen;
 	uchar_t *dst1 = dst;
 	uchar_t *src1 = src;
 

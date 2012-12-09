@@ -62,12 +62,12 @@ ppmd_stats(int show)
 }
 
 void
-ppmd_props(algo_props_t *data, int level, ssize_t chunksize) {
+ppmd_props(algo_props_t *data, int level, int64_t chunksize) {
 	data->delta2_stride = 100;
 }
 
 int
-ppmd_init(void **data, int *level, int nthreads, ssize_t chunksize,
+ppmd_init(void **data, int *level, int nthreads, int64_t chunksize,
 	  int file_version, compress_op_t op)
 {
 	CPpmd8 *_ppmd;
@@ -105,8 +105,8 @@ ppmd_deinit(void **data)
 }
 
 int
-ppmd_compress(void *src, size_t srclen, void *dst,
- 	      size_t *dstlen, int level, uchar_t chdr, void *data)
+ppmd_compress(void *src, uint64_t srclen, void *dst,
+ 	      uint64_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	CPpmd8 *_ppmd = (CPpmd8 *)data;
 	uchar_t *_src = (uchar_t *)src;
@@ -129,13 +129,13 @@ ppmd_compress(void *src, size_t srclen, void *dst,
 }
 
 int
-ppmd_decompress(void *src, size_t srclen, void *dst,
-		size_t *dstlen, int level, uchar_t chdr, void *data)
+ppmd_decompress(void *src, uint64_t srclen, void *dst,
+		uint64_t *dstlen, int level, uchar_t chdr, void *data)
 {
 	CPpmd8 *_ppmd = (CPpmd8 *)data;
 	Byte *_src = (Byte *)src;
 	Byte *_dst = (Byte *)dst;
-	size_t i;
+	uint64_t i;
 	int res;
 
 	_ppmd->buf = (Byte *)_src;

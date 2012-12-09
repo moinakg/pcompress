@@ -80,7 +80,7 @@ static const unsigned int bv[] = {
 struct slabentry {
 	struct bufentry *avail;
 	struct slabentry *next;
-	size_t sz;
+	uint64_t sz;
 	uint64_t allocs, hits;
 	pthread_mutex_t slab_lock;
 };
@@ -103,7 +103,7 @@ void
 slab_init()
 {
 	int i;
-	size_t slab_sz;
+	uint64_t slab_sz;
 	int nprocs;
 
 	/* Check bypass env variable. */
@@ -263,7 +263,7 @@ slab_cleanup(int quiet)
 }
 
 void *
-slab_calloc(void *p, size_t items, size_t size) {
+slab_calloc(void *p, uint64_t items, uint64_t size) {
 	void *ptr;
 
 	if (bypass) return(calloc(items, size));
@@ -305,7 +305,7 @@ find_slot(unsigned int v)
 }
 
 static void *
-try_dynamic_slab(size_t size)
+try_dynamic_slab(uint64_t size)
 {
 	uint32_t sindx;
 	struct slabentry *slab;
@@ -325,7 +325,7 @@ try_dynamic_slab(size_t size)
 }
 
 int
-slab_cache_add(size_t size)
+slab_cache_add(uint64_t size)
 {
 	uint32_t sindx;
 	struct slabentry *slab;
@@ -359,11 +359,11 @@ slab_cache_add(size_t size)
 }
 
 void *
-slab_alloc(void *p, size_t size)
+slab_alloc(void *p, uint64_t size)
 {
-	size_t slab_sz = SLAB_START_SZ;
+	uint64_t slab_sz = SLAB_START_SZ;
 	int i;
-	size_t div;
+	uint64_t div;
 	void *ptr;
 	struct slabentry *slab;
 
@@ -491,13 +491,13 @@ void
 slab_cleanup(int quiet) {}
 
 void
-*slab_alloc(void *p, size_t size)
+*slab_alloc(void *p, uint64_t size)
 {
 	return (malloc(size));
 }
 
 void
-*slab_calloc(void *p, size_t items, size_t size)
+*slab_calloc(void *p, uint64_t items, uint64_t size)
 {
 	return (calloc(items, size));
 }
@@ -509,6 +509,6 @@ slab_free(void *p, void *address)
 }
 
 int
-slab_cache_add(size_t size) {}
+slab_cache_add(uint64_t size) {}
 
 #endif
