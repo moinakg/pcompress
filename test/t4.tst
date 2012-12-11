@@ -5,6 +5,9 @@ echo "#################################################"
 echo "# Test Deduplication, Delta Encoding and LZP"
 echo "#################################################"
 
+rm -f *.pz
+rm -f *.1
+
 for algo in lzfx lz4 adapt
 do
 	for tf in combined.dat comb_d.dat

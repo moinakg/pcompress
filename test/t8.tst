@@ -5,6 +5,9 @@ echo "#################################################"
 echo "# Test Fixed block Deduplication"
 echo "#################################################"
 
+rm -f *.pz
+rm -f *.1
+
 for algo in lzfx lz4 adapt adapt2
 do
 	for tf in combined.dat comb_d.dat

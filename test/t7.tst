@@ -5,6 +5,9 @@ echo "#################################################"
 echo "# Pipe mode Crypto tests"
 echo "#################################################"
 
+rm -f *.pz
+rm -f *.1
+
 for algo in lzfx adapt2
 do
 	for tf in comb_d.dat
