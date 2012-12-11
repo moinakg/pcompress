@@ -46,6 +46,7 @@ yasm=yasm
 keccak_srcs=
 keccak_hdrs=
 keccak_srcs_asm=
+lto_flag=
 
 # Try a simple compilation
 cat << _EOF > tst.c
@@ -70,6 +71,10 @@ then
 	rm -f tst.c
 	exit 1
 fi
+
+# Check GCC version and enable LTO flags if possible
+gcc -v 2>&1 | grep lto > /dev/null
+[ $? -eq 0 ] && lto_flag="-flto"
 
 # Check bitness of system
 bitness=`./tst`
@@ -344,6 +349,7 @@ sha256asmobjsvar="SHA256ASM_OBJS"
 sha256objsvar="SHA256_OBJS"
 yasmvar="YASM"
 fptr_flag_var="FPTR_FLAG"
+lto_flag_var="LTO_FLAG"
 
 openssllibdirvar="OPENSSL_LIBDIR"
 opensslincdirvar="OPENSSL_INCDIR"
@@ -396,5 +402,6 @@ s#@${keccak_srcs_var}@#${keccak_srcs}#g
 s#@${keccak_hdrs_var}@#${keccak_hdrs}#g
 s#@${keccak_srcs_var}@#${keccak_srcs}#g
 s#@${keccak_srcs_asm_var}@#${keccak_srcs_asm}#g
+s#@${lto_flag_var}@#${lto_flag}#g
 " > Makefile
 
