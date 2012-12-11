@@ -31,26 +31,6 @@
    - LZ4 source repository : http://code.google.com/p/lz4/
 */
 
-/*
- * This file is a part of Pcompress, a chunked parallel multi-
- * algorithm lossless compression and decompression program.
- *
- * Copyright (C) 2012 Moinak Ghosh. All rights reserved.
- * Use is subject to license terms.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * moinakg@belenix.org, http://moinakg.wordpress.com/
- *
- */
 
 //**************************************
 // CPU Feature Detection
@@ -88,12 +68,20 @@
 
 #ifdef _MSC_VER
 #define inline __forceinline    // Visual is not C99, but supports some kind of inline
+#include <intrin.h>             // For Visual 2005
+#  if LZ4_ARCH64	// 64-bit
+#    pragma intrinsic(_BitScanForward64) // For Visual 2005
+#    pragma intrinsic(_BitScanReverse64) // For Visual 2005
+#  else
+#    pragma intrinsic(_BitScanForward)   // For Visual 2005
+#    pragma intrinsic(_BitScanReverse)   // For Visual 2005
+#  endif
 #endif
 
 #ifdef _MSC_VER  // Visual Studio
-#define bswap16(x) _byteswap_ushort(x)
+#define lz4_bswap16(x) _byteswap_ushort(x)
 #else
-#define bswap16(x)  ((unsigned short int) ((((x) >> 8) & 0xffu) | (((x) & 0xffu) << 8)))
+#define lz4_bswap16(x)  ((unsigned short int) ((((x) >> 8) & 0xffu) | (((x) & 0xffu) << 8)))
 #endif
 
 
@@ -197,8 +185,8 @@ typedef struct _U64_S { U64 v; } U64_S;
 #endif
 
 #if defined(LZ4_BIG_ENDIAN)
-#define LZ4_READ_LITTLEENDIAN_16(d,s,p) { U16 v = A16(p); v = bswap16(v); d = (s) - v; }
-#define LZ4_WRITE_LITTLEENDIAN_16(p,i)  { U16 v = (U16)(i); v = bswap16(v); A16(p) = v; p+=2; }
+#define LZ4_READ_LITTLEENDIAN_16(d,s,p) { U16 v = A16(p); v = lz4_bswap16(v); d = (s) - v; }
+#define LZ4_WRITE_LITTLEENDIAN_16(p,i)  { U16 v = (U16)(i); v = lz4_bswap16(v); A16(p) = v; p+=2; }
 #else		// Little Endian
 #define LZ4_READ_LITTLEENDIAN_16(d,s,p) { d = (s) - A16(p); }
 #define LZ4_WRITE_LITTLEENDIAN_16(p,v)  { A16(p) = v; p+=2; }
@@ -352,7 +340,7 @@ inline static int LZ4HC_InsertAndFindBestMatch (LZ4HC_Data_Structure* hc4, const
 	// HC4 match finder
 	LZ4HC_Insert(hc4, ip);
 	ref = HASH_POINTER(ip);
-	while ((ref > (ip-MAX_DISTANCE)) && (nbAttempts))
+	while ((ref >= (ip-MAX_DISTANCE)) && (nbAttempts))
 	{
 		nbAttempts--;
 		if (*(ref+ml) == *(ip+ml))
@@ -362,15 +350,15 @@ inline static int LZ4HC_InsertAndFindBestMatch (LZ4HC_Data_Structure* hc4, const
 			const BYTE* ipt = ip+MINMATCH;
 
 #ifdef __USE_SSE_INTRIN__
-			while (ipt<matchlimit-15) {
-				int mask;
-				__m128i span1 = _mm_loadu_si128((__m128i *)(reft));
-				__m128i span2 = _mm_loadu_si128((__m128i *)(ipt));
-				mask = _mm_movemask_epi8(_mm_cmpeq_epi8(span1, span2)) ^ 0xffff;
-				if (!mask) { ipt+=16; reft+=16; continue; }
-				ipt += __builtin_ctz(mask);
-				goto _endCount;
-			}
+                        while (ipt<matchlimit-15) {
+                                int mask;
+                                __m128i span1 = _mm_loadu_si128((__m128i *)(reft));
+                                __m128i span2 = _mm_loadu_si128((__m128i *)(ipt));
+                                mask = _mm_movemask_epi8(_mm_cmpeq_epi8(span1, span2)) ^ 0xffff;
+                                if (!mask) { ipt+=16; reft+=16; continue; }
+                                ipt += __builtin_ctz(mask);
+                                goto _endCount;
+                        }
 #endif
 			while (ipt<matchlimit-(STEPSIZE-1))
 			{
@@ -384,7 +372,7 @@ inline static int LZ4HC_InsertAndFindBestMatch (LZ4HC_Data_Structure* hc4, const
 			if ((ipt<matchlimit) && (*reft == *ipt)) ipt++;
 _endCount:
 
-			if (ipt-ip > ml) { ml = ipt-ip; *matchpos = ref; }
+			if (ipt-ip > ml) { ml = (int)(ipt-ip); *matchpos = ref; }
 		}
 		ref = GETNEXT(ref);
 	}
@@ -400,13 +388,13 @@ inline static int LZ4HC_InsertAndGetWiderMatch (LZ4HC_Data_Structure* hc4, const
 	INITBASE(base,hc4->base);
 	const BYTE*  ref;
 	int nbAttempts = MAX_NB_ATTEMPTS;
-	int delta = ip-startLimit;
+	int delta = (int)(ip-startLimit);
 
 	// First Match
 	LZ4HC_Insert(hc4, ip);
 	ref = HASH_POINTER(ip);
 
-	while ((ref > ip-MAX_DISTANCE) && (ref >= hc4->base) && (nbAttempts))
+	while ((ref >= ip-MAX_DISTANCE) && (ref >= hc4->base) && (nbAttempts))
 	{
 		nbAttempts--;
 		if (*(startLimit + longest) == *(ref - delta + longest))
@@ -417,15 +405,15 @@ inline static int LZ4HC_InsertAndGetWiderMatch (LZ4HC_Data_Structure* hc4, const
 			const BYTE* startt = ip;
 
 #ifdef __USE_SSE_INTRIN__
-			while (ipt<matchlimit-15) {
-				int mask;
-				__m128i span1 = _mm_loadu_si128((__m128i *)(reft));
-				__m128i span2 = _mm_loadu_si128((__m128i *)(ipt));
-				mask = _mm_movemask_epi8(_mm_cmpeq_epi8(span1, span2)) ^ 0xffff;
-				if (!mask) { ipt+=16; reft+=16; continue; }
-				ipt += __builtin_ctz(mask);
-				goto _endCount;
-			}
+                        while (ipt<matchlimit-15) {
+                                int mask;
+                                __m128i span1 = _mm_loadu_si128((__m128i *)(reft));
+                                __m128i span2 = _mm_loadu_si128((__m128i *)(ipt));
+                                mask = _mm_movemask_epi8(_mm_cmpeq_epi8(span1, span2)) ^ 0xffff;
+                                if (!mask) { ipt+=16; reft+=16; continue; }
+                                ipt += __builtin_ctz(mask);
+                                goto _endCount;
+                        }
 #endif
 			while (ipt<matchlimit-(STEPSIZE-1))
 			{
@@ -444,7 +432,7 @@ _endCount:
 
 			if ((ipt-startt) > longest)
 			{
-				longest = ipt-startt;
+				longest = (int)(ipt-startt);
 				*matchpos = reft;
 				*startpos = startt;
 			}
@@ -462,7 +450,7 @@ inline static int LZ4_encodeSequence(const BYTE** ip, BYTE** op, const BYTE** an
 	BYTE* token;
 
 	// Encode Literal length
-	length = *ip - *anchor;
+	length = (int)(*ip - *anchor);
 	token = (*op)++;
 	if (length>=(int)RUN_MASK) { *token=(RUN_MASK<<ML_BITS); len = length-RUN_MASK; for(; len > 254 ; len-=255) *(*op)++ = 255;  *(*op)++ = (BYTE)len; } 
 	else *token = (length<<ML_BITS);
@@ -471,7 +459,7 @@ inline static int LZ4_encodeSequence(const BYTE** ip, BYTE** op, const BYTE** an
 	LZ4_BLINDCOPY(*anchor, *op, length);
 
 	// Encode Offset
-	LZ4_WRITE_LITTLEENDIAN_16(*op,*ip-ref);
+	LZ4_WRITE_LITTLEENDIAN_16(*op,(U16)(*ip-ref));
 
 	// Encode MatchLength
 	len = (int)(ml-MINMATCH);
@@ -564,8 +552,8 @@ _Search3:
 			int correction;
 			int new_ml = ml;
 			if (new_ml > OPTIMAL_ML) new_ml = OPTIMAL_ML;
-			if (ip+new_ml > start2 + ml2 - MINMATCH) new_ml = start2 - ip + ml2 - MINMATCH;
-			correction = new_ml - (start2 - ip);
+			if (ip+new_ml > start2 + ml2 - MINMATCH) new_ml = (int)(start2 - ip) + ml2 - MINMATCH;
+			correction = new_ml - (int)(start2 - ip);
 			if (correction > 0)
 			{
 				start2 += correction;
@@ -588,8 +576,8 @@ _Search3:
 				{
 					int correction;
 					if (ml > OPTIMAL_ML) ml = OPTIMAL_ML;
-					if (ip+ml > start2 + ml2 - MINMATCH) ml = start2 - ip + ml2 - MINMATCH;
-					correction = ml - (start2 - ip);
+					if (ip+ml > start2 + ml2 - MINMATCH) ml = (int)(start2 - ip) + ml2 - MINMATCH;
+					correction = ml - (int)(start2 - ip);
 					if (correction > 0)
 					{
 						start2 += correction;
@@ -599,7 +587,7 @@ _Search3:
 				}
 				else
 				{
-					ml = start2 - ip;
+					ml = (int)(start2 - ip);
 				}
 			}
 			// Now, encode 2 sequences
@@ -615,7 +603,7 @@ _Search3:
 			{
 				if (start2 < ip+ml)
 				{
-					int correction = (ip+ml) - start2;
+					int correction = (int)(ip+ml - start2);
 					start2 += correction;
 					ref2 += correction;
 					ml2 -= correction;
@@ -652,8 +640,8 @@ _Search3:
 			{
 				int correction;
 				if (ml > OPTIMAL_ML) ml = OPTIMAL_ML;
-				if (ip + ml > start2 + ml2 - MINMATCH) ml = start2 - ip + ml2 - MINMATCH;
-				correction = ml - (start2 - ip);
+				if (ip + ml > start2 + ml2 - MINMATCH) ml = (int)(start2 - ip) + ml2 - MINMATCH;
+				correction = ml - (int)(start2 - ip);
 				if (correction > 0)
 				{
 					start2 += correction;
@@ -663,7 +651,7 @@ _Search3:
 			}
 			else
 			{
-				ml = start2 - ip;
+				ml = (int)(start2 - ip);
 			}
 		}
 		LZ4_encodeSequence(&ip, &op, &anchor, ml, ref);
@@ -682,7 +670,7 @@ _Search3:
 
 	// Encode Last Literals
 	{
-		int lastRun = iend - anchor;
+		int lastRun = (int)(iend - anchor);
 		if (lastRun>=(int)RUN_MASK) { *op++=(RUN_MASK<<ML_BITS); lastRun-=RUN_MASK; for(; lastRun > 254 ; lastRun-=255) *op++ = 255; *op++ = (BYTE) lastRun; } 
 		else *op++ = (lastRun<<ML_BITS);
 		memcpy(op, anchor, iend - anchor);

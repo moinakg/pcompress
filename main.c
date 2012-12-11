@@ -208,6 +208,7 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 	} else {
 		/*
 		 * Execution won't come here but just in case ...
+		 * Even Delta2 encoding below enables LZP.
 		 */
 		fprintf(stderr, "Invalid preprocessing mode\n");
 		return (-1);
@@ -541,11 +542,12 @@ cont:
  * 
  * Chunk Flags, 8 bits:
  * I  I  I  I  I  I  I  I
- * |  |     |        |  |
- * |  '-----'        |  `- 0 - Uncompressed
- * |     |           |     1 - Compressed
- * |     |           |   
- * |     |           `---- 1 - Chunk was Deduped
+ * |  |     |     |  |  |
+ * |  '-----'     |  |  `- 0 - Uncompressed
+ * |     |        |  |     1 - Compressed
+ * |     |        |  |   
+ * |     |        |  `---- 1 - Chunk was Deduped
+ * |     |        `------- 1 - Chunk was pre-compressed
  * |     |
  * |     |                 1 - Bzip2 (Adaptive Mode)
  * |     `---------------- 2 - Lzma (Adaptive Mode)

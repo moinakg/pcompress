@@ -31,28 +31,6 @@
    - LZ4 homepage : http://fastcompression.blogspot.com/p/lz4.html
    - LZ4 source repository : http://code.google.com/p/lz4/
 */
-
-/*
- * This file is a part of Pcompress, a chunked parallel multi-
- * algorithm lossless compression and decompression program.
- *
- * Copyright (C) 2012 Moinak Ghosh. All rights reserved.
- * Use is subject to license terms.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * moinakg@belenix.org, http://moinakg.wordpress.com/
- *
- */
-
 #pragma once
 
 
