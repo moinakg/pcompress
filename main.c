@@ -46,6 +46,7 @@
 #include <allocator.h>
 #include <rabin_dedup.h>
 #include <lzp.h>
+#include <transpose.h>
 
 /*
  * We use 5MB chunks by default.
@@ -452,13 +453,21 @@ redo:
 		rv = 0;
 		cmpbuf = cseg + RABIN_HDR_SIZE;
 		ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE;
-		if (dedupe_index_sz >= 90) {
+
+		if (dedupe_index_sz >= 90 && dedupe_index_sz > dedupe_index_sz_cmp) {
 			/* Index should be at least 90 bytes to have been compressed. */
 			rv = lzma_decompress(cmpbuf, dedupe_index_sz_cmp, ubuf,
 			    &dedupe_index_sz, tdat->rctx->level, 0, tdat->rctx->lzma_data);
 		} else {
 			memcpy(ubuf, cmpbuf, dedupe_index_sz);
 		}
+
+		/*
+		 * Recover from transposed index.
+		 */
+		transpose(ubuf, cmpbuf, dedupe_index_sz, sizeof (uint32_t), COL);
+		memcpy(ubuf, cmpbuf, dedupe_index_sz);
+
 	} else {
 		if (HDR & COMPRESSED) {
 			if (HDR & CHUNK_FLAG_PREPROC) {
@@ -1150,48 +1159,57 @@ redo:
 		index_size_cmp = dedupe_index_sz;
 
 		rv = 0;
+
+		/*
+		 * Do a matrix transpose of the index table with the hope of improving
+		 * compression ratio subsequently.
+		 */
+		transpose(tdat->uncompressed_chunk + RABIN_HDR_SIZE,
+		    compressed_chunk + RABIN_HDR_SIZE, dedupe_index_sz,
+		    sizeof (uint32_t), ROW);
+		memcpy(tdat->uncompressed_chunk + RABIN_HDR_SIZE,
+		    compressed_chunk + RABIN_HDR_SIZE, dedupe_index_sz);
+
 		if (dedupe_index_sz >= 90) {
 			/* Compress index if it is at least 90 bytes. */
 			rv = lzma_compress(tdat->uncompressed_chunk + RABIN_HDR_SIZE,
 			    dedupe_index_sz, compressed_chunk + RABIN_HDR_SIZE,
 			    &index_size_cmp, tdat->rctx->level, 255, tdat->rctx->lzma_data);
+
+			/* 
+			 * If index compression fails or does not produce a smaller result
+			 * retain it as is. In that case compressed size == original size
+			 * and it will be handled correctly during decompression.
+			 */
+			if (rv != 0 || index_size_cmp >= dedupe_index_sz) {
+				index_size_cmp = dedupe_index_sz;
+				goto plain_index;
+			}
 		} else {
+plain_index:
 			memcpy(compressed_chunk + RABIN_HDR_SIZE,
 			    tdat->uncompressed_chunk + RABIN_HDR_SIZE, dedupe_index_sz);
 		}
 
 		index_size_cmp += RABIN_HDR_SIZE;
 		dedupe_index_sz += RABIN_HDR_SIZE;
-		if (rv == 0) {
-			memcpy(compressed_chunk, tdat->uncompressed_chunk, RABIN_HDR_SIZE);
-			/* Compress data chunk. */
-			if (lzp_preprocess) {
-				rv = preproc_compress(tdat->compress,
-				    tdat->uncompressed_chunk + dedupe_index_sz,
-				    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
-				    tdat->level, 0, tdat->data, tdat->props);
-			} else {
-				rv = tdat->compress(tdat->uncompressed_chunk + dedupe_index_sz,
-				    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
-				    tdat->level, 0, tdat->data);
-			}
-
-			/* Can't compress data just retain as-is. */
-			if (rv < 0)
-				memcpy(compressed_chunk + index_size_cmp,
-				    tdat->uncompressed_chunk + dedupe_index_sz, _chunksize);
-			/* Now update rabin header with the compressed sizes. */
-			update_dedupe_hdr(compressed_chunk, index_size_cmp - RABIN_HDR_SIZE,
-					 _chunksize);
+		memcpy(compressed_chunk, tdat->uncompressed_chunk, RABIN_HDR_SIZE);
+		/* Compress data chunk. */
+		if (lzp_preprocess) {
+			rv = preproc_compress(tdat->compress, tdat->uncompressed_chunk + dedupe_index_sz,
+			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
+			    tdat->level, 0, tdat->data, tdat->props);
 		} else {
-			/* If rabin index compression fails, we just drop down to plain
-			 * compression and avoid dedup. Should be pretty rare case.
-			 */
-			tdat->rctx->valid = 0;
-			memcpy(tdat->uncompressed_chunk, tdat->cmp_seg, rbytes);
-			tdat->rbytes = rbytes;
-			goto plain_compress;
+			rv = tdat->compress(tdat->uncompressed_chunk + dedupe_index_sz, _chunksize,
+			    compressed_chunk + index_size_cmp, &_chunksize, tdat->level, 0, tdat->data);
 		}
+
+		/* Can't compress data just retain as-is. */
+		if (rv < 0)
+			memcpy(compressed_chunk + index_size_cmp,
+			    tdat->uncompressed_chunk + dedupe_index_sz, _chunksize);
+		/* Now update rabin header with the compressed sizes. */
+		update_dedupe_hdr(compressed_chunk, index_size_cmp - RABIN_HDR_SIZE, _chunksize);
 		_chunksize += index_size_cmp;
 	} else {
 plain_compress:
