@@ -30,18 +30,23 @@
  * Bytes are packed into integers in big-endian format.
  *
  * After an optimal stride length has been identified the encoder
- * performs a delta run length encoding on the spans. Two types of
+ * performs a delta run length encoding on the spans. Three types of
  * objects are output by the encoder:
  * 1) A literal run of unmodified bytes. Header: 1 zero byte followed
  *    by a 64bit length in bytes.
- * 2) An encoded run length of a series in arithmetic progression.
- *    Header: 1 byte stride length
+ * 2) A literal run of transposed bytes containing at least 87% below
+ *    threshold sequences.
+ *    Header: 1 byte stride length with high bit set.
+ *            64bit length of span in bytes.
+ * 3) An encoded run length of a series in arithmetic progression.
+ *    Header: 1 byte stride length (must be less than 128)
  *            64bit length of span in bytes
  *            64bit starting value of series
  *            64bit delta value
  */
 #include <stdio.h>
 #include <utils.h>
+#include <transpose.h>
 #include "delta2.h"
 
 // Size of original data. 64 bits.
@@ -59,6 +64,9 @@
 // 64bit delta value
 #define	DELTA_HDR	(1 + (sizeof (uint64_t)) * 3)
 
+// Minimum span length
+#define	MIN_THRESH	(50)
+
 int
 delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh)
 {
@@ -68,7 +76,10 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 	uchar_t *pos, *pos1, *pos2, stride, st1;
 	uchar_t strides[4] = {3, 5, 7, 8};
 	int st, sz;
+	DEBUG_STAT_EN(uint32_t num_trans);
 
+	if (rle_thresh < MIN_THRESH)
+		return (-1);
 	gtot1 = ULL_MAX;
 	stride = 0;
 	sz = sizeof (strides) / sizeof (strides[0]);
@@ -107,12 +118,10 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 			vl1 = vl2;
 			pos += st1;
 		}
-		if (snum > 1) {
-			if (snum > rle_thresh) {
-				gtot2 += DELTA_HDR;
-			} else {
-				gtot2 += snum;
-			}
+		if (snum > rle_thresh) {
+			gtot2 += DELTA_HDR;
+		} else {
+			gtot2 += snum;
 		}
 		if (gtot2 < gtot1) {
 			gtot1 = gtot2;
@@ -139,6 +148,8 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 	pos1 += MAIN_HDR;
 	pos2 = pos1;
 	pos1 += LIT_HDR;
+	gtot2 = 0;
+	DEBUG_STAT_EN(num_trans = 0);
 
 	vl2 = *((uint64_t *)pos);
 	vl2 = htonll(vl2);
@@ -154,13 +165,27 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 			if (snum > rle_thresh) {
 				if (gtot1 > 0) {
 					/*
-					 * Encode previous literal run, if any.
+					 * Encode previous literal run, if any. If the literal run
+					 * has enough large sequences just below threshold, do a
+					 * matrix transpose on the range in the hope of achieving
+					 * a better compression ratio.
 					 */
-					*pos2 = 0;
-					pos2++;
-					*((uint64_t *)pos2) = htonll(gtot1);
-					pos2 += (gtot1 + sizeof (uint64_t));
+					if (gtot2 >= ((gtot1 >> 1) + (gtot1 >> 2) + (gtot1 >> 3))) {
+						*pos2 = stride | 128;
+						pos2++;
+						*((uint64_t *)pos2) = htonll(gtot1);
+						pos2 += sizeof (uint64_t);
+						transpose(pos - (gtot1+snum), pos2, gtot1, stride, ROW);
+						DEBUG_STAT_EN(num_trans++);
+					} else {
+						*pos2 = 0;
+						pos2++;
+						*((uint64_t *)pos2) = htonll(gtot1);
+						pos2 += sizeof (uint64_t);
+					}
+					pos2 += gtot1;
 					gtot1 = 0;
+					gtot2 = 0;
 				}
 				/*
 				 * RLE Encode delta series.
@@ -176,6 +201,8 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 				pos1 = pos2 + LIT_HDR;
 			} else {
 				gtot1 += snum;
+				if (snum >= 50)
+					gtot2 += snum;
 			}
 			snum = 0;
 			sval = vl2;
@@ -230,6 +257,7 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		}
 	}
 	*dstlen = pos2 - dst;
+	DEBUG_STAT_EN(printf("%u transpositions\n", num_trans));
 	return (0);
 }
 
@@ -262,10 +290,27 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 			if (out + rcnt > *dstlen) {
 				return (-1);
 			}
-			for (cnt = 0; cnt < rcnt; cnt++) {
-				*pos1 = *pos;
-				pos++; pos1++; out++;
+			memcpy(pos1, pos, rcnt);
+			pos += rcnt;
+			pos1 += rcnt;
+			out += rcnt;
+
+		} else if (*pos & 128) {
+			int stride;
+			/*
+			 * Copy over literal run of transposed bytes and inverse-transpose.
+			 */
+			stride = (*pos & 127);
+			pos++;
+			rcnt = ntohll(*((uint64_t *)pos));
+			pos += sizeof (rcnt);
+			if (out + rcnt > *dstlen) {
+				return (-1);
 			}
+			transpose(pos, pos1, rcnt, stride, COL);
+			pos += rcnt;
+			pos1 += rcnt;
+			out += rcnt;
 		} else {
 			stride = *pos;
 			pos++;

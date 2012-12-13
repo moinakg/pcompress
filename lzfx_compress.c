@@ -41,7 +41,7 @@ lz_fx_stats(int show)
 
 void
 lz_fx_props(algo_props_t *data, int level, int64_t chunksize) {
-	data->delta2_stride = 50;
+	data->delta2_span = 50;
 }
 
 int

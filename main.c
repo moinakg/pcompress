@@ -215,9 +215,9 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 		return (-1);
 	}
 
-	if (enable_delta2_encode && props->delta2_stride > 0) {
+	if (enable_delta2_encode && props->delta2_span > 0) {
 		_dstlen = srclen;
-		result = delta2_encode(src, srclen, dst, &_dstlen, props->delta2_stride);
+		result = delta2_encode(src, srclen, dst, &_dstlen, props->delta2_span);
 		if (result != -1) {
 			memcpy(src, dst, _dstlen);
 			srclen = _dstlen;

@@ -50,7 +50,7 @@ bzip2_stats(int show)
 
 void
 bzip2_props(algo_props_t *data, int level, int64_t chunksize) {
-	data->delta2_stride = 200;
+	data->delta2_span = 200;
 }
 
 int

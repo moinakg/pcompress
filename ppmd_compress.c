@@ -63,7 +63,7 @@ ppmd_stats(int show)
 
 void
 ppmd_props(algo_props_t *data, int level, int64_t chunksize) {
-	data->delta2_stride = 100;
+	data->delta2_span = 100;
 }
 
 int
