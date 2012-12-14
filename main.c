@@ -197,6 +197,7 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 	uchar_t *dest = (uchar_t *)dst, type = 0;
 	int64_t result, _dstlen;
 
+	_dstlen = *dstlen;
 	if (lzp_preprocess) {
 		int hashsize;
 

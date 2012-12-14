@@ -45,6 +45,7 @@
  *            64bit delta value
  */
 #include <stdio.h>
+#include <string.h>
 #include <utils.h>
 #include <transpose.h>
 #include "delta2.h"
@@ -66,6 +67,9 @@
 
 // Minimum span length
 #define	MIN_THRESH	(50)
+#define	TRANSP_THRESH	(100)
+#define	TRANSP_BIT	(128)
+#define	TRANSP_MASK	(127)
 
 int
 delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh)
@@ -151,6 +155,11 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 	gtot2 = 0;
 	DEBUG_STAT_EN(num_trans = 0);
 
+	if (rle_thresh <= TRANSP_THRESH) {
+		tot = rle_thresh/2;
+	} else {
+		tot = TRANSP_THRESH;
+	}
 	vl2 = *((uint64_t *)pos);
 	vl2 = htonll(vl2);
 	vl2 >>= ((sizeof (vl2) - stride) << 3);
@@ -166,12 +175,12 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 				if (gtot1 > 0) {
 					/*
 					 * Encode previous literal run, if any. If the literal run
-					 * has enough large sequences just below threshold, do a
-					 * matrix transpose on the range in the hope of achieving
+					 * has enough (90%+) large sequences just below threshold,
+					 * do a matrix transpose on the range in the hope of achieving
 					 * a better compression ratio.
 					 */
 					if (gtot2 >= ((gtot1 >> 1) + (gtot1 >> 2) + (gtot1 >> 3))) {
-						*pos2 = stride | 128;
+						*pos2 = stride | TRANSP_BIT;
 						pos2++;
 						*((uint64_t *)pos2) = htonll(gtot1);
 						pos2 += sizeof (uint64_t);
@@ -201,7 +210,7 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 				pos1 = pos2 + LIT_HDR;
 			} else {
 				gtot1 += snum;
-				if (snum >= 50)
+				if (snum >= tot)
 					gtot2 += snum;
 			}
 			snum = 0;
@@ -295,12 +304,12 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 			pos1 += rcnt;
 			out += rcnt;
 
-		} else if (*pos & 128) {
+		} else if (*pos & TRANSP_BIT) {
 			int stride;
 			/*
 			 * Copy over literal run of transposed bytes and inverse-transpose.
 			 */
-			stride = (*pos & 127);
+			stride = (*pos & TRANSP_MASK);
 			pos++;
 			rcnt = ntohll(*((uint64_t *)pos));
 			pos += sizeof (rcnt);
