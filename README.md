@@ -103,7 +103,9 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
                   However Adaptive Delta Encoding is beneficial along with this.
 
        '-P' -     Enable Adaptive Delta Encoding. This implies '-L' as well. It improves
-                  compresion ratio further at the cost of more CPU overhead.
+                  compresion ratio further at the cost of more CPU overhead. Delta
+                  Encoding is combined with Run-Length encoding and Matrix transpose
+                  of certain kinds of data to improve subsequent compression results.
 
        '-S' <cksum>
             -     Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512, SHA256 and
@@ -120,6 +122,7 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
                   usable for disk dumps especially virtual machine images. This generally
                   gives lower dedupe ratio than content-aware dedupe (-D) and does not
                   support delta compression.
+
        '-M' -     Display memory allocator statistics
        '-C' -     Display compression statistics
 
@@ -197,31 +200,56 @@ PPMD	- Slow. Extreme compression for Text, average compression for binary.
           This requires lots of RAM similar to LZMA.
 	  Levels: 1 - 14.
 
-Adapt	- Very slow synthetic mode. Both Bzip2 and PPMD are tried per chunk and
-	  better result selected.
+Adapt	- Synthetic mode with text/binary detection. For pure text data PPMD is
+          used otherwise Bzip2 is selected per chunk.
 	  Levels: 1 - 14
-Adapt2	- Ultra slow synthetic mode. Both LZMA and PPMD are tried per chunk and
-	  better result selected. Can give best compression ratio when splitting
-	  file into multiple chunks.
+Adapt2	- Slower synthetic mode. For pure text data PPMD is otherwise LZMA is
+          applied. Can give very good compression ratio when splitting file
+          into multiple chunks.
 	  Levels: 1 - 14
           Since both LZMA and PPMD are used together memory requirements are
-          quite extensive especially if you are also using extreme levels above
-          10. For example with 64MB chunk, Level 14, 2 threads and with or without
-          dedupe, it uses upto 3.5GB physical RAM and requires 6GB of virtual
-          memory space.
+          large especially if you are also using extreme levels above 10. For
+          example with 100MB chunks, Level 14, 2 threads and with or without
+          dedupe, it uses upto 2.5GB physical RAM (RSS).
 
 It is possible for a single chunk to span the entire file if enough RAM is
 available. However for adaptive modes to be effective for large files, especially
 multi-file archives splitting into chunks is required so that best compression
 algorithm can be selected for textual and binary portions.
 
-Caveats
-=======
-This utility is not meant for resource constrained environments. Minimum memory
-usage (RES/RSS) with barely meaningful settings is around 10MB. This occurs when
-using the minimal LZFX compression algorithm at level 2 with a 1MB chunk size and
-running 2 threads.
-Normally this utility requires lots of RAM depending on compression algorithm,
-compression level, and dedupe being enabled. Larger chunk sizes can give
-better compression ratio but at the same time use more RAM.
+Pre-Processing Algorithms
+=========================
+As can be seen above a multitude of pre-processing algorithms are available that provide
+further compression effectiveness beyond what the usual compression algorithms can
+achieve by themselves. These are summarized below:
+
+1) Deduplication   : Per-Chunk (or per-segment) deduplication based on Rabin
+                     fingerprinting.
+2) LZP             : LZ Prediction is a variant of LZ77 that replaces repeating runs of
+                     text with shorter codes.
+3) Adaptive Delta  : This is a simple form of Delta Encoding where arithmetic progressions
+                     are detected in the data stream and collapsed via Run-Length encoding.
+4) Matrix Transpose: This is used automatically in Delta Encoding and Deduplication. This
+                     attempts to transpose columnar repeating sequences of bytes into
+                     row-wise sequences so that compression algorithms can work better.
+
+Memory Usage
+============
+As can be seen from above memory usage can vary greatly based on compression/
+pre-processing algorithms and chunk size. A variety of configurations are possible
+depending on resource availability in the system.
+
+The minimum possible meaningful settings while still giving about 50% compression
+ratio and very high speed is with the LZFX algorithm with 1MB chunk size and 2
+threads:
+
+        pcompress -c lzfx -l2 -s1m -t2 <file>
+
+This uses about 6MB of physical RAM (RSS). Earlier versions of the utility before
+the 0.9 release comsumed much more memory. This was improved in the later versions.
+When using Linux the virtual memory consumption may appear to be very high but it
+is just address space usage rather than actual RAM and should be ignored. It is only
+the RSS that matters. This is a result of the memory arena mechanism in Glibc that
+improves malloc() performance for multi-threaded applications.
+
 
