@@ -102,10 +102,12 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
                   delta encoding in conjunction with this may not always be beneficial.
                   However Adaptive Delta Encoding is beneficial along with this.
 
-       '-P' -     Enable Adaptive Delta Encoding. This implies '-L' as well. It improves
-                  compresion ratio further at the cost of more CPU overhead. Delta
-                  Encoding is combined with Run-Length encoding and Matrix transpose
-                  of certain kinds of data to improve subsequent compression results.
+       '-P' -     Enable Adaptive Delta Encoding. It can improve compresion ratio further
+                  for data containing tables of numerical values especially if those are
+                  in an arithmetic series. In this implementation basic Delta Encoding is
+                  combined with Run-Length encoding and Matrix transpose
+       NOTE -     If data has mixed textual and numeric table components then both -L and
+                  -P can be used together.
 
        '-S' <cksum>
             -     Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512, SHA256 and

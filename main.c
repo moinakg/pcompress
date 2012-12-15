@@ -150,8 +150,11 @@ usage(void)
 	    "7) Other flags:\n"
 	    "   '-L'    - Enable LZP pre-compression. This improves compression ratio of all\n"
 	    "             algorithms with some extra CPU and very low RAM overhead.\n"
-	    "   '-P'    - Enable Adaptive Delta Encoding. This implies '-L' as well. It improves\n"
-	    "             compresion ratio further at the cost of more CPU overhead.\n"
+	    "   '-P'    - Enable Adaptive Delta Encoding. It can improve compresion ratio for\n"
+	    "             data containing tables of numerical values especially if those are in\n"
+	    "             an arithmetic series.\n"
+	    "   NOTE    - If data has mixed textual and numeric table components then both -L and\n"
+	    "             -P can be used together.\n"
 	    "   '-S' <cksum>\n"
 	    "           - Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512, SHA256 and\n"
 	    "             SHA512. Default one is SKEIN256.\n"
@@ -207,7 +210,8 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 		if (result < 0 || result == srclen) return (-1);
 		srclen = result;
 		memcpy(src, dst, srclen);
-	} else {
+
+	} else if (!enable_delta2_encode)  {
 		/*
 		 * Execution won't come here but just in case ...
 		 * Even Delta2 encoding below enables LZP.
@@ -282,7 +286,9 @@ preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void 
 			return (-1);
 		}
 		*dstlen = result;
-	} else {
+	}
+
+	if (!(type & (PREPROC_COMPRESSED | PREPROC_TYPE_DELTA2 | PREPROC_TYPE_LZP))) {
 		fprintf(stderr, "Invalid preprocessing flags: %d\n", type);
 		return (-1);
 	}
@@ -1196,7 +1202,7 @@ plain_index:
 		dedupe_index_sz += RABIN_HDR_SIZE;
 		memcpy(compressed_chunk, tdat->uncompressed_chunk, RABIN_HDR_SIZE);
 		/* Compress data chunk. */
-		if (lzp_preprocess) {
+		if (lzp_preprocess || enable_delta2_encode) {
 			rv = preproc_compress(tdat->compress, tdat->uncompressed_chunk + dedupe_index_sz,
 			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
 			    tdat->level, 0, tdat->data, tdat->props);
@@ -1215,7 +1221,7 @@ plain_index:
 	} else {
 plain_compress:
 		_chunksize = tdat->rbytes;
-		if (lzp_preprocess) {
+		if (lzp_preprocess || enable_delta2_encode) {
 			rv = preproc_compress(tdat->compress,
 			    tdat->uncompressed_chunk, tdat->rbytes,
 			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data,
@@ -1270,7 +1276,7 @@ plain_compress:
 	if ((enable_rabin_scan || enable_fixed_scan) && tdat->rctx->valid) {
 		type |= CHUNK_FLAG_DEDUP;
 	}
-	if (lzp_preprocess) {
+	if (lzp_preprocess || enable_delta2_encode) {
 		type |= CHUNK_FLAG_PREPROC;
 	}
 
@@ -2165,7 +2171,6 @@ main(int argc, char *argv[])
 			break;
 
 		    case 'P':
-			lzp_preprocess = 1;
 			enable_delta2_encode = 1;
 			break;
 

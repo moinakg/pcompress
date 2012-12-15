@@ -56,7 +56,7 @@ lz4_props(algo_props_t *data, int level, int64_t chunksize) {
 	data->compress_mt_capable = 0;
 	data->decompress_mt_capable = 0;
 	data->buf_extra = lz4_buf_extra(chunksize);
-	data->delta2_span = 50;
+	data->delta2_span = 100;
 }
 
 int

@@ -282,8 +282,10 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 
 	last = pos + srclen;
 	olen = ntohll(*((uint64_t *)pos));
-	if (*dstlen < (olen + 8))
+	if (*dstlen < olen) {
+		fprintf(stderr, "DELTA2 Decode: Destination buffer too small.\n");
 		return (-1);
+	}
 
 	out = 0;
 	pos += MAIN_HDR;
@@ -297,6 +299,7 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 			rcnt = ntohll(*((uint64_t *)pos));
 			pos += sizeof (rcnt);
 			if (out + rcnt > *dstlen) {
+				fprintf(stderr, "DELTA2 Decode: Destination buffer overflow. Corrupt data.\n");
 				return (-1);
 			}
 			memcpy(pos1, pos, rcnt);
@@ -314,6 +317,7 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 			rcnt = ntohll(*((uint64_t *)pos));
 			pos += sizeof (rcnt);
 			if (out + rcnt > *dstlen) {
+				fprintf(stderr, "DELTA2 Decode: Destination buffer overflow. Corrupt data.\n");
 				return (-1);
 			}
 			transpose(pos, pos1, rcnt, stride, COL);
@@ -330,6 +334,7 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 			delta = ntohll(*((uint64_t *)pos));
 			pos += sizeof (delta);
 			if (out + rcnt > *dstlen) {
+				fprintf(stderr, "DELTA2 Decode: Destination buffer overflow. Corrupt data.\n");
 				return (-1);
 			}
 
