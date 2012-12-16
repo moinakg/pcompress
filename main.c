@@ -272,6 +272,7 @@ preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void 
 		if (result != -1) {
 			memcpy(src, dst, _dstlen);
 			srclen = _dstlen;
+			*dstlen = _dstlen;
 		} else {
 			return (result);
 		}

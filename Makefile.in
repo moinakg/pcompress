@@ -22,15 +22,30 @@
 #
 
 PROG= pcompress
-MAINSRCS = main.c utils/utils.c allocator.c zlib_compress.c bzip2_compress.c \
-	lzma_compress.c ppmd_compress.c adaptive_compress.c lzfx_compress.c \
-	lz4_compress.c none_compress.c utils/xxhash.c utils/heapq.c utils/cpuid.c \
-	crypto/aes/crypto_aes.c crypto/scrypt/crypto_scrypt-nosse.c \
-	crypto/scrypt/sha256.c crypto/scrypt/crypto_aesctr.c crypto/crypto_utils.c
+MAINSRCS = main.c utils/utils.c allocator.c lzma_compress.c ppmd_compress.c \
+	adaptive_compress.c lzfx_compress.c lz4_compress.c none_compress.c \
+	utils/xxhash.c utils/heapq.c utils/cpuid.c
 MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heapq.h \
-	utils/cpuid.h crypto/crypto_utils.h crypto/scrypt/crypto_scrypt.h \
-	crypto/scrypt/sha256.h crypto/scrypt/crypto_aesctr.h crypto/aes/crypto_aes.h
+	utils/cpuid.h
 MAINOBJS = $(MAINSRCS:.c=.o)
+
+CRYPTO_SRCS = crypto/aes/crypto_aes.c crypto/scrypt/crypto_scrypt-nosse.c \
+	crypto/scrypt/sha256.c crypto/scrypt/crypto_aesctr.c crypto/crypto_utils.c
+CRYPTO_HDRS = crypto/crypto_utils.h crypto/scrypt/crypto_scrypt.h \
+	crypto/scrypt/sha256.h crypto/scrypt/crypto_aesctr.h crypto/aes/crypto_aes.h \
+	$(MAINHDRS)
+CRYPTO_OBJS = $(CRYPTO_SRCS:.c=.o)
+CRYPTO_CPPFLAGS=-I@OPENSSL_INCDIR@
+
+ZLIB_SRCS = zlib_compress.c
+ZLIB_HDRS = $(MAINHDRS)
+ZLIB_OBJS = $(ZLIB_SRCS:.c=.o)
+ZLIB_CPPFLAGS = @LIBZ_INC@
+
+BZLIB_SRCS = bzip2_compress.c
+BZLIB_HDRS = $(MAINHDRS)
+BZLIB_OBJS = $(BZLIB_SRCS:.c=.o)
+BZLIB_CPPFLAGS = @LIBBZ2_INC@
 
 RABINSRCS = rabin/rabin_dedup.c
 RABINHDRS = rabin/rabin_dedup.h utils/utils.h
@@ -130,17 +145,17 @@ RM = rm -f
 RM_RF = rm -rf
 COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
-	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I@OPENSSL_INCDIR@ \
-	-I./crypto/sha2 -I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ \
-	@LIBBZ2_INC@ @LIBZ_INC@ -I./crypto/keccak -I./transpose
+	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I./crypto/sha2 \
+	-I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ \
+	-I./crypto/keccak -I./transpose $(EXTRA_CPPFLAGS)
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -L@LIBBZ2_DIR@ -lbz2 -L@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
-	-L@OPENSSL_LIBDIR@ -lcrypto -lrt
+	-L@OPENSSL_LIBDIR@ -lcrypto -lrt $(EXTRA_LDFLAGS)
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
 $(SKEIN_BLOCK_OBJ) @SHA256ASM_OBJS@ @SHA256_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
-$(TRANSP_OBJS)
+$(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS)
 
 DEBUG_LINK = g++ -m64 -pthread -msse3 @LIBBSCGEN_OPT@
 DEBUG_COMPILE = gcc -m64 -g -msse3 -c
@@ -235,6 +250,15 @@ $(LIBBSCWRAPOBJ): $(LIBBSCWRAP) $(LIBBSCLIB)
 $(TRANSP_OBJS): $(TRANSP_SRCS) $(TRANSP_HDRS)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
+$(CRYPTO_OBJS): $(CRYPTO_SRCS) $(CRYPTO_HDRS)
+	$(COMPILE) $(GEN_OPT) $(CRYPTO_CPPFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
+$(ZLIB_OBJS): $(ZLIB_SRCS) $(ZLIB_HDRS)
+	$(COMPILE) $(GEN_OPT) $(ZLIB_CPPFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
+$(BZLIB_OBJS): $(BZLIB_SRCS) $(BZLIB_HDRS)
+	$(COMPILE) $(GEN_OPT) $(BZLIB_CPPFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
 $(MAINOBJS): $(MAINSRCS) $(MAINHDRS)
 	$(COMPILE) $(GEN_OPT) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
@@ -253,13 +277,13 @@ distclean: clean
 	$(RM) Makefile
 
 install: $(PROG)
-	@mkdir -p $(PREFIX)/bin
-	@chmod 0755 $(PREFIX)/bin
-	@cp $(PROG) $(PREFIX)/bin
-	@chmod 0555 $(PREFIX)/bin/$(PROG)
-	@mkdir -p $(PREFIX)/share/doc/$(PROG)
-	@chmod 0755 $(PREFIX)/share $(PREFIX)/share/doc $(PREFIX)/share/doc/$(PROG)
-	@cp README.md $(PREFIX)/share/doc/$(PROG)/README
-	@chmod 0444 $(PREFIX)/share/doc/$(PROG)/README
+	@mkdir -p $(DESTDIR)$(PREFIX)/bin
+	@chmod 0755 $(DESTDIR)$(PREFIX)/bin
+	@cp $(PROG) $(DESTDIR)$(PREFIX)/bin
+	@chmod 0555 $(DESTDIR)$(PREFIX)/bin/$(PROG)
+	@mkdir -p $(DESTDIR)$(PREFIX)/share/doc/$(PROG)
+	@chmod 0755 $(DESTDIR)$(PREFIX)/share $(PREFIX)/share/doc $(PREFIX)/share/doc/$(PROG)
+	@cp README.md $(DESTDIR)$(PREFIX)/share/doc/$(PROG)/README
+	@chmod 0444 $(DESTDIR)$(PREFIX)/share/doc/$(PROG)/README
 
 

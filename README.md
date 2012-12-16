@@ -221,22 +221,28 @@ algorithm can be selected for textual and binary portions.
 
 Pre-Processing Algorithms
 =========================
-As can be seen above a multitude of pre-processing algorithms are available that provide
-further compression effectiveness beyond what the usual compression algorithms can
-achieve by themselves. These are summarized below:
+As can be seen above a multitude of pre-processing algorithms are available that
+provide further compression effectiveness beyond what the usual compression
+algorithms can achieve by themselves. These are summarized below:
 
-1) Deduplication   : Per-Chunk (or per-segment) deduplication based on Rabin
-                     fingerprinting.
+1) Deduplication     : Per-Chunk (or per-segment) deduplication based on Rabin
+                       fingerprinting.
 
-2) LZP             : LZ Prediction is a variant of LZ77 that replaces repeating runs of
-                     text with shorter codes.
+2) Delta Compression : A similarity based (minhash) comparison of Rabin blocks. Two
+                       blocks at least 60% similar with each other are diffed using
+                       bsdiff.
 
-3) Adaptive Delta  : This is a simple form of Delta Encoding where arithmetic progressions
-                     are detected in the data stream and collapsed via Run-Length encoding.
+3) LZP               : LZ Prediction is a variant of LZ77 that replaces repeating
+                       runs of text with shorter codes.
 
-4) Matrix Transpose: This is used automatically in Delta Encoding and Deduplication. This
-                     attempts to transpose columnar repeating sequences of bytes into
-                     row-wise sequences so that compression algorithms can work better.
+4) Adaptive Delta    : This is a simple form of Delta Encoding where arithmetic
+                       progressions are detected in the data stream and collapsed
+                       via Run-Length encoding.
+
+4) Matrix Transpose  : This is used automatically in Delta Encoding and Deduplication.
+                       This attempts to transpose columnar repeating sequences of
+                       bytes into row-wise sequences so that compression algorithms
+                       can work better.
 
 Memory Usage
 ============

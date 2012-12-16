@@ -76,6 +76,13 @@ not the usual GNU Autoconf script.
 			path to the libbsc source tree must be provided. It
 			links the library statically.
 
+--with-zlib=<path to zlib installation tree> (Default: System)
+                        Enable building against an alternate Zlib installation.
+
+--with-bzlib=<path to Bzip2 library installation tree> (Default: System)
+                        Enable building against an alternate Bzip2 and library
+                        installation.
+
 --help			Display the help message.
 
 Steps for building with libbsc support
@@ -94,5 +101,8 @@ Steps for building with libbsc support
 
 4) Now run make in the pcompress directory. This will also run make in
    the libbsc source directory to build it.
+
+5) Additional compilation flags can be passed to make like this:
+   make EXTRA_CPPFLAGS=<...> EXTRA_LDFLAGS=<...>
 
 

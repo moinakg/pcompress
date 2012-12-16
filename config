@@ -17,6 +17,10 @@ ${prog} [<options>]
 --with-openssl=<path to OpenSSL installation tree> (Default: System)
                         This defaults to the system's OpenSSL library. You can use this option
                         if you want to use an alternate OpenSSL installation.
+--with-zlib=<path to zlib installation tree> (Default: System)
+                        Enable building against an alternate Zlib installation.
+--with-bzlib=<path to Bzip2 library installation tree> (Default: System)
+                        Enable building against an alternate Bzip2 and library installation.
 --use-key256		Use 256-bit encryption keys. Default key length is 128-bit.
 --help			Display this help message.
 
@@ -47,6 +51,8 @@ keccak_srcs=
 keccak_hdrs=
 keccak_srcs_asm=
 lto_flag=
+zlib_prefix=
+bzlib_prefix=
 
 # Try a simple compilation
 cat << _EOF > tst.c
@@ -113,6 +119,12 @@ do
 	;;
 	--with-openssl=*)
 		openssl_prefix=`echo ${arg1} | cut -f2 -d"="`
+	;;
+	--with-zlib=*)
+		zlib_prefix=`echo ${arg1} | cut -f2 -d"="`
+	;;
+	--with-bzlib=*)
+		bzlib_prefix=`echo ${arg1} | cut -f2 -d"="`
 	;;
 	--use-key256)
 		keylen='-DKEYLEN=32'
@@ -263,11 +275,26 @@ fi
 
 
 # Detect other library packages
-for libname in "libbz2" "libz"
+for libspec in "libbz2:${bzlib_prefix}" "libz:${zlib_prefix}"
 do
-	for lib in "/lib64" "/usr/lib64" "/lib" "/usr/lib" "/lib/x86_64-linux-gnu" \
-		"/usr/lib/x86_64-linux-gnu" \
-		"${prefix}/lib64" "${prefix}/lib" "${prefix}/lib/x86_64-linux-gnu"
+	_OIFS="$IFS"
+	IFS=":"
+	set -- ${libspec}
+	libname=$1
+	pref=$2
+	IFS="$_OIFS"
+
+	use_prefix="${pref}"
+	if [ "x${pref}" = "x" ]
+	then
+		use_prefix="$prefix"
+	fi
+	for lib in "${pref}/lib64" "${pref}/usr/lib64" "${pref}/lib" "${pref}/usr/lib" \
+		"${pref}/lib/x86_64-linux-gnu" "${pref}/usr/lib/x86_64-linux-gnu" \
+		"${pref}/local/lib64" "${pref}/usr/local/lib64" "${pref}/local/lib" "${pref}/usr/local/lib" \
+		"${pref}/local/lib/x86_64-linux-gnu" "${pref}/usr/local/lib/x86_64-linux-gnu" \
+		"${use_prefix}/lib64" "${use_prefix}/lib" "${use_prefix}/lib/x86_64-linux-gnu" \
+		"${use_prefix}/usr/lib/x86_64-linux-gnu"
 	do
 		if [ -d ${lib} ]
 		then
@@ -288,31 +315,49 @@ done
 
 if [ "x${libbz2_libdir}" = "x" ]
 then
-	echo "ERROR: Libbz2 not detected."
-	echo "       You may have to install libbz2-devel or libbz2-dev"
+	if [ "x$bzlib_prefix" = "x" ]
+	then
+		echo "ERROR: Libbz2 not detected."
+		echo "       You may have to install libbz2-devel or libbz2-dev"
+	else
+		echo "ERROR: Bzip2 library not detected in given prefix."
+	fi
 	exit 1
 fi
 
 if [ "x${libz_libdir}" = "x" ]
 then
-	echo "ERROR: Zlib not detected."
-	echo "       You may have to install libz-devel or libz-dev"
+	if [ "x$zlib_prefix" = "x" ]
+	then
+		echo "ERROR: Zlib not detected."
+		echo "       You may have to install libz-devel or libz-dev"
+	else
+		echo "ERROR: Zlib not detected in given prefix."
+	fi
 	exit 1
 fi
 
 libbz2_inc=
 libz_inc=
 # Detect other library headers
-for hdr in "libbz2_inc:bzlib.h" "libz_inc:zlib.h"
+for hdr in "libbz2_inc:bzlib.h:${bzlib_prefix}" "libz_inc:zlib.h:${zlib_prefix}"
 do
 	_OIFS="$IFS"
 	IFS=":"
 	set -- ${hdr}
 	var=$1
 	hdrf=$2
+	pref=$3
 	IFS="$_OIFS"
 
-	for inc in "${prefix}/include" "/usr/include"
+	use_prefix="${pref}"
+	if [ "x${pref}" = "x" ]
+	then
+		use_prefix="$prefix"
+	fi
+	for inc in "${pref}/include" "${pref}/usr/include" \
+		"${pref}/local/include" "${pref}/usr/local/include" \
+		"${use_prefix}/include" "${use_prefix}/usr/include"
 	do
 		if [ -d ${inc} ]
 		then

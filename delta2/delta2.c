@@ -34,8 +34,9 @@
  * objects are output by the encoder:
  * 1) A literal run of unmodified bytes. Header: 1 zero byte followed
  *    by a 64bit length in bytes.
- * 2) A literal run of transposed bytes containing at least 87% below
- *    threshold sequences.
+ * 2) A literal run of transposed bytes containing sequences that are
+ *    below threshold and the total span of those sequences is at least
+ *    87% of the entire run.
  *    Header: 1 byte stride length with high bit set.
  *            64bit length of span in bytes.
  * 3) An encoded run length of a series in arithmetic progression.
@@ -175,7 +176,7 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 				if (gtot1 > 0) {
 					/*
 					 * Encode previous literal run, if any. If the literal run
-					 * has enough (90%+) large sequences just below threshold,
+					 * has enough (87%+) large sequences just below threshold,
 					 * do a matrix transpose on the range in the hope of achieving
 					 * a better compression ratio.
 					 */
