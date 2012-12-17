@@ -62,7 +62,7 @@ int
 main(void)
 {
 	long l;
-	printf("%d\n", sizeof (l));
+	printf("%lu\n", sizeof (l));
 	return (0);
 }
 _EOF

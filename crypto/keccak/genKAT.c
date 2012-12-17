@@ -93,7 +93,7 @@ STATUS_CODES
 genShortMsg(int hashbitlen)
 {
     char        fn[32], line[SUBMITTER_INFO_LEN];
-    int         msglen, msgbytelen, done;
+    int         msglen, msgbytelen, done, rv;
     BitSequence Msg[256], MD[64];
     FILE        *fp_in, *fp_out;
     
@@ -109,7 +109,7 @@ genShortMsg(int hashbitlen)
     }
     fprintf(fp_out, "# %s\n", fn);
     if ( FindMarker(fp_in, "# Algorithm Name:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Algorithm Name:%s\n", line);
     }
     else {
@@ -117,7 +117,7 @@ genShortMsg(int hashbitlen)
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Principal Submitter:%s\n", line);
     }
     else {
@@ -128,7 +128,7 @@ genShortMsg(int hashbitlen)
     done = 0;
     do {
         if ( FindMarker(fp_in, "Len = ") )
-            fscanf(fp_in, "%d", &msglen);
+            rv = fscanf(fp_in, "%d", &msglen);
         else {
             done = 1;
             break;
@@ -157,7 +157,7 @@ STATUS_CODES
 genShortMsgSponge(unsigned int rate, unsigned int capacity, int outputLength, const char *fileName)
 {
     char        line[SUBMITTER_INFO_LEN];
-    int         msglen, msgbytelen, done;
+    int         msglen, msgbytelen, done, rv;
     BitSequence Msg[256];
     BitSequence Squeezed[SqueezingOutputLength/8];
     spongeState   state;
@@ -179,7 +179,7 @@ genShortMsgSponge(unsigned int rate, unsigned int capacity, int outputLength, co
     }
     fprintf(fp_out, "# %s\n", fileName);
     if ( FindMarker(fp_in, "# Algorithm Name:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Algorithm Name:%s\n", line);
     }
     else {
@@ -187,7 +187,7 @@ genShortMsgSponge(unsigned int rate, unsigned int capacity, int outputLength, co
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Principal Submitter:%s\n", line);
     }
     else {
@@ -198,7 +198,7 @@ genShortMsgSponge(unsigned int rate, unsigned int capacity, int outputLength, co
     done = 0;
     do {
         if ( FindMarker(fp_in, "Len = ") )
-            fscanf(fp_in, "%d", &msglen);
+            rv = fscanf(fp_in, "%d", &msglen);
         else {
             done = 1;
             break;
@@ -232,7 +232,7 @@ STATUS_CODES
 genLongMsg(int hashbitlen)
 {
     char        fn[32], line[SUBMITTER_INFO_LEN];
-    int         msglen, msgbytelen, done;
+    int         msglen, msgbytelen, done, rv;
     BitSequence Msg[4288], MD[64];
 #ifdef AllowExtendedFunctions
     BitSequence Squeezed[SqueezingOutputLength/8];
@@ -252,7 +252,7 @@ genLongMsg(int hashbitlen)
     }
     fprintf(fp_out, "# %s\n", fn);
     if ( FindMarker(fp_in, "# Algorithm Name:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Algorithm Name:%s\n", line);
     }
     else {
@@ -260,7 +260,7 @@ genLongMsg(int hashbitlen)
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Principal Submitter:%s\n\n", line);
     }
     else {
@@ -271,7 +271,7 @@ genLongMsg(int hashbitlen)
     done = 0;
     do {
         if ( FindMarker(fp_in, "Len = ") )
-            fscanf(fp_in, "%d", &msglen);
+            rv = fscanf(fp_in, "%d", &msglen);
         else
             break;
         msgbytelen = (msglen+7)/8;
@@ -319,7 +319,7 @@ genExtremelyLongMsg(int hashbitlen)
 #ifdef AllowExtendedFunctions
     BitSequence Squeezed[SqueezingOutputLength/8];
 #endif
-    int         i, repeat;
+    int         i, repeat, rv;
     FILE        *fp_in, *fp_out;
     hashState   state;
     HashReturn  retval;
@@ -336,7 +336,7 @@ genExtremelyLongMsg(int hashbitlen)
     }
     fprintf(fp_out, "# %s\n", fn);
     if ( FindMarker(fp_in, "# Algorithm Name:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Algorithm Name:%s\n", line);
     }
     else {
@@ -344,7 +344,7 @@ genExtremelyLongMsg(int hashbitlen)
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Principal Submitter:%s\n\n", line);
     }
     else {
@@ -353,14 +353,14 @@ genExtremelyLongMsg(int hashbitlen)
     }
     
     if ( FindMarker(fp_in, "Repeat = ") )
-        fscanf(fp_in, "%d", &repeat);
+        rv = fscanf(fp_in, "%d", &repeat);
     else {
         printf("ERROR: unable to read 'Repeat' from <ExtremelyLongMsgKAT.txt>\n");
         return KAT_DATA_ERROR;
     }
     
     if ( FindMarker(fp_in, "Text = ") )
-        fscanf(fp_in, "%s", Text);
+        rv = fscanf(fp_in, "%s", Text);
     else {
         printf("ERROR: unable to read 'Text' from <ExtremelyLongMsgKAT.txt>\n");
         return KAT_DATA_ERROR;
@@ -408,7 +408,7 @@ genMonteCarlo(int hashbitlen)
 {
     char        fn[32], line[SUBMITTER_INFO_LEN];
     BitSequence Seed[128], Msg[128], MD[64], Temp[128];
-    int         i, j, bytelen;
+    int         i, j, bytelen, rv;
     FILE        *fp_in, *fp_out;
     
     if ( (fp_in = fopen("MonteCarlo.txt", "r")) == NULL ) {
@@ -423,7 +423,7 @@ genMonteCarlo(int hashbitlen)
     }
     fprintf(fp_out, "# %s\n", fn);
     if ( FindMarker(fp_in, "# Algorithm Name:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Algorithm Name:%s\n", line);
     }
     else {
@@ -431,7 +431,7 @@ genMonteCarlo(int hashbitlen)
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Principal Submitter:%s\n\n", line);
     }
     else {
@@ -471,7 +471,7 @@ genMonteCarloSqueezing(int hashbitlen)
 {
     char        fn[32], line[SUBMITTER_INFO_LEN];
     BitSequence Seed[128], MD[64];
-    int         i, j, bytelen;
+    int         i, j, bytelen, rv;
     FILE        *fp_in, *fp_out;
     hashState   state;
     HashReturn  retval;
@@ -488,7 +488,7 @@ genMonteCarloSqueezing(int hashbitlen)
     }
     fprintf(fp_out, "# %s\n", fn);
     if ( FindMarker(fp_in, "# Algorithm Name:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Algorithm Name:%s\n", line);
     }
     else {
@@ -496,7 +496,7 @@ genMonteCarloSqueezing(int hashbitlen)
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
-        fscanf(fp_in, "%[^\n]\n", line);
+        rv = fscanf(fp_in, "%[^\n]\n", line);
         fprintf(fp_out, "# Principal Submitter:%s\n\n", line);
     }
     else {
@@ -545,7 +545,7 @@ genMonteCarloSqueezing(int hashbitlen)
 STATUS_CODES
 genDuplexKAT(unsigned int rate, unsigned int capacity, const char *fileName)
 {
-    int inLen, inByteLen, outLen, outByteLen, done;
+    int inLen, inByteLen, outLen, outByteLen, done, rv;
     BitSequence in[256];
     BitSequence out[256];
     FILE *fp_in, *fp_out;
@@ -569,7 +569,7 @@ genDuplexKAT(unsigned int rate, unsigned int capacity, const char *fileName)
     outByteLen = (outLen+7)/8;
     do {
         if ( FindMarker(fp_in, "InLen = ") )
-            fscanf(fp_in, "%d", &inLen);
+            rv = fscanf(fp_in, "%d", &inLen);
         else {
             done = 1;
             break;

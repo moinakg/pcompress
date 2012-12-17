@@ -40,12 +40,16 @@ For every test both compression and decompression are performed
 and after every decompression the decompressed file is verified
 byte for byte with the original using the diff utility.
 
-It takes a while to run all the tests.
+It takes a long time to run all the tests. The complete test log
+is stored in the file test.log. Test failures are indicated by the
+error message starting with the word "FATAL". All other error
+messages visible in the log are a result of negative testing where
+the utility is expected to exit with an error.
 
 Custom Installation
 ===================
-The options to the config script are detailed below. Note that this is
-not the usual GNU Autoconf script.
+The options to the config script are detailed below. Note that this
+is not the usual GNU Autoconf script.
 
 ./config [<options>]
 
