@@ -82,16 +82,27 @@ fi
 gcc -v 2>&1 | grep lto > /dev/null
 [ $? -eq 0 ] && lto_flag="-flto"
 
-# Check bitness of system
+# Check bitness of system/toolchain
 bitness=`./tst`
-rm -f tst tst.c
 if [ $bitness -lt 8 ]
 then
-	echo "ERROR:"
-	echo "Only 64-bit platforms are supported."
-	echo ""
-	exit 1
+	# Hmmm maybe default compilation is 32-bit. Re-try with m64 flag.
+	gcc -m64 tst.c -o tst
+	if [ $? -ne 0 ]
+	then
+		rm -f tst tst.c
+		echo "ERROR:"
+		echo "Only 64-bit platforms are supported."
+		echo ""
+		exit 1
+	fi
+
+	# If m64 compilation succeeds we assume platform to be 64-bit capable but
+	# explicit flag is reqd.
+	# Instead of setting another variable lets cheat by plugging m64 into lto_flag!
+	lto_flag="${lto_flag} -m64"
 fi
+rm -f tst tst.c
 
 while [ "${arg1}" != "" ]
 do
