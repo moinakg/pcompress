@@ -46,6 +46,11 @@ error message starting with the word "FATAL". All other error
 messages visible in the log are a result of negative testing where
 the utility is expected to exit with an error.
 
+The files test/t1.tst, test/t2.tst and so on are individual test
+suites. It is possible to run a single test suite. For example to
+run test/t4.tst the following command can be used:
+make test TESTSUITE=4
+
 Custom Installation
 ===================
 The options to the config script are detailed below. Note that this
