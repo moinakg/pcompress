@@ -141,6 +141,7 @@ extern void ppmd_props(algo_props_t *data, int level, int64_t chunksize);
 extern void lz_fx_props(algo_props_t *data, int level, int64_t chunksize);
 extern void bzip2_props(algo_props_t *data, int level, int64_t chunksize);
 extern void adapt_props(algo_props_t *data, int level, int64_t chunksize);
+extern void none_props(algo_props_t *data, int level, int64_t chunksize);
 
 extern int zlib_deinit(void **data);
 extern int adapt_deinit(void **data);

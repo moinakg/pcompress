@@ -2031,6 +2031,7 @@ init_algo(const char *algo, int bail)
 		_init_func = none_init;
 		_deinit_func = none_deinit;
 		_stats_func = none_stats;
+		_props_func = none_props;
 		rv = 0;
 
 	/* adapt2 and adapt ordering of the checks matter here. */

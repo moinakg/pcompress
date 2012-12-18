@@ -72,8 +72,92 @@
 #define	TRANSP_BIT	(128)
 #define	TRANSP_MASK	(127)
 
+/*
+ * Delta2 algorithm processes data in chunks. The 4K size below is somewhat
+ * adhoc but a couple of considerations were looked at:
+ * 1) Balance between number of headers and delta runs. Too small chunks
+ *    will increase header counts for long delta runs spanning chunks.
+ *    Too large chunks will reduce effectiveness of locating more data
+ *    tables.
+ * 2) Chunk size should ideally be small enough to fit into L1 cache.
+ */
+#define	DELTA2_CHUNK	(4096)
+
+static int delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen,
+		int rle_thresh, int last_encode);
+
 int
 delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh)
+{
+	if (*dstlen < DELTA2_CHUNK) {
+		return (delta2_encode_real(src, srclen, dst, dstlen, rle_thresh, 1));
+	} else {
+		uchar_t *srcpos, *dstpos, *lastdst, *lastsrc, *dstend;
+		uint64_t slen, sz, dsz, pending;
+		int rem, lenc;
+
+		srcpos = src;
+		dstpos = dst;
+		dstend = dst + *dstlen;
+		slen = srclen;
+		pending = 0;
+		lastdst = dst;
+		lastsrc = src;
+		*((uint64_t *)dstpos) = htonll(srclen);
+		dstpos += MAIN_HDR;
+
+		while (slen > 0) {
+			if (slen > DELTA2_CHUNK) {
+				sz = DELTA2_CHUNK;
+				lenc = 0;
+			} else {
+				sz = slen;
+				lenc = 1;
+			}
+			dsz = sz;
+			rem = delta2_encode_real(srcpos, sz, dstpos, &dsz, rle_thresh, lenc);
+			if (rem == -1) {
+				if (pending == 0) {
+					lastdst = dstpos;
+					lastsrc = srcpos;
+					dstpos += LIT_HDR;
+				}
+				pending += sz;
+				srcpos += sz;
+				dstpos += sz;
+				slen -= sz;
+			} else {
+				if (pending) {
+					*lastdst = 0;
+					lastdst++;
+					*((uint64_t *)lastdst) = htonll(pending);
+					lastdst += sizeof (uint64_t);
+					memcpy(lastdst, lastsrc, pending);
+					pending = 0;
+				}
+				srcpos += (sz - rem);
+				slen -= (sz - rem);
+				dstpos += dsz;
+				if (dstpos > dstend) return (-1);
+			}
+		}
+		if (pending) {
+			*lastdst = 0;
+			lastdst++;
+			*((uint64_t *)lastdst) = htonll(pending);
+			lastdst += sizeof (uint64_t);
+			if (lastdst + pending > dstend) return (-1);
+			memcpy(lastdst, lastsrc, pending);
+		}
+		*dstlen = dstpos - dst;
+		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 ", dstlen: %" PRIu64 "\n", srclen, *dstlen));
+	}
+	return (0);
+}
+
+static int
+delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen,
+		   int rle_thresh, int last_encode)
 {
 	uint64_t snum, gtot1, gtot2, tot;
 	uint64_t cnt, val, sval;
@@ -81,7 +165,6 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 	uchar_t *pos, *pos1, *pos2, stride, st1;
 	uchar_t strides[4] = {3, 5, 7, 8};
 	int st, sz;
-	DEBUG_STAT_EN(uint32_t num_trans);
 
 	if (rle_thresh < MIN_THRESH)
 		return (-1);
@@ -135,10 +218,8 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 	}
 
 	if (!(gtot1 < srclen && srclen - gtot1 > (DELTA_HDR + LIT_HDR + MAIN_HDR))) {
-		DEBUG_STAT_EN(fprintf(stderr, "No Delta\n"));
 		return (-1);
 	}
-	DEBUG_STAT_EN(fprintf(stderr, "Found Delta: %llu (srclen: %llu), stride: %d\n", gtot1, srclen, stride));
 
 	/*
 	 * Now perform encoding using the stride length.
@@ -149,12 +230,9 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 	gtot1 = 0;
 	pos = src;
 	pos1 = dst;
-	*((uint64_t *)pos1) = htonll(srclen);
-	pos1 += MAIN_HDR;
-	pos2 = pos1;
+	pos2 = dst;
 	pos1 += LIT_HDR;
 	gtot2 = 0;
-	DEBUG_STAT_EN(num_trans = 0);
 
 	if (rle_thresh <= TRANSP_THRESH) {
 		tot = rle_thresh/2;
@@ -186,7 +264,6 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 						*((uint64_t *)pos2) = htonll(gtot1);
 						pos2 += sizeof (uint64_t);
 						transpose(pos - (gtot1+snum), pos2, gtot1, stride, ROW);
-						DEBUG_STAT_EN(num_trans++);
 					} else {
 						*pos2 = 0;
 						pos2++;
@@ -242,33 +319,40 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 			pos2 += sizeof (uint64_t);
 			*((uint64_t *)pos2) = htonll(vld1);
 			pos2 += sizeof (uint64_t);
-		} else {
+
+		} else if (last_encode) {
 			gtot1 += snum;
 			*pos2 = 0;
 			pos2++;
 			*((uint64_t *)pos2) = htonll(gtot1);
 			pos2 += (gtot1 + sizeof (uint64_t));
+		} else {
+			gtot1 += snum;
 		}
 	}
 
-	val = srclen - (pos - src);
-	if (val > 0) {
-		/*
-		 * Encode left over bytes, if any, at the end into a
-		 * literal run.
-		 */
-		*pos2 = 0;
-		pos2++;
-		*((uint64_t *)pos2) = htonll(val);
-		pos2 += sizeof (uint64_t);
-		for (cnt = 0; cnt < val; cnt++) {
-			*pos2 = *pos;
-			pos2++; pos++;
+	if (last_encode) {
+		val = srclen - (pos - src);
+		if (val > 0) {
+			/*
+			* Encode left over bytes, if any, at the end into a
+			* literal run.
+			*/
+			*pos2 = 0;
+			pos2++;
+			*((uint64_t *)pos2) = htonll(val);
+			pos2 += sizeof (uint64_t);
+			for (cnt = 0; cnt < val; cnt++) {
+				*pos2 = *pos;
+				pos2++; pos++;
+			}
 		}
+		val = 0;
+	} else {
+		val = gtot1 + (srclen - (pos - src));
 	}
 	*dstlen = pos2 - dst;
-	DEBUG_STAT_EN(printf("%u transpositions\n", num_trans));
-	return (0);
+	return (val);
 }
 
 int

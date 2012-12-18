@@ -43,6 +43,14 @@ none_init(void **data, int *level, int nthreads, int64_t chunksize,
 	return (0);
 }
 
+void
+none_props(algo_props_t *data, int level, int64_t chunksize) {
+	data->compress_mt_capable = 0;
+	data->decompress_mt_capable = 0;
+	data->buf_extra = 0;
+	data->delta2_span = 50;
+}
+
 int
 none_deinit(void **data)
 {
