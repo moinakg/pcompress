@@ -58,6 +58,7 @@
 // 1-byte flag
 // 64bit length of run in bytes.
 #define	LIT_HDR		(1 + sizeof (uint64_t))
+#define	TRANSP_HDR	(LIT_HDR)
 
 // Delta encoded header block:
 // 1-byte flag indicating stride length
@@ -84,17 +85,24 @@
 #define	DELTA2_CHUNK	(4096)
 
 static int delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen,
-		int rle_thresh, int last_encode);
+		int rle_thresh, int last_encode, int *transp_count, int *hdr_ovr);
 
 int
 delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh)
 {
 	if (*dstlen < DELTA2_CHUNK) {
-		return (delta2_encode_real(src, srclen, dst, dstlen, rle_thresh, 1));
+		int transp_count, hdr_ovr;
+		int rv;
+
+		transp_count = 0;
+		hdr_ovr = 0;
+		rv = delta2_encode_real(src, srclen, dst, dstlen, rle_thresh, 1, &transp_count, &hdr_ovr);
+		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 ", dstlen: %" PRIu64 "\n", srclen, *dstlen));
+		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: transpositions: %d, header overhead: %d\n", transp_count, hdr_ovr));
 	} else {
 		uchar_t *srcpos, *dstpos, *lastdst, *lastsrc, *dstend;
 		uint64_t slen, sz, dsz, pending;
-		int rem, lenc;
+		int rem, lenc, transp_count, hdr_ovr;
 
 		srcpos = src;
 		dstpos = dst;
@@ -105,6 +113,8 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		lastsrc = src;
 		*((uint64_t *)dstpos) = htonll(srclen);
 		dstpos += MAIN_HDR;
+		transp_count = 0;
+		hdr_ovr = 0;
 
 		while (slen > 0) {
 			if (slen > DELTA2_CHUNK) {
@@ -115,7 +125,8 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 				lenc = 1;
 			}
 			dsz = sz;
-			rem = delta2_encode_real(srcpos, sz, dstpos, &dsz, rle_thresh, lenc);
+			rem = delta2_encode_real(srcpos, sz, dstpos, &dsz, rle_thresh, lenc,
+						 &transp_count, &hdr_ovr);
 			if (rem == -1) {
 				if (pending == 0) {
 					lastdst = dstpos;
@@ -151,13 +162,14 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		}
 		*dstlen = dstpos - dst;
 		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 ", dstlen: %" PRIu64 "\n", srclen, *dstlen));
+		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: transpositions: %d, header overhead: %d\n", transp_count, hdr_ovr));
 	}
 	return (0);
 }
 
 static int
 delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen,
-		   int rle_thresh, int last_encode)
+		   int rle_thresh, int last_encode, int *transp_count, int *hdr_ovr)
 {
 	uint64_t snum, gtot1, gtot2, tot;
 	uint64_t cnt, val, sval;
@@ -263,12 +275,15 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 						pos2++;
 						*((uint64_t *)pos2) = htonll(gtot1);
 						pos2 += sizeof (uint64_t);
+						DEBUG_STAT_EN((*transp_count)++);
+						DEBUG_STAT_EN(*hdr_ovr += TRANSP_HDR);
 						transpose(pos - (gtot1+snum), pos2, gtot1, stride, ROW);
 					} else {
 						*pos2 = 0;
 						pos2++;
 						*((uint64_t *)pos2) = htonll(gtot1);
 						pos2 += sizeof (uint64_t);
+						DEBUG_STAT_EN(*hdr_ovr += LIT_HDR);
 					}
 					pos2 += gtot1;
 					gtot1 = 0;
@@ -286,6 +301,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 				*((uint64_t *)pos2) = htonll(vld1);
 				pos2 += sizeof (uint64_t);
 				pos1 = pos2 + LIT_HDR;
+				DEBUG_STAT_EN(*hdr_ovr += DELTA_HDR);
 			} else {
 				gtot1 += snum;
 				if (snum >= tot)
@@ -310,6 +326,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 				*((uint64_t *)pos2) = htonll(gtot1);
 				pos2 += (gtot1 + sizeof (uint64_t));
 				gtot1 = 0;
+				DEBUG_STAT_EN(*hdr_ovr += LIT_HDR);
 			}
 			*pos2 = stride;
 			pos2++;
@@ -319,6 +336,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 			pos2 += sizeof (uint64_t);
 			*((uint64_t *)pos2) = htonll(vld1);
 			pos2 += sizeof (uint64_t);
+			DEBUG_STAT_EN(*hdr_ovr += DELTA_HDR);
 
 		} else if (last_encode) {
 			gtot1 += snum;
@@ -326,6 +344,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 			pos2++;
 			*((uint64_t *)pos2) = htonll(gtot1);
 			pos2 += (gtot1 + sizeof (uint64_t));
+			DEBUG_STAT_EN(*hdr_ovr += LIT_HDR);
 		} else {
 			gtot1 += snum;
 		}
@@ -346,6 +365,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 				*pos2 = *pos;
 				pos2++; pos++;
 			}
+			DEBUG_STAT_EN(*hdr_ovr += LIT_HDR);
 		}
 		val = 0;
 	} else {
