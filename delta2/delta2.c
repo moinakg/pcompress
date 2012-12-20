@@ -174,7 +174,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 	uint64_t snum, gtot1, gtot2, tot;
 	uint64_t cnt, val, sval;
 	uint64_t vl1, vl2, vld1, vld2;
-	uchar_t *pos, *pos1, *pos2, stride, st1;
+	uchar_t *pos, *pos2, stride, st1;
 	uchar_t strides[4] = {3, 5, 7, 8};
 	int st, sz;
 
@@ -241,9 +241,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 	vld1 = 0;
 	gtot1 = 0;
 	pos = src;
-	pos1 = dst;
 	pos2 = dst;
-	pos1 += LIT_HDR;
 	gtot2 = 0;
 
 	if (rle_thresh <= TRANSP_THRESH) {
@@ -284,6 +282,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 						*((uint64_t *)pos2) = htonll(gtot1);
 						pos2 += sizeof (uint64_t);
 						DEBUG_STAT_EN(*hdr_ovr += LIT_HDR);
+						memcpy(pos2, pos - (gtot1+snum), gtot1);
 					}
 					pos2 += gtot1;
 					gtot1 = 0;
@@ -300,7 +299,6 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 				pos2 += sizeof (uint64_t);
 				*((uint64_t *)pos2) = htonll(vld1);
 				pos2 += sizeof (uint64_t);
-				pos1 = pos2 + LIT_HDR;
 				DEBUG_STAT_EN(*hdr_ovr += DELTA_HDR);
 			} else {
 				gtot1 += snum;
@@ -310,8 +308,6 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 			snum = 0;
 			sval = vl2;
 		}
-		*((uint64_t *)pos1) = val;
-		pos1 += stride;
 		snum += stride;
 		vld1 = vld2;
 		vl1 = vl2;
@@ -324,9 +320,11 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 				*pos2 = 0;
 				pos2++;
 				*((uint64_t *)pos2) = htonll(gtot1);
-				pos2 += (gtot1 + sizeof (uint64_t));
-				gtot1 = 0;
+				pos2 += sizeof (uint64_t);
 				DEBUG_STAT_EN(*hdr_ovr += LIT_HDR);
+				memcpy(pos2, pos - (gtot1+snum), gtot1);
+				pos2 += gtot1;
+				gtot1 = 0;
 			}
 			*pos2 = stride;
 			pos2++;
@@ -343,8 +341,10 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 			*pos2 = 0;
 			pos2++;
 			*((uint64_t *)pos2) = htonll(gtot1);
-			pos2 += (gtot1 + sizeof (uint64_t));
+			pos2 += sizeof (uint64_t);
 			DEBUG_STAT_EN(*hdr_ovr += LIT_HDR);
+			memcpy(pos2, pos - gtot1, gtot1);
+			pos2 += gtot1;
 		} else {
 			gtot1 += snum;
 		}
