@@ -36,7 +36,7 @@
  *    by a 64bit length in bytes.
  * 2) A literal run of transposed bytes containing sequences that are
  *    below threshold and the total span of those sequences is at least
- *    87% of the entire run.
+ *    97%+ of the entire run.
  *    Header: 1 byte stride length with high bit set.
  *            64bit length of span in bytes.
  * 3) An encoded run length of a series in arithmetic progression.
@@ -69,6 +69,8 @@
 
 // Minimum span length
 #define	MIN_THRESH	(50)
+// Maximum data length (16TB)
+#define	MAX_THRESH	(0x100000000000ULL)
 #define	TRANSP_THRESH	(100)
 #define	TRANSP_BIT	(128)
 #define	TRANSP_MASK	(127)
@@ -90,6 +92,11 @@ static int delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint6
 int
 delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh)
 {
+	if (srclen > MAX_THRESH) {
+		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 " is too big.\n", srclen));
+		return (-1);
+	}
+
 	if (*dstlen < DELTA2_CHUNK) {
 		int transp_count, hdr_ovr;
 		int rv;
@@ -109,10 +116,10 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		dstend = dst + *dstlen;
 		slen = srclen;
 		pending = 0;
-		lastdst = dst;
-		lastsrc = src;
 		*((uint64_t *)dstpos) = htonll(srclen);
 		dstpos += MAIN_HDR;
+		lastdst = dstpos;
+		lastsrc = srcpos;
 		transp_count = 0;
 		hdr_ovr = 0;
 
@@ -149,7 +156,10 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 				srcpos += (sz - rem);
 				slen -= (sz - rem);
 				dstpos += dsz;
-				if (dstpos > dstend) return (-1);
+				if (dstpos > dstend) {
+					DEBUG_STAT_EN(fprintf(stderr, "No Delta\n"));
+					return (-1);
+				}
 			}
 		}
 		if (pending) {
@@ -157,7 +167,10 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 			lastdst++;
 			*((uint64_t *)lastdst) = htonll(pending);
 			lastdst += sizeof (uint64_t);
-			if (lastdst + pending > dstend) return (-1);
+			if (lastdst + pending > dstend) {
+				DEBUG_STAT_EN(fprintf(stderr, "No Delta\n"));
+				return (-1);
+			}
 			memcpy(lastdst, lastsrc, pending);
 		}
 		*dstlen = dstpos - dst;
@@ -264,11 +277,12 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 				if (gtot1 > 0) {
 					/*
 					 * Encode previous literal run, if any. If the literal run
-					 * has enough (87%+) large sequences just below threshold,
+					 * has enough (97%+) large sequences just below threshold,
 					 * do a matrix transpose on the range in the hope of achieving
 					 * a better compression ratio.
 					 */
-					if (gtot2 >= ((gtot1 >> 1) + (gtot1 >> 2) + (gtot1 >> 3))) {
+					if (gtot2 >= ((gtot1 >> 1) + (gtot1 >> 2) + (gtot1 >> 3) +
+					    (gtot1 >> 4) + (gtot1 >> 5))) {
 						*pos2 = stride | TRANSP_BIT;
 						pos2++;
 						*((uint64_t *)pos2) = htonll(gtot1);
@@ -288,6 +302,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 					gtot1 = 0;
 					gtot2 = 0;
 				}
+
 				/*
 				 * RLE Encode delta series.
 				 */
