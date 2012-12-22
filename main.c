@@ -199,6 +199,7 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 {
 	uchar_t *dest = (uchar_t *)dst, type = 0;
 	int64_t result, _dstlen;
+	DEBUG_STAT_EN(double strt, en);
 
 	_dstlen = *dstlen;
 	if (lzp_preprocess) {
@@ -233,10 +234,14 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 	*dest = type;
 	*((int64_t *)(dest + 1)) = htonll(srclen);
 	_dstlen = srclen;
+	DEBUG_STAT_EN(strt = get_wtime_millis());
 	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr, data);
+	DEBUG_STAT_EN(en = get_wtime_millis());
+
 	if (result > -1 && _dstlen < srclen) {
 		*dest |= PREPROC_COMPRESSED;
 		*dstlen = _dstlen + 9;
+		DEBUG_STAT_EN(fprintf(stderr, "Chunk compression speed %.3f MB/s\n", get_mb_s(srclen, strt, en)));
 	} else {
 		memcpy(dest+1, src, srclen);
 		*dstlen = srclen + 1;
@@ -253,6 +258,7 @@ preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void 
 	uchar_t *sorc = (uchar_t *)src, type;
 	int64_t result;
 	uint64_t _dstlen = *dstlen;
+	DEBUG_STAT_EN(double strt, en);
 
 	type = *sorc;
 	sorc++;
@@ -261,8 +267,11 @@ preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void 
 		*dstlen = ntohll(*((int64_t *)(sorc)));
 		sorc += 8;
 		srclen -= 8;
+		DEBUG_STAT_EN(strt = get_wtime_millis());
 		result = dec_func(sorc, srclen, dst, dstlen, level, chdr, data);
+		DEBUG_STAT_EN(en = get_wtime_millis());
 		if (result < 0) return (result);
+		DEBUG_STAT_EN(fprintf(stderr, "Chunk decompression speed %.3f MB/s\n", get_mb_s(srclen, strt, en)));
 		memcpy(src, dst, *dstlen);
 		srclen = *dstlen;
 	}
@@ -445,8 +454,14 @@ redo:
 				rv = preproc_decompress(tdat->decompress, cmpbuf, dedupe_data_sz_cmp,
 				    ubuf, &_chunksize, tdat->level, HDR, tdat->data, tdat->props);
 			} else {
+				DEBUG_STAT_EN(double strt, en);
+
+				DEBUG_STAT_EN(strt = get_wtime_millis());
 				rv = tdat->decompress(cmpbuf, dedupe_data_sz_cmp, ubuf, &_chunksize,
 				    tdat->level, HDR, tdat->data);
+				DEBUG_STAT_EN(en = get_wtime_millis());
+				DEBUG_STAT_EN(fprintf(stderr, "Chunk decompression speed %.3f MB/s\n",
+						      get_mb_s(_chunksize, strt, en)));
 			}
 			if (rv == -1) {
 				tdat->len_cmp = 0;
@@ -1208,8 +1223,14 @@ plain_index:
 			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
 			    tdat->level, 0, tdat->data, tdat->props);
 		} else {
+			DEBUG_STAT_EN(double strt, en);
+
+			DEBUG_STAT_EN(strt = get_wtime_millis());
 			rv = tdat->compress(tdat->uncompressed_chunk + dedupe_index_sz, _chunksize,
 			    compressed_chunk + index_size_cmp, &_chunksize, tdat->level, 0, tdat->data);
+			DEBUG_STAT_EN(en = get_wtime_millis());
+			DEBUG_STAT_EN(fprintf(stderr, "Chunk compression speed %.3f MB/s\n",
+					      get_mb_s(_chunksize, strt, en)));
 		}
 
 		/* Can't compress data just retain as-is. */

@@ -23,6 +23,7 @@
 
 #include <sys/types.h>
 #include <sys/param.h>
+#include <sys/time.h>
 #include <fcntl.h>
 #include <time.h>
 #include <libgen.h>
@@ -307,4 +308,25 @@ get_total_ram()
 	page_size = sysconf(_SC_PAGESIZE);
 	phys_pages = sysconf(_SC_PHYS_PAGES);
 	return (phys_pages * page_size);
+}
+
+double
+get_wtime_millis(void)
+{
+	struct timespec ts;
+	int rv;
+
+	rv = clock_gettime(CLOCK_MONOTONIC, &ts);
+	if (rv == 0)
+		return (ts.tv_sec * 1000 + ((double)ts.tv_nsec) / 1000000L);
+	return (1);
+}
+
+double
+get_mb_s(uint64_t bytes, double strt, double en)
+{
+	double bytes_sec;
+
+	bytes_sec = ((double)bytes / (en - strt)) * 1000;
+	return (BYTES_TO_MB(bytes_sec));
 }

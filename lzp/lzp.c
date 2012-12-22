@@ -43,6 +43,8 @@ See also the bsc and libbsc web site:
 #include <string.h>
 #include <allocator.h>
 #include <sys/types.h>
+#include <stdio.h>
+#include <utils.h>
 
 #include "lzp.h"
 
@@ -245,7 +247,9 @@ int64_t bsc_lzp_compress_serial(const unsigned char * input, unsigned char * out
     int chunkSize;
     int blockId;
     int64_t outputPtr = 1 + 8 * nBlocks;
+    DEBUG_STAT_EN(double strt, en);
 
+    DEBUG_STAT_EN(strt = get_wtime_millis());
     if (n > LZP_MAX_BLOCK)
         chunkSize = LZP_MAX_BLOCK;
     else
@@ -270,7 +274,10 @@ int64_t bsc_lzp_compress_serial(const unsigned char * input, unsigned char * out
 
         outputPtr += result;
     }
+    DEBUG_STAT_EN(en = get_wtime_millis());
 
+    DEBUG_STAT_EN(fprintf(stderr, "LZP: Insize: %" PRId64 ", Outsize: %" PRId64 "\n", n, outputPtr));
+    DEBUG_STAT_EN(fprintf(stderr, "LZP: Processed at %.3f MB/s\n", get_mb_s(n, strt, en)));
     return outputPtr;
 }
 

@@ -291,12 +291,14 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, int64_t *size, int64_t offs
 	heap_t heap;
 	DEBUG_STAT_EN(uint32_t max_count);
 	DEBUG_STAT_EN(max_count = 0);
+	DEBUG_STAT_EN(double strt, en);
 
 	length = offset;
 	last_offset = 0;
 	blknum = 0;
 	ctx->valid = 0;
 	cur_roll_checksum = 0;
+	DEBUG_STAT_EN(strt = get_wtime_millis());
 
 	if (ctx->fixed_flag) {
 		blknum = *size / ctx->rabin_poly_avg_block_size;
@@ -484,8 +486,8 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, int64_t *size, int64_t offs
 
 process_blocks:
 	// If we found at least a few chunks, perform dedup.
-	DEBUG_STAT_EN(printf("Original size: %" PRId64 ", blknum: %u\n", *size, blknum));
-	DEBUG_STAT_EN(printf("Number of maxlen blocks: %u\n", max_count));
+	DEBUG_STAT_EN(fprintf(stderr, "Original size: %" PRId64 ", blknum: %u\n", *size, blknum));
+	DEBUG_STAT_EN(fprintf(stderr, "Number of maxlen blocks: %u\n", max_count));
 	if (blknum > 2) {
 		int64_t pos, matchlen, pos1;
 		int valid = 1;
@@ -605,10 +607,11 @@ process_blocks:
 				}
 			}
 		}
-		DEBUG_STAT_EN(printf("Total Hashtable bucket collisions: %u\n", hash_collisions));
+		DEBUG_STAT_EN(fprintf(stderr, "Total Hashtable bucket collisions: %u\n", hash_collisions));
 
 		dedupe_index_sz = (int64_t)blknum * RABIN_ENTRY_SIZE;
 		if (matchlen < dedupe_index_sz) {
+			DEBUG_STAT_EN(fprintf(stderr, "No Dedupe possible.\n"));
 			ctx->valid = 0;
 			return;
 		}
@@ -639,7 +642,7 @@ process_blocks:
 				i++;
 			}
 		}
-		DEBUG_STAT_EN(printf("Merge count: %u\n", merge_count));
+		DEBUG_STAT_EN(fprintf(stderr, "Merge count: %u\n", merge_count));
 
 		/*
 		 * Final pass update dedupe index and copy data.
@@ -688,7 +691,9 @@ cont:
 		if (valid) {
 			uchar_t *cbuf = ctx->cbuf;
 			int64_t *entries;
+			DEBUG_STAT_EN(int64_t sz);
 
+			DEBUG_STAT_EN(sz = *size);
 			*((uint32_t *)cbuf) = htonl(blknum);
 			cbuf += sizeof (uint32_t);
 			entries = (int64_t *)cbuf;
@@ -697,8 +702,10 @@ cont:
 			entries[2] = htonll(pos1 - dedupe_index_sz - RABIN_HDR_SIZE);
 			*size = pos1;
 			ctx->valid = 1;
-			DEBUG_STAT_EN(printf("Deduped size: %" PRId64 ", blknum: %u, delta_calls: %u, delta_fails: %u\n",
+			DEBUG_STAT_EN(en = get_wtime_millis());
+			DEBUG_STAT_EN(fprintf(stderr, "Deduped size: %" PRId64 ", blknum: %u, delta_calls: %u, delta_fails: %u\n",
 					     *size, blknum, delta_calls, delta_fails));
+			DEBUG_STAT_EN(fprintf(stderr, "Dedupe speed %.3f MB/s\n", get_mb_s(sz, strt, en)));
 			/*
 			 * Remaining header entries: size of compressed index and size of
 			 * compressed data are inserted later via rabin_update_hdr, after actual compression!

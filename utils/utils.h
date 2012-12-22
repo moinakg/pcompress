@@ -102,6 +102,8 @@ typedef int64_t bsize_t;
 #define	DEBUG_STAT_EN(...)
 #endif
 
+#define	BYTES_TO_MB(x) ((x) / (1024 * 1024))
+
 typedef struct {
 	uint32_t buf_extra;
 	int compress_mt_capable;
@@ -143,6 +145,8 @@ extern int64_t Write(int fd, const void *buf, uint64_t count);
 extern void set_threadcounts(algo_props_t *props, int *nthreads, int nprocs,
 	algo_threads_type_t typ);
 extern uint64_t get_total_ram();
+extern double get_wtime_millis(void);
+extern double get_mb_s(uint64_t bytes, double strt, double en);
 
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, uint64_t srclen, void *dst,

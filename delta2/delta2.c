@@ -110,6 +110,7 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		uchar_t *srcpos, *dstpos, *lastdst, *lastsrc, *dstend;
 		uint64_t slen, sz, dsz, pending;
 		int rem, lenc, transp_count, hdr_ovr;
+		DEBUG_STAT_EN(double strt, en);
 
 		srcpos = src;
 		dstpos = dst;
@@ -123,6 +124,7 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		transp_count = 0;
 		hdr_ovr = 0;
 
+		DEBUG_STAT_EN(strt = get_wtime_millis());
 		while (slen > 0) {
 			if (slen > DELTA2_CHUNK) {
 				sz = DELTA2_CHUNK;
@@ -174,8 +176,10 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 			memcpy(lastdst, lastsrc, pending);
 		}
 		*dstlen = dstpos - dst;
+		DEBUG_STAT_EN(en = get_wtime_millis());
 		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 ", dstlen: %" PRIu64 "\n", srclen, *dstlen));
 		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: transpositions: %d, header overhead: %d\n", transp_count, hdr_ovr));
+		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: Processed at %.3f MB/s\n", get_mb_s(srclen, strt, en)));
 	}
 	return (0);
 }
@@ -195,12 +199,16 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 		return (-1);
 	gtot1 = ULL_MAX;
 	stride = 0;
+	sval = 0;
+	val = 0;
 	sz = sizeof (strides) / sizeof (strides[0]);
 
 	/*
 	 * Estimate which stride length gives the max reduction given rle_thresh.
 	 */
 	for (st = 0; st < sz; st++) {
+		int gt;
+
 		snum = 0;
 		gtot2 = MAIN_HDR + LIT_HDR;
 		vl1 = 0;
@@ -215,10 +223,9 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 			vld2 = vl2 - vl1;
 			if (vld1 != vld2) {
 				if (snum > rle_thresh) {
-					if (tot > 0) {
-						gtot2 += LIT_HDR;
-						tot = 0;
-					}
+					gt = (tot > 0);
+					gtot2 += (LIT_HDR * gt);
+					tot = 0;
 					gtot2 += DELTA_HDR;
 				} else {
 					gtot2 += snum;
@@ -233,16 +240,32 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 		}
 		if (snum > rle_thresh) {
 			gtot2 += DELTA_HDR;
+			/*
+			 * If this ended partially into another table reset next scan
+			 * point to before the table.
+			 */
+			val = cnt - snum;
 		} else {
 			gtot2 += snum;
+			/*
+			 * If this ended partially into another table reset next scan
+			 * point to before the table.
+			 */
+			if (snum >= st1 * 5)
+				val = cnt - snum;
 		}
 		if (gtot2 < gtot1) {
 			gtot1 = gtot2;
 			stride = st1;
+			sval = val;
 		}
 	}
 
-	if (!(gtot1 < srclen && srclen - gtot1 > (DELTA_HDR + LIT_HDR + MAIN_HDR))) {
+	if ( !(gtot1 < srclen && srclen - gtot1 > (DELTA_HDR + LIT_HDR + MAIN_HDR) && gtot1 < *dstlen) ) {
+		if (srclen >= DELTA2_CHUNK) {
+			if (sval > 0)
+				*dstlen = sval;
+		}
 		return (-1);
 	}
 
