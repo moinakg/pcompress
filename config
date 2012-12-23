@@ -50,7 +50,7 @@ yasm=yasm
 keccak_srcs=
 keccak_hdrs=
 keccak_srcs_asm=
-lto_flag=
+m64_flag=
 zlib_prefix=
 bzlib_prefix=
 
@@ -78,10 +78,6 @@ then
 	exit 1
 fi
 
-# Check GCC version and enable LTO flags if possible
-gcc -v 2>&1 | grep lto > /dev/null
-[ $? -eq 0 ] && lto_flag="-flto"
-
 # Check bitness of system/toolchain
 bitness=`./tst`
 if [ $bitness -lt 8 ]
@@ -99,8 +95,7 @@ then
 
 	# If m64 compilation succeeds we assume platform to be 64-bit capable but
 	# explicit flag is reqd.
-	# Instead of setting another variable lets cheat by plugging m64 into lto_flag!
-	lto_flag="${lto_flag} -m64"
+	m64_flag="-m64"
 fi
 rm -f tst tst.c
 
@@ -405,7 +400,7 @@ sha256asmobjsvar="SHA256ASM_OBJS"
 sha256objsvar="SHA256_OBJS"
 yasmvar="YASM"
 fptr_flag_var="FPTR_FLAG"
-lto_flag_var="LTO_FLAG"
+m64_flag_var="M64_FLAG"
 
 openssllibdirvar="OPENSSL_LIBDIR"
 opensslincdirvar="OPENSSL_INCDIR"
@@ -458,6 +453,6 @@ s#@${keccak_srcs_var}@#${keccak_srcs}#g
 s#@${keccak_hdrs_var}@#${keccak_hdrs}#g
 s#@${keccak_srcs_var}@#${keccak_srcs}#g
 s#@${keccak_srcs_asm_var}@#${keccak_srcs_asm}#g
-s#@${lto_flag_var}@#${lto_flag}#g
+s#@${m64_flag_var}@#${m64_flag}#g
 " > Makefile
 

@@ -208,9 +208,13 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 		type = PREPROC_TYPE_LZP;
 		hashsize = lzp_hash_size(level);
 		result = lzp_compress(src, dst, srclen, hashsize, LZP_DEFAULT_LZPMINLEN, 0);
-		if (result < 0 || result == srclen) return (-1);
-		srclen = result;
-		memcpy(src, dst, srclen);
+		if (result < 0 || result == srclen) {
+			if (!enable_delta2_encode)
+				return (-1);
+		} else {
+			srclen = result;
+			memcpy(src, dst, srclen);
+		}
 
 	} else if (!enable_delta2_encode)  {
 		/*
