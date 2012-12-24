@@ -27,7 +27,7 @@
  * (3, 5, 7, 8) are tried to find the one that gives the maximum
  * reduction. A span length threshold in bytes is used. Byte spans
  * less than this threshold are ignored.
- * Bytes are packed into integers in big-endian format.
+ * Bytes are packed into integers in little-endian format.
  *
  * After an optimal stride length has been identified the encoder
  * performs a delta run length encoding on the spans. Two types of
@@ -71,7 +71,7 @@
 #define	MSB_SHIFT	(56)
 
 /*
- * Delta2 algorithm processes data in chunks. The 4K size below is somewhat
+ * Delta2 algorithm processes data in blocks. The 4K size below is somewhat
  * adhoc but a couple of considerations were looked at:
  * 1) Balance between number of headers and delta runs. Too small chunks
  *    will increase header counts for long delta runs spanning chunks.
@@ -86,8 +86,8 @@
  * and interpreted in little-endian order.
  */
 #if BYTE_ORDER == BIG_ENDIAN
-#define	HTONLL	__bswap_64(x)
-#define	NTOHLL	__bswap_64(x)
+#define	HTONLL	htonll
+#define	NTOHLL	ntohll
 #else
 #define	HTONLL
 #define	NTOHLL
@@ -249,14 +249,14 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 			gtot2 += DELTA_HDR;
 			/*
 			 * If this ended into another table reset next scan
-			 * point to before the table.
+			 * point to beginning of the table.
 			 */
 			val = cnt - snum;
 		} else {
 			gtot2 += snum;
 			/*
 			 * If this ended into another table reset next scan
-			 * point to before the table.
+			 * point to beginning of the table.
 			 */
 			if (snum >= (MIN_THRESH>>1))
 				val = cnt - snum;

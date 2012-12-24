@@ -247,6 +247,7 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 		*dstlen = _dstlen + 9;
 		DEBUG_STAT_EN(fprintf(stderr, "Chunk compression speed %.3f MB/s\n", get_mb_s(srclen, strt, en)));
 	} else {
+		DEBUG_STAT_EN(fprintf(stderr, "Chunk did not compress.\n"));
 		memcpy(dest+1, src, srclen);
 		*dstlen = srclen + 1;
 		result = 0;
@@ -274,10 +275,13 @@ preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void 
 		DEBUG_STAT_EN(strt = get_wtime_millis());
 		result = dec_func(sorc, srclen, dst, dstlen, level, chdr, data);
 		DEBUG_STAT_EN(en = get_wtime_millis());
+
 		if (result < 0) return (result);
 		DEBUG_STAT_EN(fprintf(stderr, "Chunk decompression speed %.3f MB/s\n", get_mb_s(srclen, strt, en)));
 		memcpy(src, dst, *dstlen);
 		srclen = *dstlen;
+	} else {
+		src = sorc;
 	}
 
 	if (type & PREPROC_TYPE_DELTA2) {
@@ -1253,8 +1257,14 @@ plain_compress:
 			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data,
 			    tdat->props);
 		} else {
+			DEBUG_STAT_EN(double strt, en);
+
+			DEBUG_STAT_EN(strt = get_wtime_millis());
 			rv = tdat->compress(tdat->uncompressed_chunk, tdat->rbytes,
 			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data);
+			DEBUG_STAT_EN(en = get_wtime_millis());
+			DEBUG_STAT_EN(fprintf(stderr, "Chunk compression speed %.3f MB/s\n",
+					      get_mb_s(_chunksize, strt, en)));
 		}
 	}
 
