@@ -75,7 +75,7 @@ typedef struct {
  * Generic message digest functions.
  */
 int compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, int64_t bytes);
-int get_checksum_props(char *name, int *cksum, int *cksum_bytes, int *mac_bytes);
+int get_checksum_props(const char *name, int *cksum, int *cksum_bytes, int *mac_bytes);
 void serialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
 void deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
 
@@ -88,7 +88,7 @@ int crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, int64_t bytes, ui
 uint64_t crypto_nonce(crypto_ctx_t *cctx);
 void crypto_clean_pkey(crypto_ctx_t *cctx);
 void cleanup_crypto(crypto_ctx_t *cctx);
-int get_pw_string(char pw[MAX_PW_LEN], char *prompt, int twice);
+int get_pw_string(uchar_t pw[MAX_PW_LEN], const char *prompt, int twice);
 
 /*
  * HMAC functions.
@@ -96,6 +96,7 @@ int get_pw_string(char pw[MAX_PW_LEN], char *prompt, int twice);
 int hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx);
 int hmac_reinit(mac_ctx_t *mctx);
 int hmac_update(mac_ctx_t *mctx, uchar_t *data, uint64_t len);
+int hmac_final(mac_ctx_t *mctx, uchar_t *hash, unsigned int *len);
 int hmac_cleanup(mac_ctx_t *mctx);
 
 #ifdef	__cplusplus

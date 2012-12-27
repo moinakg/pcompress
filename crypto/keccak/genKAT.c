@@ -36,8 +36,8 @@ STATUS_CODES    genShortMsgSponge(unsigned int rate, unsigned int capacity, int 
 STATUS_CODES    genDuplexKAT(unsigned int rate, unsigned int capacity, const char *fileName);
 #endif
 int     FindMarker(FILE *infile, const char *marker);
-int     ReadHex(FILE *infile, BitSequence *A, int Length, char *str);
-void    fprintBstr(FILE *fp, char *S, BitSequence *A, int L);
+int     ReadHex(FILE *infile, BitSequence *A, int Length, const char *str);
+void    fprintBstr(FILE *fp, const char *S, BitSequence *A, int L);
 
 
 STATUS_CODES
@@ -139,7 +139,7 @@ genShortMsg(int hashbitlen)
             printf("ERROR: unable to read 'Msg' from <ShortMsgKAT.txt>\n");
             return KAT_DATA_ERROR;
         }
-        Hash(hashbitlen, Msg, msglen, MD);
+        Keccak_Hash(hashbitlen, Msg, msglen, MD);
         fprintf(fp_out, "\nLen = %d\n", msglen);
         fprintBstr(fp_out, "Msg = ", Msg, msgbytelen);
         fprintBstr(fp_out, "MD = ", MD, hashbitlen/8);
@@ -282,15 +282,15 @@ genLongMsg(int hashbitlen)
         }
 #ifdef AllowExtendedFunctions
         if (hashbitlen > 0)
-            Hash(hashbitlen, Msg, msglen, MD);
+            Keccak_Hash(hashbitlen, Msg, msglen, MD);
         else {
-            Init(&state, hashbitlen);
-            Update(&state, Msg, msglen);
-            Final(&state, 0);
+            Keccak_Init(&state, hashbitlen);
+            Keccak_Update(&state, Msg, msglen);
+            Keccak_Final(&state, 0);
             Squeeze(&state, Squeezed, SqueezingOutputLength);
         }
 #else
-        Hash(hashbitlen, Msg, msglen, MD);
+        Keccak_Hash(hashbitlen, Msg, msglen, MD);
 #endif
         fprintf(fp_out, "Len = %d\n", msglen);
         fprintBstr(fp_out, "Msg = ", Msg, msgbytelen);
@@ -368,17 +368,17 @@ genExtremelyLongMsg(int hashbitlen)
     
 //  memcpy(Text, "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmno", 64);
     
-    if ( (retval = Init(&state, hashbitlen)) != KAT_SUCCESS ) {
-        printf("Init returned <%d> in genExtremelyLongMsg\n", retval);
+    if ( (retval = Keccak_Init(&state, hashbitlen)) != KAT_SUCCESS ) {
+        printf("Keccak_Init returned <%d> in genExtremelyLongMsg\n", retval);
         return KAT_HASH_ERROR;
     }
     for ( i=0; i<repeat; i++ )
-        if ( (retval = Update(&state, Text, 512)) != KAT_SUCCESS ) {
-            printf("Update returned <%d> in genExtremelyLongMsg\n", retval);
+        if ( (retval = Keccak_Update(&state, Text, 512)) != KAT_SUCCESS ) {
+            printf("Keccak_Update returned <%d> in genExtremelyLongMsg\n", retval);
             return KAT_HASH_ERROR;
         }
-    if ( (retval = Final(&state, MD)) != KAT_SUCCESS ) {
-        printf("Final returned <%d> in genExtremelyLongMsg\n", retval);
+    if ( (retval = Keccak_Final(&state, MD)) != KAT_SUCCESS ) {
+        printf("Keccak_Final returned <%d> in genExtremelyLongMsg\n", retval);
         return KAT_HASH_ERROR;
     }
 #ifdef AllowExtendedFunctions
@@ -449,7 +449,7 @@ genMonteCarlo(int hashbitlen)
     fprintBstr(fp_out, "Seed = ", Seed, 128);
     for ( j=0; j<100; j++ ) {
         for ( i=0; i<1000; i++ ) {
-            Hash(hashbitlen, Msg, 1024, MD);
+            Keccak_Hash(hashbitlen, Msg, 1024, MD);
             memcpy(Temp, Msg, 128-bytelen);
             memcpy(Msg, MD, bytelen);
             memcpy(Msg+bytelen, Temp, 128-bytelen);
@@ -511,22 +511,22 @@ genMonteCarloSqueezing(int hashbitlen)
     
     fprintBstr(fp_out, "Seed = ", Seed, 128);
 
-    if ( (retval = Init(&state, hashbitlen)) != KAT_SUCCESS ) {
-        printf("Init returned <%d> in genMonteCarloSqueezing\n", retval);
+    if ( (retval = Keccak_Init(&state, hashbitlen)) != KAT_SUCCESS ) {
+        printf("Keccak_Init returned <%d> in genMonteCarloSqueezing\n", retval);
         return KAT_HASH_ERROR;
     }
-    if ( (retval = Update(&state, Seed, 128*8)) != KAT_SUCCESS ) {
-        printf("Update returned <%d> in genMonteCarloSqueezing\n", retval);
+    if ( (retval = Keccak_Update(&state, Seed, 128*8)) != KAT_SUCCESS ) {
+        printf("Keccak_Update returned <%d> in genMonteCarloSqueezing\n", retval);
         return KAT_HASH_ERROR;
     }
-    if ( (retval = Final(&state, 0)) != KAT_SUCCESS ) {
-        printf("Final returned <%d> in genMonteCarloSqueezing\n", retval);
+    if ( (retval = Keccak_Final(&state, 0)) != KAT_SUCCESS ) {
+        printf("Keccak_Final returned <%d> in genMonteCarloSqueezing\n", retval);
         return KAT_HASH_ERROR;
     }
     bytelen = 64;
     for ( j=0; j<100; j++ ) {
         for ( i=0; i<1000; i++ ) {
-            if ( (retval = Squeeze(&state, MD, bytelen*8)) != KAT_SUCCESS ) {
+            if ( (retval = (HashReturn)Squeeze(&state, MD, bytelen*8)) != KAT_SUCCESS ) {
                 printf("Squeeze returned <%d> in genMonteCarloSqueezing\n", retval);
                 return KAT_HASH_ERROR;
             }
@@ -634,7 +634,7 @@ FindMarker(FILE *infile, const char *marker)
 // ALLOW TO READ HEXADECIMAL ENTRY (KEYS, DATA, TEXT, etc.)
 //
 int
-ReadHex(FILE *infile, BitSequence *A, int Length, char *str)
+ReadHex(FILE *infile, BitSequence *A, int Length, const char *str)
 {
     int         i, ch, started;
     BitSequence ich;
@@ -664,6 +664,8 @@ ReadHex(FILE *infile, BitSequence *A, int Length, char *str)
                 ich = ch - 'A' + 10;
             else if ( (ch >= 'a') && (ch <= 'f') )
                 ich = ch - 'a' + 10;
+	    else
+		return 1;
             
             for ( i=0; i<Length-1; i++ )
                 A[i] = (A[i] << 4) | (A[i+1] >> 4);
@@ -676,7 +678,7 @@ ReadHex(FILE *infile, BitSequence *A, int Length, char *str)
 }
 
 void
-fprintBstr(FILE *fp, char *S, BitSequence *A, int L)
+fprintBstr(FILE *fp, const char *S, BitSequence *A, int L)
 {
     int     i;
 

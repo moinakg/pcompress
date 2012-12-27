@@ -25,9 +25,15 @@
 #define	_UTILS_H
 
 #include <arpa/nameser_compat.h>
+#include <arpa/inet.h>
 #include <sys/types.h>
-#include <stdint.h>
+
+#ifndef __STDC_FORMAT_MACROS
+#define	__STDC_FORMAT_MACROS	1
+#endif
+
 #include <inttypes.h>
+#include <stdint.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -147,6 +153,7 @@ extern void set_threadcounts(algo_props_t *props, int *nthreads, int nprocs,
 extern uint64_t get_total_ram();
 extern double get_wtime_millis(void);
 extern double get_mb_s(uint64_t bytes, double strt, double en);
+extern void init_algo_props(algo_props_t *props);
 
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, uint64_t srclen, void *dst,
@@ -158,11 +165,11 @@ typedef enum {
 } compress_op_t;
 
 /* Pointer type for algo specific init/deinit/stats functions. */
-typedef int (*init_func_ptr)(void **data, int *level, int nthreads, int64_t chunksize,
+typedef int (*init_func_ptr)(void **data, int *level, int nthreads, uint64_t chunksize,
 			     int file_version, compress_op_t op);
 typedef int (*deinit_func_ptr)(void **data);
 typedef void (*stats_func_ptr)(int show);
-typedef void (*props_func_ptr)(algo_props_t *data, int level, int64_t chunksize);
+typedef void (*props_func_ptr)(algo_props_t *data, int level, uint64_t chunksize);
 
 
 /*
@@ -179,38 +186,6 @@ roundup_pow_two(unsigned int v) {
 	v |= v >> 16;
 	v++;
 	return (v);
-}
-
-/*
- * Hash function for 64Bit pointers/numbers that generates
- * a 32Bit hash value.
- * Taken from Thomas Wang's Integer hashing paper:
- * http://www.cris.com/~Ttwang/tech/inthash.htm
- */
-static uint32_t
-hash6432shift(uint64_t key)
-{
-	key = (~key) + (key << 18); // key = (key << 18) - key - 1;
-	key = key ^ (key >> 31);
-	key = key * 21; // key = (key + (key << 2)) + (key << 4);
-	key = key ^ (key >> 11);
-	key = key + (key << 6);
-	key = key ^ (key >> 22);
-	return (uint32_t) key;
-}
-
-static void
-init_algo_props(algo_props_t *props)
-{
-	props->buf_extra = 0;
-	props->compress_mt_capable = 0;
-	props->decompress_mt_capable = 0;
-	props->single_chunk_mt_capable = 0;
-	props->is_single_chunk = 0;
-	props->nthreads = 1;
-	props->c_max_threads = 1;
-	props->d_max_threads = 1;
-	props->delta2_span = 0;
 }
 
 #ifdef	__cplusplus

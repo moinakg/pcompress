@@ -55,7 +55,7 @@ crypto_aesctr_init(AES_KEY * key, uint64_t nonce)
 	struct crypto_aesctr * stream;
 
 	/* Allocate memory. */
-	if ((stream = malloc(sizeof(struct crypto_aesctr))) == NULL)
+	if ((stream = (struct crypto_aesctr *)malloc(sizeof(struct crypto_aesctr))) == NULL)
 		goto err0;
 
 	/* Initialize values. */

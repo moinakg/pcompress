@@ -47,6 +47,9 @@
 #include <rabin_dedup.h>
 #include <lzp.h>
 #include <transpose.h>
+#include <delta2/delta2.h>
+#include <crypto/crypto_utils.h>
+#include <ctype.h>
 
 /*
  * We use 5MB chunks by default.
@@ -95,7 +98,6 @@ static int do_uncompress = 0;
 static int cksum_bytes, mac_bytes;
 static int cksum = 0, t_errored = 0;
 static int rab_blk_size = 0;
-static dedupe_context_t *rctx;
 static crypto_ctx_t crypto_ctx;
 static char *pwd_file = NULL;
 
@@ -198,7 +200,8 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 	uint64_t *dstlen, int level, uchar_t chdr, void *data, algo_props_t *props)
 {
 	uchar_t *dest = (uchar_t *)dst, type = 0;
-	int64_t result, _dstlen;
+	int64_t result;
+	uint64_t _dstlen;
 	DEBUG_STAT_EN(double strt, en);
 
 	_dstlen = *dstlen;
@@ -207,7 +210,8 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 
 		type = PREPROC_TYPE_LZP;
 		hashsize = lzp_hash_size(level);
-		result = lzp_compress(src, dst, srclen, hashsize, LZP_DEFAULT_LZPMINLEN, 0);
+		result = lzp_compress((const uchar_t *)src, (uchar_t *)dst, srclen,
+				      hashsize, LZP_DEFAULT_LZPMINLEN, 0);
 		if (result < 0 || result == srclen) {
 			if (!enable_delta2_encode)
 				return (-1);
@@ -227,7 +231,8 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 
 	if (enable_delta2_encode && props->delta2_span > 0) {
 		_dstlen = srclen;
-		result = delta2_encode(src, srclen, dst, &_dstlen, props->delta2_span);
+		result = delta2_encode((uchar_t *)src, srclen, (uchar_t *)dst,
+				       &_dstlen, props->delta2_span);
 		if (result != -1) {
 			memcpy(src, dst, _dstlen);
 			srclen = _dstlen;
@@ -285,7 +290,7 @@ preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void 
 	}
 
 	if (type & PREPROC_TYPE_DELTA2) {
-		result = delta2_decode(src, srclen, dst, &_dstlen);
+		result = delta2_decode((uchar_t *)src, srclen, (uchar_t *)dst, &_dstlen);
 		if (result != -1) {
 			memcpy(src, dst, _dstlen);
 			srclen = _dstlen;
@@ -298,7 +303,8 @@ preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void 
 	if (type & PREPROC_TYPE_LZP) {
 		int hashsize;
 		hashsize = lzp_hash_size(level);
-		result = lzp_decompress(src, dst, srclen, hashsize, LZP_DEFAULT_LZPMINLEN, 0);
+		result = lzp_decompress((const uchar_t *)src, (uchar_t *)dst, srclen,
+					hashsize, LZP_DEFAULT_LZPMINLEN, 0);
 		if (result < 0) {
 			fprintf(stderr, "LZP decompression failed.\n");
 			return (-1);
@@ -323,9 +329,9 @@ static void *
 perform_decompress(void *dat)
 {
 	struct cmp_data *tdat = (struct cmp_data *)dat;
-	int64_t _chunksize;
-	int64_t dedupe_index_sz, dedupe_data_sz, dedupe_index_sz_cmp, dedupe_data_sz_cmp;
-	int type, rv;
+	uint64_t _chunksize;
+	uint64_t dedupe_index_sz, dedupe_data_sz, dedupe_index_sz_cmp, dedupe_data_sz_cmp;
+	int rv = 0;
 	unsigned int blknum;
 	uchar_t checksum[CKSUM_MAX_BYTES];
 	uchar_t HDR;
@@ -388,7 +394,7 @@ redo:
 			tdat->len_cmp = 0;
 			t_errored = 1;
 			sem_post(&tdat->cmp_done_sem);
-			return;
+			return (NULL);
 		}
 
 		/*
@@ -403,7 +409,7 @@ redo:
 			main_cancel = 1;
 			tdat->len_cmp = 0;
 			sem_post(&tdat->cmp_done_sem);
-			return;
+			return (NULL);
 		}
 	} else if (mac_bytes > 0) {
 		/*
@@ -431,7 +437,7 @@ redo:
 			tdat->len_cmp = 0;
 			t_errored = 1;
 			sem_post(&tdat->cmp_done_sem);
-			return;
+			return (NULL);
 		}
 
 		/*
@@ -603,7 +609,6 @@ cont:
 static int
 start_decompress(const char *filename, const char *to_filename)
 {
-	char tmpfile[MAXPATHLEN];
 	char algorithm[ALGO_SZ];
 	struct stat sbuf;
 	struct wdata w;
@@ -752,6 +757,7 @@ start_decompress(const char *filename, const char *to_filename)
 		 * is computed over header and encrypted data.
 		 */
 		cksum_bytes = 0;
+		pw_len = -1;
 		compressed_chunksize += mac_bytes;
 		encrypt_type = flags & MASK_CRYPTO_ALG;
 		if (Read(compfd, &saltlen, sizeof (saltlen)) < sizeof (saltlen)) {
@@ -759,8 +765,8 @@ start_decompress(const char *filename, const char *to_filename)
 			UNCOMP_BAIL;
 		}
 		saltlen = ntohl(saltlen);
-		salt1 = malloc(saltlen);
-		salt2 = malloc(saltlen);
+		salt1 = (uchar_t *)malloc(saltlen);
+		salt2 = (uchar_t *)malloc(saltlen);
 		if (Read(compfd, salt1, saltlen) < saltlen) {
 			free(salt1);  free(salt2);
 			perror("Read: ");
@@ -867,7 +873,6 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 	} else if (version >= 5) {
 		uint32_t crc1, crc2;
-		unsigned int hlen;
 		unsigned short d1;
 		unsigned int d2;
 		uint64_t ch;
@@ -1084,7 +1089,6 @@ start_decompress(const char *filename, const char *to_filename)
 			tdat = dary[p];
 			sem_wait(&tdat->write_done_sem);
 		}
-		thread = 0;
 	}
 uncomp_done:
 	if (t_errored) err = t_errored;
@@ -1151,6 +1155,8 @@ redo:
 
 	compressed_chunk = tdat->compressed_chunk + CHUNK_FLAG_SZ;
 	rbytes = tdat->rbytes;
+	dedupe_index_sz = 0;
+
 	/* Perform Dedup if enabled. */
 	if ((enable_rabin_scan || enable_fixed_scan)) {
 		dedupe_context_t *rctx;
@@ -1249,7 +1255,6 @@ plain_index:
 		update_dedupe_hdr(compressed_chunk, index_size_cmp - RABIN_HDR_SIZE, _chunksize);
 		_chunksize += index_size_cmp;
 	} else {
-plain_compress:
 		_chunksize = tdat->rbytes;
 		if (lzp_preprocess || enable_delta2_encode) {
 			rv = preproc_compress(tdat->compress,
@@ -1366,7 +1371,6 @@ plain_compress:
 		 * Compute header CRC32 in non-crypto mode.
 		 */
 		uchar_t *mac_ptr;
-		unsigned int hlen;
 		uint32_t crc;
 
 		/* Clean out mac_bytes to 0 for stable CRC32. */
@@ -1379,7 +1383,6 @@ plain_compress:
 		*((uint32_t *)mac_ptr) = htonl(crc);
 	}
 	
-cont:
 	sem_post(&tdat->cmp_done_sem);
 	goto redo;
 }
@@ -1409,8 +1412,6 @@ repeat:
 
 		wbytes = Write(w->wfd, tdat->cmp_seg, tdat->len_cmp);
 		if (unlikely(wbytes != tdat->len_cmp)) {
-			int i;
-
 			perror("Chunk Write: ");
 do_cancel:
 			main_cancel = 1;
@@ -1437,8 +1438,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	struct wdata w;
 	char tmpfile1[MAXPATHLEN];
 	char to_filename[MAXPATHLEN];
-	int64_t compressed_chunksize;
-	int64_t n_chunksize, rbytes, rabin_count;
+	uint64_t compressed_chunksize, n_chunksize;
+	int64_t rbytes, rabin_count;
 	short version, flags;
 	struct stat sbuf;
 	int compfd = -1, uncompfd = -1, err;
@@ -1464,6 +1465,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 */
 	compressed_chunksize = chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
 	init_algo_props(&props);
+	cread_buf = NULL;
 
 	if (_props_func) {
 		_props_func(&props, level, chunksize);
@@ -1486,7 +1488,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 
 	if (encrypt_type) {
 		uchar_t pw[MAX_PW_LEN];
-		int pw_len;
+		int pw_len = -1;
 
 		compressed_chunksize += mac_bytes;
 		if (!pwd_file) {
@@ -1697,7 +1699,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 */
 	flags |= cksum;
 	memset(cread_buf, 0, ALGO_SZ);
-	strncpy(cread_buf, algo, ALGO_SZ);
+	strncpy((char *)cread_buf, algo, ALGO_SZ);
 	version = htons(VERSION);
 	flags = htons(flags);
 	n_chunksize = htonll(chunksize);
@@ -1991,7 +1993,7 @@ comp_done:
 static int
 init_algo(const char *algo, int bail)
 {
-	int rv = 1, i;
+	int rv = 1;
 	char algorithm[8];
 
 	/* Copy given string into known length buffer to avoid memcmp() overruns. */
@@ -2115,6 +2117,7 @@ main(int argc, char *argv[])
 
 	exec_name = get_execname(argv[0]);
 	level = 6;
+	err = 0;
 	slab_init();
 
 	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEew:rLPS:B:F")) != -1) {

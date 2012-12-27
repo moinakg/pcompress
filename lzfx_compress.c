@@ -40,12 +40,12 @@ lz_fx_stats(int show)
 }
 
 void
-lz_fx_props(algo_props_t *data, int level, int64_t chunksize) {
+lz_fx_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->delta2_span = 50;
 }
 
 int
-lz_fx_init(void **data, int *level, int nthreads, int64_t chunksize,
+lz_fx_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	   int file_version, compress_op_t op)
 {
 	struct lzfx_params *lzdat;
@@ -55,7 +55,7 @@ lz_fx_init(void **data, int *level, int nthreads, int64_t chunksize,
 		fprintf(stderr, "Chunk size too big for LZFX.\n");
 		return (1);
 	}
-	lzdat = slab_alloc(NULL, sizeof (struct lzfx_params));
+	lzdat = (struct lzfx_params *)slab_alloc(NULL, sizeof (struct lzfx_params));
 
 	lev = *level;
 	if (lev > 5) lev = 5;

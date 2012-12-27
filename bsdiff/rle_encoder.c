@@ -30,13 +30,13 @@
 #define COUNT_MAX (32767)
 
 int
-zero_rle_encode(const void *const ibuf, const unsigned int ilen,
-	void *obuf, unsigned int *const olen)
+zero_rle_encode(const void *ibuf, const unsigned int ilen,
+	void *obuf, unsigned int *olen)
 {
 	unsigned int pos1, pos2;
 	unsigned short count;
-	const uchar_t *const ib = ibuf;
-	uchar_t *ob = obuf;
+	const uchar_t *ib = (const uchar_t *)ibuf;
+	uchar_t *ob = (uchar_t *)obuf;
 
 	pos2 = 0;
 	for (pos1=0; pos1<ilen && pos2<*olen;) {
@@ -83,8 +83,8 @@ zero_rle_decode(const void* ibuf, unsigned int ilen,
 {
 	unsigned int pos1, pos2, i;
 	unsigned short count;
-	const uchar_t *ib = ibuf;
-	uchar_t *ob = obuf;
+	const uchar_t *ib = (const uchar_t *)ibuf;
+	uchar_t *ob = (uchar_t *)obuf;
 
 	pos2 = 0;
 	pos1 = 0;

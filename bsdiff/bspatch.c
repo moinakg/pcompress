@@ -37,13 +37,9 @@ __FBSDID("$FreeBSD: src/usr.bin/bsdiff/bspatch/bspatch.c,v 1.1 2005/08/06 01:59:
 #include <fcntl.h>
 #include <allocator.h>
 #include <utils.h>
-#include "bscommon.h"
 
-static bsize_t
-valin(u_char *buf)
-{
-	return ntohll(*((bsize_t *)buf));
-}
+#define	__IN_BSPATCH__
+#include "bscommon.h"
 
 static int32_t
 valini32(u_char *buf)
@@ -55,7 +51,7 @@ bsize_t
 get_bsdiff_sz(u_char *pbuf) {
 	bsize_t newsize;
 	bsize_t lzctrllen, ctrllen, lzdatalen, datalen, lzextralen, extralen;
-	int hdrsz, rv;
+	int hdrsz;
 
 	hdrsz = 4*7;
 
@@ -70,7 +66,7 @@ get_bsdiff_sz(u_char *pbuf) {
 }
 
 int
-bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new, bsize_t *_newsize)
+bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *_newsize)
 {
 	bsize_t newsize;
 	bsize_t lzctrllen, ctrllen, lzdatalen, datalen, lzextralen, extralen;
@@ -123,8 +119,8 @@ bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new, bsize_t *_newsi
 	*_newsize = newsize;
 
 	/* Allocate buffers. */
-	diffdata = slab_alloc(NULL, datalen);
-	extradata = slab_alloc(NULL, extralen);
+	diffdata = (u_char *)slab_alloc(NULL, datalen);
+	extradata = (u_char *)slab_alloc(NULL, extralen);
 	if (diffdata == NULL || extradata == NULL) {
 		fprintf(stderr, "bspatch: Out of memory.\n");
 		if (diffdata) slab_free(NULL, diffdata);
@@ -135,7 +131,7 @@ bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new, bsize_t *_newsi
 	/* Decompress ctrldata, diffdata and extradata. */
 	if (lzctrllen < ctrllen) {
 		/* Ctrl data will be RLE-d if RLE size is less. */
-		ctrldata = slab_alloc(NULL, ctrllen);
+		ctrldata = (u_char *)slab_alloc(NULL, ctrllen);
 		if (ctrldata == NULL) {
 			fprintf(stderr, "bspatch: Out of memory.\n");
 			slab_free(NULL, diffdata);
@@ -195,7 +191,7 @@ bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new, bsize_t *_newsi
 		}
 
 		/* Read diff string */
-		lenread = BUFREAD(&dpf, new + newpos, ctrl[0]);
+		lenread = BUFREAD(&dpf, newbuf + newpos, ctrl[0]);
 		if (lenread < ctrl[0]) {
 			fprintf(stderr, "4: Corrupt diff data\n");
 			rv = 0;
@@ -205,7 +201,7 @@ bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new, bsize_t *_newsi
 		/* Add old data to diff string */
 		for(i=0;i<ctrl[0];i++)
 			if((oldpos+i>=0) && (oldpos+i<oldsize))
-				new[newpos+i]+=old[oldpos+i];
+				newbuf[newpos+i]+=oldbuf[oldpos+i];
 
 		/* Adjust pointers */
 		newpos+=ctrl[0];
@@ -219,7 +215,7 @@ bspatch(u_char *pbuf, u_char *old, bsize_t oldsize, u_char *new, bsize_t *_newsi
 		}
 
 		/* Read extra string */
-		lenread = BUFREAD(&epf, new + newpos, ctrl[1]);
+		lenread = BUFREAD(&epf, newbuf + newpos, ctrl[1]);
 		if (lenread < ctrl[1]) {
 			fprintf(stderr, "6: Corrupt diff data\n");
 			rv = 0;

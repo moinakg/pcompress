@@ -273,7 +273,6 @@ static void MatchFinder_SetLimits(CMatchFinder *p)
 
 void MatchFinder_Init(CMatchFinder *p)
 {
-  UInt32 i;
   /*
    * Optimized following loop:
    * for (i = 0; i < p->hashSizeSum; i++)

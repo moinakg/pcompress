@@ -790,7 +790,6 @@ static UInt32 RcTree_ReverseGetPrice(const CLzmaProb *probs, int numBitLevels, U
 
 static void LenEnc_Init(CLenEnc *p)
 {
-  unsigned i;
   UInt64 val;
   val = kProbInitValue;
   val <<= 32;
@@ -1313,7 +1312,6 @@ cont_1:
       }
       else
       {
-        UInt32 i;
         reps[0] = (pos - LZMA_NUM_REPS);
 	/* Unroll for small iterations. */
 #if LZMA_NUM_REPS > 4
@@ -2127,7 +2125,6 @@ void LzmaEnc_Init(CLzmaEnc *p)
 
   for (i = 0; i < kNumStates; i++)
   {
-    UInt32 j;
     /*
      * for (j = 0; j < LZMA_NUM_PB_STATES_MAX; j++)
      * {

@@ -117,7 +117,7 @@ raise_by_multiplier(int64_t *val, int mult, int power) {
 int
 parse_numeric(int64_t *val, const char *str)
 {
-	int i, ovr;
+	int ovr = 2;
 	char *mult;
 
 	*val = strtoll(str, &mult, 0);
@@ -184,7 +184,6 @@ Read(int fd, void *buf, uint64_t count)
 {
 	int64_t rcount, rem;
 	uchar_t *cbuf;
-	va_list args;
 
 	rem = count;
 	cbuf = (uchar_t *)buf;
@@ -207,23 +206,29 @@ Read(int fd, void *buf, uint64_t count)
 int64_t
 Read_Adjusted(int fd, uchar_t *buf, uint64_t count, int64_t *rabin_count, void *ctx)
 {
-        char *buf2;
+        uchar_t *buf2;
         int64_t rcount;
         dedupe_context_t *rctx = (dedupe_context_t *)ctx;
 
         if (!ctx)  return (Read(fd, buf, count));
         buf2 = buf;
         if (*rabin_count) {
-                buf2 = (char *)buf + *rabin_count;
+                buf2 = buf + *rabin_count;
                 count -= *rabin_count;
         }
         rcount = Read(fd, buf2, count);
         if (rcount > 0) {
                 rcount += *rabin_count;
-		if (rcount == count)
-			dedupe_compress(rctx, buf, &rcount, 0, rabin_count);
-		else
+		if (rcount == count) {
+			uint64_t rc, rbc;
+			rc = rcount;
+			rbc = *rabin_count;
+			dedupe_compress(rctx, buf, &rc, 0, &rbc);
+			rcount = rc;
+			*rabin_count = rbc;
+		} else {
 			*rabin_count = 0;
+		}
         } else {
                 if (rcount == 0) rcount = *rabin_count;
                 *rabin_count = 0;
@@ -246,6 +251,20 @@ Write(int fd, const void *buf, uint64_t count)
 		cbuf += wcount;
 	} while (rem);
 	return (count - rem);
+}
+
+void
+init_algo_props(algo_props_t *props)
+{
+	props->buf_extra = 0;
+	props->compress_mt_capable = 0;
+	props->decompress_mt_capable = 0;
+	props->single_chunk_mt_capable = 0;
+	props->is_single_chunk = 0;
+	props->nthreads = 1;
+	props->c_max_threads = 1;
+	props->d_max_threads = 1;
+	props->delta2_span = 0;
 }
 
 /*

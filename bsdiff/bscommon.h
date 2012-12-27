@@ -64,6 +64,8 @@ BUFOPEN(bufio_t *bio, uchar_t *buf, bsize_t len)
 	bio->buf = buf; bio->pos = 0; bio->buflen = len;
 	return (0);
 }
+
+#ifndef	__IN_BSPATCH__
 static bsize_t
 BUFWRITE(bufio_t *bio, uchar_t *buf, bsize_t len)
 {
@@ -75,12 +77,13 @@ BUFWRITE(bufio_t *bio, uchar_t *buf, bsize_t len)
 		return (-1);
 	}
 }
+#endif
 
+#ifndef	__IN_BSDIFF__
 static bsize_t
 BUFREAD(bufio_t *bio, uchar_t *buf, bsize_t len)
 {
 	bsize_t actual;
-int i;
 
 	actual = len;
 	if (bio->pos + len > bio->buflen) {
@@ -91,7 +94,9 @@ int i;
 	bio->pos += actual;
 	return (actual);
 }
+#endif
 
+#ifndef	__IN_BSPATCH__
 static bsize_t
 BUFTELL(bufio_t *bio)
 {
@@ -123,9 +128,10 @@ BUFSEEK(bufio_t *bio, bsize_t pos, int typ)
 	}
 	return (0);
 }
+#endif
 
-extern int zero_rle_encode(const void *const ibuf, const unsigned int ilen,
-	void *obuf, unsigned int *const olen);
+extern int zero_rle_encode(const void *ibuf, const unsigned int ilen,
+	void *obuf, unsigned int *olen);
 extern int zero_rle_decode(const void* ibuf, unsigned int ilen,
 	void* obuf, unsigned int *olen);
 

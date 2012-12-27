@@ -89,7 +89,7 @@
 // Header for a chunk deduped using Rabin
 // Number of rabin blocks, size of original data chunk, size of compressed index,
 // size of deduped data, size of compressed data
-#define	RABIN_HDR_SIZE (sizeof (unsigned int) + sizeof (int64_t) + sizeof (int64_t) + sizeof (int64_t) + sizeof (int64_t))
+#define	RABIN_HDR_SIZE (sizeof (unsigned int) + sizeof (uint64_t) + sizeof (uint64_t) + sizeof (uint64_t) + sizeof (uint64_t))
 
 // Maximum number of dedup blocks supported (2^30 - 1)
 #define	RABIN_MAX_BLOCKS (0x3FFFFFFFUL)
@@ -135,7 +135,7 @@
 #define	FP_POLY  0xbfe6b8a5bf378d83ULL
 
 typedef struct rab_blockentry {
-	int64_t offset;
+	uint64_t offset;
 	uint32_t similarity_hash;
 	uint32_t hash;
 	uint32_t index;
@@ -167,13 +167,13 @@ extern dedupe_context_t *create_dedupe_context(uint64_t chunksize, uint64_t real
 	compress_op_t op);
 extern void destroy_dedupe_context(dedupe_context_t *ctx);
 extern unsigned int dedupe_compress(dedupe_context_t *ctx, unsigned char *buf, 
-	int64_t *size, int64_t offset, int64_t *rabin_pos);
-extern void dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, int64_t *size);
-extern void parse_dedupe_hdr(uchar_t *buf, unsigned int *blknum, int64_t *dedupe_index_sz,
-		int64_t *dedupe_data_sz, int64_t *rabin_index_sz_cmp,
-		int64_t *dedupe_data_sz_cmp, int64_t *deduped_size);
-extern void update_dedupe_hdr(uchar_t *buf, int64_t dedupe_index_sz_cmp,
-			     int64_t dedupe_data_sz_cmp);
+	uint64_t *size, uint64_t offset, uint64_t *rabin_pos);
+extern void dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size);
+extern void parse_dedupe_hdr(uchar_t *buf, unsigned int *blknum, uint64_t *dedupe_index_sz,
+		uint64_t *dedupe_data_sz, uint64_t *rabin_index_sz_cmp,
+		uint64_t *dedupe_data_sz_cmp, uint64_t *deduped_size);
+extern void update_dedupe_hdr(uchar_t *buf, uint64_t dedupe_index_sz_cmp,
+			     uint64_t dedupe_data_sz_cmp);
 extern void reset_dedupe_context(dedupe_context_t *ctx);
 extern uint32_t dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo,
 	int delta_flag);

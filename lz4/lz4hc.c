@@ -297,16 +297,16 @@ inline static int LZ4HC_Init (LZ4HC_Data_Structure* hc4, const BYTE* base)
 }
 
 
-inline static void* LZ4HC_Create (const BYTE* base)
+inline static LZ4HC_Data_Structure* LZ4HC_Create (const BYTE* base)
 {
-	void* hc4 = ALLOCATOR(sizeof(LZ4HC_Data_Structure));
+	LZ4HC_Data_Structure* hc4 = (LZ4HC_Data_Structure *)ALLOCATOR(sizeof(LZ4HC_Data_Structure));
 
 	LZ4HC_Init (hc4, base);
 	return hc4;
 }
 
 
-inline static int LZ4HC_Free (void** LZ4HC_Data)
+inline static int LZ4HC_Free (LZ4HC_Data_Structure** LZ4HC_Data)
 {
 	FREEMEM(*LZ4HC_Data);
 	*LZ4HC_Data = NULL;
@@ -686,7 +686,7 @@ int LZ4_compressHC(const char* source,
 				 char* dest,
 				 int isize)
 {
-	void* ctx = LZ4HC_Create((const BYTE*)source);
+	LZ4HC_Data_Structure* ctx = LZ4HC_Create((const BYTE*)source);
 	int result = LZ4_compressHCCtx(ctx, source, dest, isize);
 	LZ4HC_Free (&ctx);
 

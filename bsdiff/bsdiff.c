@@ -66,6 +66,7 @@ __FBSDID("$FreeBSD: src/usr.bin/bsdiff/bsdiff/bsdiff.c,v 1.1 2005/08/06 01:59:05
 #include <emmintrin.h>
 #endif
 
+#define	__IN_BSDIFF__
 #include "bscommon.h"
 
 #define MIN(x,y) (((x)<(y)) ? (x) : (y))
@@ -131,7 +132,7 @@ static void split(bsize_t *I,bsize_t *V,bsize_t start,bsize_t len,bsize_t h)
 	if(start+len>kk) split(I,V,kk,start+len-kk,h);
 }
 
-static void qsufsort(bsize_t *I,bsize_t *V,u_char *old,bsize_t oldsize)
+static void qsufsort(bsize_t *I,bsize_t *V,u_char *oldbuf,bsize_t oldsize)
 {
 	bsize_t buckets[256];
 	bsize_t i,h,len;
@@ -158,14 +159,14 @@ static void qsufsort(bsize_t *I,bsize_t *V,u_char *old,bsize_t oldsize)
 #ifdef __USE_SSE_INTRIN__
 	}
 #endif
-	for(i=0;i<oldsize;i++) buckets[old[i]]++;
+	for(i=0;i<oldsize;i++) buckets[oldbuf[i]]++;
 	for(i=1;i<256;i++) buckets[i]+=buckets[i-1];
 	for(i=255;i>0;i--) buckets[i]=buckets[i-1];
 	buckets[0]=0;
 
-	for(i=0;i<oldsize;i++) I[++buckets[old[i]]]=i;
+	for(i=0;i<oldsize;i++) I[++buckets[oldbuf[i]]]=i;
 	I[0]=oldsize;
-	for(i=0;i<oldsize;i++) V[i]=buckets[old[i]];
+	for(i=0;i<oldsize;i++) V[i]=buckets[oldbuf[i]];
 	V[oldsize]=0;
 	for(i=1;i<256;i++) if(buckets[i]==buckets[i-1]+1) I[buckets[i]]=-1;
 	I[0]=-1;
@@ -190,24 +191,24 @@ static void qsufsort(bsize_t *I,bsize_t *V,u_char *old,bsize_t oldsize)
 	for(i=0;i<oldsize+1;i++) I[V[i]]=i;
 }
 
-static bsize_t matchlen(u_char *old,bsize_t oldsize,u_char *new,bsize_t newsize)
+static bsize_t matchlen(u_char *oldbuf,bsize_t oldsize,u_char *newbuf,bsize_t newsize)
 {
 	bsize_t i;
 
 	for(i=0;(i<oldsize)&&(i<newsize);i++)
-		if(old[i]!=new[i]) break;
+		if(oldbuf[i]!=newbuf[i]) break;
 
 	return i;
 }
 
-static bsize_t search(bsize_t *I,u_char *old,bsize_t oldsize,
-		u_char *new,bsize_t newsize,bsize_t st,bsize_t en,bsize_t *pos)
+static bsize_t search(bsize_t *I,u_char *oldbuf,bsize_t oldsize,
+		u_char *newbuf,bsize_t newsize,bsize_t st,bsize_t en,bsize_t *pos)
 {
 	bsize_t x,y;
 
 	if(en-st<2) {
-		x=matchlen(old+I[st],oldsize-I[st],new,newsize);
-		y=matchlen(old+I[en],oldsize-I[en],new,newsize);
+		x=matchlen(oldbuf+I[st],oldsize-I[st],newbuf,newsize);
+		y=matchlen(oldbuf+I[en],oldsize-I[en],newbuf,newsize);
 
 		if(x>y) {
 			*pos=I[st];
@@ -219,17 +220,11 @@ static bsize_t search(bsize_t *I,u_char *old,bsize_t oldsize,
 	};
 
 	x=st+(en-st)/2;
-	if(memcmp(old+I[x],new,MIN(oldsize-I[x],newsize))<0) {
-		return search(I,old,oldsize,new,newsize,x,en,pos);
+	if(memcmp(oldbuf+I[x],newbuf,MIN(oldsize-I[x],newsize))<0) {
+		return search(I,oldbuf,oldsize,newbuf,newsize,x,en,pos);
 	} else {
-		return search(I,old,oldsize,new,newsize,st,x,pos);
+		return search(I,oldbuf,oldsize,newbuf,newsize,st,x,pos);
 	};
-}
-
-static void
-valout(bsize_t x, u_char *buf)
-{
-	*((bsize_t *)buf) = htonll(x);
 }
 
 static void
@@ -241,7 +236,7 @@ valouti32(bsize_t x, u_char *buf)
 }
 
 bsize_t
-bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
+bsdiff(u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t newsize,
        u_char *diff, u_char *scratch, bsize_t scratchsize)
 {
 	bsize_t *I,*V;
@@ -259,15 +254,15 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 	bufio_t pf;
 
 	sz = sizeof (bsize_t);
-	I = slab_alloc(NULL, (oldsize+1)*sz);
-	V = slab_alloc(NULL, (oldsize+1)*sz);
+	I = (bsize_t *)slab_alloc(NULL, (oldsize+1)*sz);
+	V = (bsize_t *)slab_alloc(NULL, (oldsize+1)*sz);
 	if(I == NULL || V == NULL) return (0);
 
-	qsufsort(I,V,old,oldsize);
+	qsufsort(I,V,oldbuf,oldsize);
 	slab_free(NULL, V);
 
-	if(((db=slab_alloc(NULL, newsize+1))==NULL) ||
-		((eb=slab_alloc(NULL, newsize+1))==NULL)) {
+	if(((db=(u_char *)slab_alloc(NULL, newsize+1))==NULL) ||
+		((eb=(u_char *)slab_alloc(NULL, newsize+1))==NULL)) {
 		fprintf(stderr, "bsdiff: Memory allocation error.\n");
 		slab_free(NULL, I);
 		slab_free(NULL, V);
@@ -307,30 +302,31 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 	/* Compute the differences, writing ctrl as we go */
 	scan=0;len=0;
 	lastscan=0;lastpos=0;lastoffset=0;
+	pos=0;
 	while(scan<newsize) {
 		oldscore=0;
 
 		for(scsc=scan+=len;scan<newsize;scan++) {
-			len=search(I,old,oldsize,new+scan,newsize-scan,
+			len=search(I,oldbuf,oldsize,newbuf+scan,newsize-scan,
 					0,oldsize,&pos);
 
 			for(;scsc<scan+len;scsc++)
 			if((scsc+lastoffset<oldsize) &&
-				(old[scsc+lastoffset] == new[scsc]))
+				(oldbuf[scsc+lastoffset] == newbuf[scsc]))
 				oldscore++;
 
 			if(((len==oldscore) && (len!=0)) || 
 				(len>oldscore+sz)) break;
 
 			if((scan+lastoffset<oldsize) &&
-				(old[scan+lastoffset] == new[scan]))
+				(oldbuf[scan+lastoffset] == newbuf[scan]))
 				oldscore--;
 		};
 
 		if((len!=oldscore) || (scan==newsize)) {
 			s=0;Sf=0;lenf=0;
 			for(i=0;(lastscan+i<scan)&&(lastpos+i<oldsize);) {
-				if(old[lastpos+i]==new[lastscan+i]) s++;
+				if(oldbuf[lastpos+i]==newbuf[lastscan+i]) s++;
 				i++;
 				if(s*2-i>Sf*2-lenf) { Sf=s; lenf=i; };
 			};
@@ -339,7 +335,7 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 			if(scan<newsize) {
 				s=0;Sb=0;
 				for(i=1;(scan>=lastscan+i)&&(pos>=i);i++) {
-					if(old[pos-i]==new[scan-i]) s++;
+					if(oldbuf[pos-i]==newbuf[scan-i]) s++;
 					if(s*2-i>Sb*2-lenb) { Sb=s; lenb=i; };
 				};
 			};
@@ -348,10 +344,10 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 				overlap=(lastscan+lenf)-(scan-lenb);
 				s=0;Ss=0;lens=0;
 				for(i=0;i<overlap;i++) {
-					if(new[lastscan+lenf-overlap+i]==
-					   old[lastpos+lenf-overlap+i]) s++;
-					if(new[scan-lenb+i]==
-					   old[pos-lenb+i]) s--;
+					if(newbuf[lastscan+lenf-overlap+i]==
+					   oldbuf[lastpos+lenf-overlap+i]) s++;
+					if(newbuf[scan-lenb+i]==
+					   oldbuf[pos-lenb+i]) s--;
 					if(s>Ss) { Ss=s; lens=i+1; };
 				};
 
@@ -360,9 +356,9 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 			};
 
 			for(i=0;i<lenf;i++)
-				db[dblen+i]=new[lastscan+i]-old[lastpos+i];
+				db[dblen+i]=newbuf[lastscan+i]-oldbuf[lastpos+i];
 			for(i=0;i<(scan-lenb)-(lastscan+lenf);i++)
-				eb[eblen+i]=new[lastscan+lenf+i];
+				eb[eblen+i]=newbuf[lastscan+lenf+i];
 
 			dblen+=lenf;
 			eblen+=(scan-lenb)-(lastscan+lenf);
@@ -391,7 +387,7 @@ bsdiff(u_char *old, bsize_t oldsize, u_char *new, bsize_t newsize,
 
 	/* If our data can fit in the scratch area use it otherwise alloc. */
 	if (ulen > scratchsize) {
-		cb = slab_alloc(NULL, ulen);
+		cb = (u_char *)slab_alloc(NULL, ulen);
 	} else {
 		cb = scratch;
 	}

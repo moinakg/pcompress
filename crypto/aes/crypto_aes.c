@@ -50,6 +50,10 @@
  * online backup system.
  */
 
+#ifndef __STDC_FORMAT_MACROS
+#define	__STDC_FORMAT_MACROS	1
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -106,7 +110,6 @@ int
 aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 	 uint64_t nonce, int enc)
 {
-	int rv;
 	struct timespec tp;
 	uint64_t tv;
 	uchar_t num[25];
@@ -141,8 +144,9 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 		} else {
 			tv = tp.tv_sec * 1000UL + tp.tv_nsec;
 		}
-		sprintf(num, "%" PRIu64, tv);
-		PKCS5_PBKDF2_HMAC(num, strlen(num), salt, saltlen, PBE_ROUNDS, EVP_sha256(), 32, IV);
+		sprintf((char *)num, "%" PRIu64, tv);
+		PKCS5_PBKDF2_HMAC((const char *)num, strlen((char *)num), salt,
+				  saltlen, PBE_ROUNDS, EVP_sha256(), 32, IV);
 		ctx->nonce = lzma_crc64(IV, 32, 0) & 0xffffffff00000000ULL;
 		// Nullify stack components
 		memset(num, 0, 25);
@@ -177,6 +181,7 @@ aes_encrypt(aes_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, ssize_t len
 	crypto_aesctr_stream(strm, plaintext, ciphertext, len);
 	crypto_aesctr_free(strm);
 	memset(&key, 0, sizeof (key));
+	return (0);
 }
 
 int
@@ -200,6 +205,7 @@ aes_decrypt(aes_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, ssize_t len
 	crypto_aesctr_stream(strm, ciphertext, plaintext, len);
 	crypto_aesctr_free(strm);
 	memset(&key, 0, sizeof (key));
+	return (0);
 }
 
 uint64_t

@@ -46,7 +46,7 @@ slab_alloc_ui(void *p, unsigned int items, unsigned int size) {
 }
 
 uint32_t
-zlib_buf_extra(int64_t buflen)
+zlib_buf_extra(uint64_t buflen)
 {
 	if (buflen > SINGLE_CALL_MAX)
 		buflen = SINGLE_CALL_MAX;
@@ -54,13 +54,13 @@ zlib_buf_extra(int64_t buflen)
 }
 
 int
-zlib_init(void **data, int *level, int nthreads, int64_t chunksize,
+zlib_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	  int file_version, compress_op_t op)
 {
 	z_stream *zs;
 	int ret;
 
-	zs = slab_alloc(NULL, sizeof (z_stream));
+	zs = (z_stream *)slab_alloc(NULL, sizeof (z_stream));
 	zs->zalloc = slab_alloc_ui;
 	zs->zfree = slab_free;
 	zs->opaque = NULL;
@@ -90,7 +90,7 @@ zlib_stats(int show)
 }
 
 void
-zlib_props(algo_props_t *data, int level, int64_t chunksize) {
+zlib_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->delta2_span = 100;
 }
 
@@ -102,6 +102,7 @@ zlib_deinit(void **data)
 		deflateEnd(zs);
 		slab_free(NULL, *data);
 	}
+	return (0);
 }
 
 static
@@ -144,8 +145,8 @@ zlib_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	unsigned int slen, dlen;
 	uint64_t _srclen = srclen;
 	uint64_t _dstlen = *dstlen;
-	uchar_t *dst1 = dst;
-	uchar_t *src1 = src;
+	uchar_t *dst1 = (uchar_t *)dst;
+	uchar_t *src1 = (uchar_t *)src;
 	z_stream *zs = (z_stream *)data;
 
 	ending = 0;
@@ -207,8 +208,8 @@ zlib_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	unsigned int slen, dlen;
 	uint64_t _srclen = srclen;
 	uint64_t _dstlen = *dstlen;
-	uchar_t *dst1 = dst;
-	uchar_t *src1 = src;
+	uchar_t *dst1 = (uchar_t *)dst;
+	uchar_t *src1 = (uchar_t *)src;
 	z_stream *zs = (z_stream *)data;
 
 	while (_srclen > 0) {

@@ -62,13 +62,13 @@ extern int ppmd_decompress(void *src, uint64_t srclen, void *dst,
 extern int libbsc_decompress(void *src, uint64_t srclen, void *dst,
 	uint64_t *dstlen, int level, uchar_t chdr, void *data);
 
-extern int lzma_init(void **data, int *level, int nthreads, int64_t chunksize,
+extern int lzma_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		     int file_version, compress_op_t op);
 extern int lzma_deinit(void **data);
-extern int ppmd_init(void **data, int *level, int nthreads, int64_t chunksize,
+extern int ppmd_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		     int file_version, compress_op_t op);
 extern int ppmd_deinit(void **data);
-extern int libbsc_init(void **data, int *level, int nthreads, int64_t chunksize,
+extern int libbsc_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		       int file_version, compress_op_t op);
 extern int libbsc_deinit(void **data);
 
@@ -96,17 +96,17 @@ adapt_stats(int show)
 }
 
 void
-adapt_props(algo_props_t *data, int level, int64_t chunksize)
+adapt_props(algo_props_t *data, int level, uint64_t chunksize)
 {
 	data->delta2_span = 200;
 }
 
 int
-adapt_init(void **data, int *level, int nthreads, int64_t chunksize,
+adapt_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	   int file_version, compress_op_t op)
 {
 	struct adapt_data *adat = (struct adapt_data *)(*data);
-	int rv;
+	int rv = 0;
 
 	if (!adat) {
 		adat = (struct adapt_data *)slab_alloc(NULL, sizeof (struct adapt_data));
@@ -125,11 +125,11 @@ adapt_init(void **data, int *level, int nthreads, int64_t chunksize,
 }
 
 int
-adapt2_init(void **data, int *level, int nthreads, int64_t chunksize,
+adapt2_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	    int file_version, compress_op_t op)
 {
 	struct adapt_data *adat = (struct adapt_data *)(*data);
-	int rv, lv;
+	int rv = 0, lv;
 
 	if (!adat) {
 		adat = (struct adapt_data *)slab_alloc(NULL, sizeof (struct adapt_data));
@@ -160,7 +160,7 @@ int
 adapt_deinit(void **data)
 {
 	struct adapt_data *adat = (struct adapt_data *)(*data);
-	int rv;
+	int rv = 0;
 
 	if (adat) {
 		rv = ppmd_deinit(&(adat->ppmd_data));
@@ -179,7 +179,7 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t *src1 = (uchar_t *)src;
 	uint64_t i, tot8b, tagcnt;
-	int rv, tag;
+	int rv = 0, tag;
 
 	/*
 	 * Count number of 8-bit binary bytes and XML tags in source.

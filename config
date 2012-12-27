@@ -383,7 +383,6 @@ vecflagsvar="VEC_FLAGS"
 loopoptflagsvar="LOOP_OPTFLAGS"
 cppflagsvar="CPPFLAGS"
 genoptvar="GEN_OPT"
-rabinoptvar="RABIN_OPT"
 noslabcppflagsvar="NO_SLAB_CPPFLAGS"
 debugstatscppflagsvar="DEBUG_STATS_CPPFLAGS"
 prefixvar="PREFIX"
@@ -427,7 +426,6 @@ s#@${vecflagsvar}@#\\\$\\(${typ}_${vecflagsvar}\\)#g
 s#@${loopoptflagsvar}@#\\\$\\(${typ}_${loopoptflagsvar}\\)#g
 s#@${cppflagsvar}@#\\\$\\(${typ}_${cppflagsvar}\\)#g
 s#@${genoptvar}@#\\\$\\(${typ}_${genoptvar}\\)#g
-s#@${rabinoptvar}@#\\\$\\(${typ}_${rabinoptvar}\\)#g
 s#@${fptr_flag_var}@#\\\$\\(${typ}_${fptr_flag_var}\\)#g
 s#@${noslabcppflagsvar}@#${noslabcppflagsval}#g
 s#@${debugstatscppflagsvar}@#${debugstatscppflagsval}#g

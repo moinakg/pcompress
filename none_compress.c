@@ -37,14 +37,14 @@ none_stats(int show)
 }
 
 int
-none_init(void **data, int *level, int nthreads, int64_t chunksize,
+none_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	  int file_version, compress_op_t op)
 {
 	return (0);
 }
 
 void
-none_props(algo_props_t *data, int level, int64_t chunksize) {
+none_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->compress_mt_capable = 0;
 	data->decompress_mt_capable = 0;
 	data->buf_extra = 0;

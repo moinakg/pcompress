@@ -38,6 +38,10 @@ See also the bsc and libbsc web site:
  */
 #undef LZP_OPENMP
 
+#ifndef __STDC_FORMAT_MACROS
+#define	__STDC_FORMAT_MACROS	1
+#endif
+
 #include <stdlib.h>
 #include <memory.h>
 #include <string.h>
@@ -74,7 +78,8 @@ int bsc_lzp_encode_block(const unsigned char * input, const unsigned char * inpu
         return LZP_NOT_COMPRESSIBLE;
     }
 
-    if (lookup = (int *)slab_calloc(NULL, (int)(1 << hashSize), sizeof(int)))
+    lookup = (int *)slab_calloc(NULL, (int)(1 << hashSize), sizeof(int));
+    if (lookup)
     {
         unsigned int            mask        = (int)(1 << hashSize) - 1;
         const unsigned char *   inputStart  = input;
@@ -172,7 +177,8 @@ int bsc_lzp_decode_block(const unsigned char * input, const unsigned char * inpu
         return LZP_UNEXPECTED_EOB;
     }
 
-    if (lookup = (int *)slab_calloc(NULL, (int)(1 << hashSize), sizeof(int)))
+    lookup = (int *)slab_calloc(NULL, (int)(1 << hashSize), sizeof(int));
+    if (lookup)
     {
         unsigned int            mask        = (int)(1 << hashSize) - 1;
         const unsigned char *   outputStart = output;

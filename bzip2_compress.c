@@ -49,12 +49,12 @@ bzip2_stats(int show)
 }
 
 void
-bzip2_props(algo_props_t *data, int level, int64_t chunksize) {
+bzip2_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->delta2_span = 200;
 }
 
 int
-bzip2_init(void **data, int *level, int nthreads, int64_t chunksize,
+bzip2_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	   int file_version, compress_op_t op)
 {
 	if (*level > 9) *level = 9;
@@ -100,8 +100,8 @@ bzip2_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	unsigned int slen, dlen;
 	uint64_t _srclen = srclen;
 	uint64_t _dstlen = *dstlen;
-	uchar_t *dst1 = dst;
-	uchar_t *src1 = src;
+	char *dst1 = (char *)dst;
+	char *src1 = (char *)src;
 
 	bzs.bzalloc = slab_alloc_i;
 	bzs.bzfree = slab_free;
@@ -169,8 +169,8 @@ bzip2_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	unsigned int slen, dlen;
 	uint64_t _srclen = srclen;
 	uint64_t _dstlen = *dstlen;
-	uchar_t *dst1 = dst;
-	uchar_t *src1 = src;
+	char *dst1 = (char *)dst;
+	char *src1 = (char *)src;
 
 	bzs.bzalloc = slab_alloc_i;
 	bzs.bzfree = slab_free;

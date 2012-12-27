@@ -139,7 +139,7 @@ KECCAK_OBJS_ASM = $(KECCAK_SRCS_ASM:.s=.o)
 
 BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~ utils/*~ crypto/sha2/*~ \
 	crypto/sha2/intel/*~ crypto/aes/*~ crypto/scrypt/*~ crypto/*~ rabin/global/*~ \
-	delta2/*~ crypto/keccak/*~ transpose/*~
+	delta2/*~ crypto/keccak/*~ transpose/*~ crypto/skein/*~ crypto/keccak/*.o
 
 RM = rm -f
 RM_RF = rm -rf
@@ -147,7 +147,8 @@ COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
 	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I./crypto/sha2 \
 	-I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ \
-	-I./crypto/keccak -I./transpose $(EXTRA_CPPFLAGS)
+	-I./crypto/keccak -I./transpose $(EXTRA_CPPFLAGS) -pedantic -Wall -Werror -std=gnu99 \
+	-fno-strict-aliasing -Wno-unused-but-set-variable -Wno-enum-compare
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -L@LIBBZ2_DIR@ -lbz2 -L@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
@@ -163,7 +164,6 @@ DEBUG_COMPILE_cpp = g++ -m64 -g -msse3 -c
 DEBUG_VEC_FLAGS = 
 DEBUG_LOOP_OPTFLAGS = 
 DEBUG_GEN_OPT = -O -fno-omit-frame-pointer @LIBBSCGEN_OPT@
-DEBUG_RABIN_OPT = -O -fno-omit-frame-pointer
 DEBUG_CPPFLAGS = $(COMMON_CPPFLAGS)
 DEBUG_FPTR_FLAG = 
 
@@ -174,7 +174,6 @@ RELEASE_VEC_FLAGS = $(COMMON_VEC_FLAGS)
 RELEASE_LOOP_OPTFLAGS = $(COMMON_LOOP_OPTFLAGS)
 RELEASE_CPPFLAGS = $(COMMON_CPPFLAGS) -DNDEBUG
 RELEASE_GEN_OPT = -O3 @LIBBSCGEN_OPT@
-RELEASE_RABIN_OPT = -O2
 RELEASE_FPTR_FLAG = -fomit-frame-pointer
 
 NO_SLAB_CPPFLAGS = -DDEBUG_NO_SLAB
@@ -187,7 +186,6 @@ VEC_FLAGS = @VEC_FLAGS@
 LOOP_OPTFLAGS = @LOOP_OPTFLAGS@
 CPPFLAGS = @CPPFLAGS@ @NO_SLAB_CPPFLAGS@ @DEBUG_STATS_CPPFLAGS@
 GEN_OPT = @GEN_OPT@
-RABIN_OPT = @RABIN_OPT@
 PREFIX=@PREFIX@
 
 SKEIN_FLAGS = $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) @FPTR_FLAG@
@@ -206,7 +204,7 @@ $(PPMDOBJS): $(PPMDSRCS) $(PPMDHDRS)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(RABINOBJS): $(RABINSRCS) $(RABINHDRS)
-	$(COMPILE) $(RABIN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(BSDIFFOBJS): $(BSDIFFSRCS) $(BSDIFFHDRS)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@

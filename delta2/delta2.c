@@ -115,9 +115,9 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 	} else {
 		uchar_t *srcpos, *dstpos, *lastdst, *lastsrc, *dstend;
 		uint64_t slen, sz, dsz, pending;
-		int rem, lenc, transp_count, hdr_ovr;
+		int rem, lenc, hdr_ovr;
 		DEBUG_STAT_EN(double strt, en);
-
+	
 		srcpos = src;
 		dstpos = dst;
 		dstend = dst + *dstlen;

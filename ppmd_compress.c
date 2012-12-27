@@ -62,12 +62,12 @@ ppmd_stats(int show)
 }
 
 void
-ppmd_props(algo_props_t *data, int level, int64_t chunksize) {
+ppmd_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->delta2_span = 100;
 }
 
 int
-ppmd_init(void **data, int *level, int nthreads, int64_t chunksize,
+ppmd_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	  int file_version, compress_op_t op)
 {
 	CPpmd8 *_ppmd;
@@ -110,7 +110,6 @@ ppmd_compress(void *src, uint64_t srclen, void *dst,
 {
 	CPpmd8 *_ppmd = (CPpmd8 *)data;
 	uchar_t *_src = (uchar_t *)src;
-	UInt32 i;
 
 	Ppmd8_RangeEnc_Init(_ppmd);
 	Ppmd8_Init(_ppmd, _ppmd->Order, PPMD8_RESTORE_METHOD_RESTART);

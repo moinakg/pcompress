@@ -72,7 +72,7 @@ libbsc_stats(int show)
  * when compressing entire file in a single chunk.
  */
 void
-libbsc_props(algo_props_t *data, int level, int64_t chunksize) {
+libbsc_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->compress_mt_capable = 0;
 	data->decompress_mt_capable = 0;
 	data->single_chunk_mt_capable = 1;
@@ -83,14 +83,14 @@ libbsc_props(algo_props_t *data, int level, int64_t chunksize) {
 }
 
 int
-libbsc_init(void **data, int *level, int nthreads, int64_t chunksize,
+libbsc_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	    int file_version, compress_op_t op)
 {
 	struct libbsc_params *bscdat;
 	int rv;
 
 	if (chunksize > BSC_MAX_CHUNK) {
-		fprintf(stderr, "Max allowed chunk size for LIBBSC is: %d \n",
+		fprintf(stderr, "Max allowed chunk size for LIBBSC is: %ld \n",
 		    BSC_MAX_CHUNK);
 		return (1);
 	}

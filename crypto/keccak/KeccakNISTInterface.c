@@ -43,14 +43,14 @@ HashReturn Keccak_Init(hashState *state, int hashbitlen)
 HashReturn Keccak_Update(hashState *state, const BitSequence *data, DataLength databitlen)
 {
     if ((databitlen % 8) == 0)
-        return Absorb((spongeState*)state, data, databitlen);
+        return (HashReturn)Absorb((spongeState*)state, data, databitlen);
     else {
-        HashReturn ret = Absorb((spongeState*)state, data, databitlen - (databitlen % 8));
+        HashReturn ret = (HashReturn)Absorb((spongeState*)state, data, databitlen - (databitlen % 8));
         if (ret == SUCCESS) {
             unsigned char lastByte; 
             // Align the last partial byte to the least significant bits
             lastByte = data[databitlen/8] >> (8 - (databitlen % 8));
-            return Absorb((spongeState*)state, &lastByte, databitlen % 8);
+            return (HashReturn)Absorb((spongeState*)state, &lastByte, databitlen % 8);
         }
         else
             return ret;
@@ -59,7 +59,7 @@ HashReturn Keccak_Update(hashState *state, const BitSequence *data, DataLength d
 
 HashReturn Keccak_Final(hashState *state, BitSequence *hashval)
 {
-    return Squeeze(state, hashval, state->fixedOutputLength);
+    return (HashReturn)Squeeze(state, hashval, state->fixedOutputLength);
 }
 
 HashReturn Keccak_Hash(int hashbitlen, const BitSequence *data, DataLength databitlen, BitSequence *hashval)

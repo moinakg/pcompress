@@ -55,6 +55,8 @@ struct cpu_raw_data_t {
 
 void exec_cpuid(uint32_t *regs);
 void cpuid_get_raw_data(struct cpu_raw_data_t* data);
+void cpuid_basic_identify(processor_info_t *pc);
+
 #endif /* __x86_64__ */
 
 #endif /* __CPUID_H__ */

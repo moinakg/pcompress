@@ -104,8 +104,6 @@ APS_NAMESPACE(Init_SHA) (processor_info_t *pc)
 static void
 _init (SHA256_Context *sc, const uint32_t iv[SHA256_HASH_WORDS])
 {
-	int i;
-
 	/*
 	 * SHA256_HASH_WORDS is 8, must be 8, cannot be anything but 8!
 	 * So we unroll a loop here.
@@ -132,7 +130,7 @@ APS_NAMESPACE(SHA256_Init) (SHA256_Context *sc)
 void
 APS_NAMESPACE(SHA256_Update) (SHA256_Context *sc, const void *vdata, size_t len)
 {
-	const uint8_t *data = vdata;
+	const uint8_t *data = (const uint8_t *)vdata;
 	uint32_t bufferBytesLeft;
 	size_t bytesToCopy;
 	int rem;
@@ -215,7 +213,7 @@ APS_NAMESPACE(HMAC_SHA256_Init) (HMAC_SHA256_Context * ctx, const void * _K, siz
 {
 	unsigned char pad[64];
 	unsigned char khash[32];
-	const unsigned char * K = _K;
+	const unsigned char * K = (const unsigned char *)_K;
 	size_t i;
 
 	/* If Klen > 64, the key is really SHA256(K). */

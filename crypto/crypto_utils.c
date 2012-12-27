@@ -39,9 +39,9 @@
 #include <sha256.h>
 #include <crypto_aes.h>
 #include <KeccakNISTInterface.h>
+#include <cpuid.h>
 
 #include "crypto_utils.h"
-#include "cpuid.h"
 
 #define	PROVIDER_OPENSSL	0
 #define	PROVIDER_X64_OPT	1
@@ -53,7 +53,7 @@ static int geturandom_bytes(uchar_t rbytes[32]);
  */
 typedef void (*ckinit_func_ptr)(void);
 static struct {
-	char	*name;
+	const char	*name;
 	cksum_t	cksum_id;
 	int	bytes, mac_bytes;
 	ckinit_func_ptr init_func;
@@ -67,7 +67,7 @@ static struct {
 	{"KECCAK512",	CKSUM_KECCAK512,	64,	64,	NULL}
 };
 
-static int cksum_provider = PROVIDER_OPENSSL, ossl_inited = 0;
+static int cksum_provider = PROVIDER_OPENSSL;
 
 extern uint64_t lzma_crc64(const uint8_t *buf, uint64_t size, uint64_t crc);
 extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, uint64_t size,
@@ -153,7 +153,7 @@ init_sha256(void)
  * return it's properties.
  */
 int
-get_checksum_props(char *name, int *cksum, int *cksum_bytes, int *mac_bytes)
+get_checksum_props(const char *name, int *cksum, int *cksum_bytes, int *mac_bytes)
 {
 	int i;
 
@@ -212,12 +212,12 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 	mctx->mac_cksum = cksum;
 
 	if (cksum == CKSUM_SKEIN256) {
-		Skein_512_Ctxt_t *ctx = malloc(sizeof (Skein_512_Ctxt_t));
+		Skein_512_Ctxt_t *ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) return (-1);
 		Skein_512_InitExt(ctx, 256, SKEIN_CFG_TREE_INFO_SEQUENTIAL,
 				 actx->pkey, KEYLEN);
 		mctx->mac_ctx = ctx;
-		ctx = malloc(sizeof (Skein_512_Ctxt_t));
+		ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) {
 			free(mctx->mac_ctx);
 			return (-1);
@@ -226,12 +226,12 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 		mctx->mac_ctx_reinit = ctx;
 
 	} else if (cksum == CKSUM_SKEIN512) {
-		Skein_512_Ctxt_t *ctx = malloc(sizeof (Skein_512_Ctxt_t));
+		Skein_512_Ctxt_t *ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) return (-1);
 		Skein_512_InitExt(ctx, 512, SKEIN_CFG_TREE_INFO_SEQUENTIAL,
 				  actx->pkey, KEYLEN);
 		mctx->mac_ctx = ctx;
-		ctx = malloc(sizeof (Skein_512_Ctxt_t));
+		ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) {
 			free(mctx->mac_ctx);
 			return (-1);
@@ -241,30 +241,30 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 
 	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_CRC64) {
 		if (cksum_provider == PROVIDER_OPENSSL) {
-			HMAC_CTX *ctx = malloc(sizeof (HMAC_CTX));
+			HMAC_CTX *ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
 			if (!ctx) return (-1);
 			HMAC_CTX_init(ctx);
 			HMAC_Init_ex(ctx, actx->pkey, KEYLEN, EVP_sha256(), NULL);
 			mctx->mac_ctx = ctx;
 
-			ctx = malloc(sizeof (HMAC_CTX));
+			ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
 			if (!ctx) {
 				free(mctx->mac_ctx);
 				return (-1);
 			}
-			if (!HMAC_CTX_copy(ctx, mctx->mac_ctx)) {
+			if (!HMAC_CTX_copy(ctx, (HMAC_CTX *)(mctx->mac_ctx))) {
 				free(ctx);
 				free(mctx->mac_ctx);
 				return (-1);
 			}
 			mctx->mac_ctx_reinit = ctx;
 		} else {
-			HMAC_SHA256_Context *ctx = malloc(sizeof (HMAC_SHA256_Context));
+			HMAC_SHA256_Context *ctx = (HMAC_SHA256_Context *)malloc(sizeof (HMAC_SHA256_Context));
 			if (!ctx) return (-1);
 			opt_HMAC_SHA256_Init(ctx, actx->pkey, KEYLEN);
 			mctx->mac_ctx = ctx;
 
-			ctx = malloc(sizeof (HMAC_SHA256_Context));
+			ctx = (HMAC_SHA256_Context *)malloc(sizeof (HMAC_SHA256_Context));
 			if (!ctx) {
 				free(mctx->mac_ctx);
 				return (-1);
@@ -273,18 +273,18 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 			mctx->mac_ctx_reinit = ctx;
 		}
 	} else if (cksum == CKSUM_SHA512) {
-		HMAC_CTX *ctx = malloc(sizeof (HMAC_CTX));
+		HMAC_CTX *ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
 		if (!ctx) return (-1);
 		HMAC_CTX_init(ctx);
 		HMAC_Init_ex(ctx, actx->pkey, KEYLEN, EVP_sha512(), NULL);
 		mctx->mac_ctx = ctx;
 
-		ctx = malloc(sizeof (HMAC_CTX));
+		ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
 		if (!ctx) {
 			free(mctx->mac_ctx);
 			return (-1);
 		}
-		if (!HMAC_CTX_copy(ctx, mctx->mac_ctx)) {
+		if (!HMAC_CTX_copy(ctx, (HMAC_CTX *)(mctx->mac_ctx))) {
 			free(ctx);
 			free(mctx->mac_ctx);
 			return (-1);
@@ -292,7 +292,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 		mctx->mac_ctx_reinit = ctx;
 
 	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
-		hashState *ctx = malloc(sizeof (hashState));
+		hashState *ctx = (hashState *)malloc(sizeof (hashState));
 		if (!ctx) return (-1);
 
 		if (cksum == CKSUM_KECCAK256) {
@@ -306,7 +306,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 			return (-1);
 		mctx->mac_ctx = ctx;
 
-		ctx = malloc(sizeof (hashState));
+		ctx = (hashState *)malloc(sizeof (hashState));
 		if (!ctx) {
 			free(mctx->mac_ctx);
 			return (-1);
@@ -329,12 +329,13 @@ hmac_reinit(mac_ctx_t *mctx)
 
 	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_CRC64) {
 		if (cksum_provider == PROVIDER_OPENSSL) {
-			HMAC_CTX_copy(mctx->mac_ctx, mctx->mac_ctx_reinit);
+			HMAC_CTX_copy((HMAC_CTX *)(mctx->mac_ctx),
+				      (HMAC_CTX *)(mctx->mac_ctx_reinit));
 		} else {
 			memcpy(mctx->mac_ctx, mctx->mac_ctx_reinit, sizeof (HMAC_SHA256_Context));
 		}
 	} else if (cksum == CKSUM_SHA512) {
-		HMAC_CTX_copy(mctx->mac_ctx, mctx->mac_ctx_reinit);
+		HMAC_CTX_copy((HMAC_CTX *)(mctx->mac_ctx), (HMAC_CTX *)(mctx->mac_ctx_reinit));
 
 	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
 		memcpy(mctx->mac_ctx, mctx->mac_ctx_reinit, sizeof (hashState));
@@ -350,17 +351,17 @@ hmac_update(mac_ctx_t *mctx, uchar_t *data, uint64_t len)
 	int cksum = mctx->mac_cksum;
 
 	if (cksum == CKSUM_SKEIN256 || cksum == CKSUM_SKEIN512) {
-		Skein_512_Update(mctx->mac_ctx, data, len);
+		Skein_512_Update((Skein_512_Ctxt_t *)(mctx->mac_ctx), data, len);
 
 	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_CRC64) {
 		if (cksum_provider == PROVIDER_OPENSSL) {
-			if (HMAC_Update(mctx->mac_ctx, data, len) == 0)
+			if (HMAC_Update((HMAC_CTX *)(mctx->mac_ctx), data, len) == 0)
 				return (-1);
 		} else {
-			opt_HMAC_SHA256_Update(mctx->mac_ctx, data, len);
+			opt_HMAC_SHA256_Update((HMAC_SHA256_Context *)(mctx->mac_ctx), data, len);
 		}
 	} else if (cksum == CKSUM_SHA512) {
-		if (HMAC_Update(mctx->mac_ctx, data, len) == 0)
+		if (HMAC_Update((HMAC_CTX *)(mctx->mac_ctx), data, len) == 0)
 			return (-1);
 
 	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
@@ -369,11 +370,11 @@ hmac_update(mac_ctx_t *mctx, uchar_t *data, uint64_t len)
 			uint64_t blen;
 
 			blen = KECCAK_MAX_SEG;
-			if (Keccak_Update(mctx->mac_ctx, data, blen << 3) != 0)
+			if (Keccak_Update((hashState *)(mctx->mac_ctx), data, blen << 3) != 0)
 				return (-1);
 			len -= KECCAK_MAX_SEG;
 		}
-		if (Keccak_Update(mctx->mac_ctx, data, len << 3) != 0)
+		if (Keccak_Update((hashState *)(mctx->mac_ctx), data, len << 3) != 0)
 			return (-1);
 	} else {
 		return (-1);
@@ -387,25 +388,25 @@ hmac_final(mac_ctx_t *mctx, uchar_t *hash, unsigned int *len)
 	int cksum = mctx->mac_cksum;
 
 	if (cksum == CKSUM_SKEIN256) {
-		Skein_512_Final(mctx->mac_ctx, hash);
+		Skein_512_Final((Skein_512_Ctxt_t *)(mctx->mac_ctx), hash);
 		*len = 32;
 
 	} else if (cksum == CKSUM_SKEIN512) {
-		Skein_512_Final(mctx->mac_ctx, hash);
+		Skein_512_Final((Skein_512_Ctxt_t *)(mctx->mac_ctx), hash);
 		*len = 64;
 
 	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_CRC64) {
 		if (cksum_provider == PROVIDER_OPENSSL) {
-			HMAC_Final(mctx->mac_ctx, hash, len);
+			HMAC_Final((HMAC_CTX *)(mctx->mac_ctx), hash, len);
 		} else {
-			opt_HMAC_SHA256_Final(mctx->mac_ctx, hash);
+			opt_HMAC_SHA256_Final((HMAC_SHA256_Context *)(mctx->mac_ctx), hash);
 			*len = 32;
 		}
 	} else if (cksum == CKSUM_SHA512) {
-		HMAC_Final(mctx->mac_ctx, hash, len);
+		HMAC_Final((HMAC_CTX *)(mctx->mac_ctx), hash, len);
 
 	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
-		if (Keccak_Final(mctx->mac_ctx, hash) != 0)
+		if (Keccak_Final((hashState *)(mctx->mac_ctx), hash) != 0)
 			return (-1);
 		if (cksum == CKSUM_KECCAK256)
 			*len = 32;
@@ -428,15 +429,15 @@ hmac_cleanup(mac_ctx_t *mctx)
 
 	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_CRC64) {
 		if (cksum_provider == PROVIDER_OPENSSL) {
-			HMAC_CTX_cleanup(mctx->mac_ctx);
-			HMAC_CTX_cleanup(mctx->mac_ctx_reinit);
+			HMAC_CTX_cleanup((HMAC_CTX *)(mctx->mac_ctx));
+			HMAC_CTX_cleanup((HMAC_CTX *)(mctx->mac_ctx_reinit));
 		} else {
 			memset(mctx->mac_ctx, 0, sizeof (HMAC_SHA256_Context));
 			memset(mctx->mac_ctx_reinit, 0, sizeof (HMAC_SHA256_Context));
 		}
 	} else if (cksum == CKSUM_SHA512) {
-		HMAC_CTX_cleanup(mctx->mac_ctx);
-		HMAC_CTX_cleanup(mctx->mac_ctx_reinit);
+		HMAC_CTX_cleanup((HMAC_CTX *)(mctx->mac_ctx));
+		HMAC_CTX_cleanup((HMAC_CTX *)(mctx->mac_ctx_reinit));
 
 	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
 		memset(mctx->mac_ctx, 0, sizeof (hashState));
@@ -455,13 +456,13 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 	    uchar_t *salt, int saltlen, uint64_t nonce, int enc_dec)
 {
 	if (crypto_alg == CRYPTO_ALG_AES) {
-		aes_ctx_t *actx = malloc(sizeof (aes_ctx_t));
+		aes_ctx_t *actx = (aes_ctx_t *)malloc(sizeof (aes_ctx_t));
 
 		if (enc_dec) {
 			/*
 			 * Encryption init.
 			 */
-			cctx->salt = malloc(32);
+			cctx->salt = (uchar_t *)malloc(32);
 			salt = cctx->salt;
 			cctx->saltlen = 32;
 			if (RAND_status() != 1 || RAND_bytes(salt, 32) != 1) {
@@ -509,7 +510,7 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 				    MAX_SALTLEN);
 				return (-1);
 			}
-			cctx->salt = malloc(saltlen);
+			cctx->salt = (uchar_t *)malloc(saltlen);
 			memcpy(cctx->salt, salt, saltlen);
 
 			if (aes_init(actx, cctx->salt, saltlen, pwd, pwd_len, nonce,
@@ -533,9 +534,9 @@ crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, int64_t bytes, uint64
 {
 	if (cctx->crypto_alg == CRYPTO_ALG_AES) {
 		if (cctx->enc_dec == ENCRYPT_FLAG) {
-			return (aes_encrypt(cctx->crypto_ctx, from, to, bytes, id));
+			return (aes_encrypt((aes_ctx_t *)(cctx->crypto_ctx), from, to, bytes, id));
 		} else {
-			return (aes_decrypt(cctx->crypto_ctx, from, to, bytes, id));
+			return (aes_decrypt((aes_ctx_t *)(cctx->crypto_ctx), from, to, bytes, id));
 		}
 	} else {
 		fprintf(stderr, "Unrecognized algorithm code: %d\n", cctx->crypto_alg);
@@ -547,19 +548,19 @@ crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, int64_t bytes, uint64
 uint64_t
 crypto_nonce(crypto_ctx_t *cctx)
 {
-	return (aes_nonce(cctx->crypto_ctx));
+	return (aes_nonce((aes_ctx_t *)(cctx->crypto_ctx)));
 }
 
 void
 crypto_clean_pkey(crypto_ctx_t *cctx)
 {
-	aes_clean_pkey(cctx->crypto_ctx);
+	aes_clean_pkey((aes_ctx_t *)(cctx->crypto_ctx));
 }
 
 void
 cleanup_crypto(crypto_ctx_t *cctx)
 {
-	aes_cleanup(cctx->crypto_ctx);
+	aes_cleanup((aes_ctx_t *)(cctx->crypto_ctx));
 	memset(cctx->salt, 0, 32);
 	free(cctx->salt);
 	free(cctx);
@@ -607,12 +608,12 @@ err0:
 }
 
 int
-get_pw_string(char pw[MAX_PW_LEN], char *prompt, int twice)
+get_pw_string(uchar_t pw[MAX_PW_LEN], const char *prompt, int twice)
 {
 	int fd, len;
 	FILE *input, *strm;
 	struct termios oldt, newt;
-	uchar_t pw1[MAX_PW_LEN], pw2[MAX_PW_LEN], *s;
+	char pw1[MAX_PW_LEN], pw2[MAX_PW_LEN], *s;
 
 	// Try TTY first
 	fd = open("/dev/tty", O_RDWR | O_NOCTTY);
@@ -667,7 +668,7 @@ get_pw_string(char pw[MAX_PW_LEN], char *prompt, int twice)
 
 	len = strlen(pw1);
 	pw1[len-1] = '\0';
-	strcpy(pw, pw1);
+	strcpy((char *)pw, (const char *)pw1);
 	memset(pw1, 0, MAX_PW_LEN);
 	memset(pw2, 0, MAX_PW_LEN);
 	return (len);

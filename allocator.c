@@ -94,17 +94,33 @@ static struct slabentry slabheads[NUM_SLABS];
 static struct bufentry **htable;
 static pthread_mutex_t *hbucket_locks;
 static pthread_mutex_t htable_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t slab_table_lock = PTHREAD_MUTEX_INITIALIZER;
 static int inited = 0, bypass = 0;
 
 static uint64_t total_allocs, oversize_allocs, hash_collisions, hash_entries;
+
+/*
+ * Hash function for 64Bit pointers/numbers that generates
+ * a 32Bit hash value.
+ * Taken from Thomas Wang's Integer hashing paper:
+ * http://www.cris.com/~Ttwang/tech/inthash.htm
+ */
+static uint32_t
+hash6432shift(uint64_t key)
+{
+	key = (~key) + (key << 18); // key = (key << 18) - key - 1;
+	key = key ^ (key >> 31);
+	key = key * 21; // key = (key + (key << 2)) + (key << 4);
+	key = key ^ (key >> 11);
+	key = key + (key << 6);
+	key = key ^ (key >> 22);
+	return (uint32_t) key;
+}
 
 void
 slab_init()
 {
 	int i;
 	uint64_t slab_sz;
-	int nprocs;
 
 	/* Check bypass env variable. */
 	if (getenv("ALLOCATOR_BYPASS") != NULL) {
@@ -278,7 +294,7 @@ slab_calloc(void *p, uint64_t items, uint64_t size) {
 static unsigned int
 find_slot(unsigned int v)
 {
-	unsigned int r, i;
+	unsigned int r;
 
 	/* Round up to nearest power of 2 */
 	v = roundup_pow_two(v);
@@ -304,7 +320,7 @@ find_slot(unsigned int v)
 	return (r);
 }
 
-static void *
+static struct slabentry *
 try_dynamic_slab(uint64_t size)
 {
 	uint32_t sindx;
@@ -361,10 +377,7 @@ slab_cache_add(uint64_t size)
 void *
 slab_alloc(void *p, uint64_t size)
 {
-	uint64_t slab_sz = SLAB_START_SZ;
-	int i;
 	uint64_t div;
-	void *ptr;
 	struct slabentry *slab;
 
 	if (bypass) return (malloc(size));
