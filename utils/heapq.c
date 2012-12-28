@@ -70,8 +70,8 @@ _siftupmax(heap_t *h, __TYPE spos, __TYPE epos)
     endpos = h->len;
     heap = h->ary;
 #ifdef ERROR_CHK
-    if (pos >= endpos) {
-        fprintf(stderr, "_siftupmax: index out of range: %u, len: %u\n", pos, endpos);
+    if (spos >= endpos) {
+        fprintf(stderr, "_siftupmax: index out of range: %u, len: %u\n", spos, endpos);
         return -1;
     }
 #endif
@@ -117,8 +117,8 @@ _siftupmax_s(heap_t *h, __TYPE spos)
     endpos = h->len;
     heap = h->ary;
 #ifdef ERROR_CHK
-    if (pos >= endpos) {
-        fprintf(stderr, "_siftupmax: index out of range: %u, len: %u\n", pos, endpos);
+    if (spos >= endpos) {
+        fprintf(stderr, "_siftupmax: index out of range: %u, len: %u\n", spos, endpos);
         return -1;
     }
 #endif

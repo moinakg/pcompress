@@ -34,6 +34,7 @@
 
 #include <inttypes.h>
 #include <stdint.h>
+#include <assert.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -67,15 +68,21 @@ typedef int64_t bsize_t;
 #	ifndef ntonll
 #		define ntohll(x) (x)
 #	endif
+#	if !defined(sun) && !defined (__sun)
+#		define LE64(x) __bswap_64(x)
+#	else
+#		define LE64(x) BSWAP_64(x)
+#	endif
 #else
 #	if !defined(sun) && !defined (__sun)
-#	ifndef htonll
-#		define htonll(x) __bswap_64(x)
+#		ifndef htonll
+#			define htonll(x) __bswap_64(x)
+#		endif
+#		ifndef ntohll
+#			define ntohll(x) __bswap_64(x)
+#		endif
 #	endif
-#	ifndef ntohll
-#		define ntohll(x) __bswap_64(x)
-#	endif
-#	endif
+#	define LE64(x) (x)
 #endif
 
 
