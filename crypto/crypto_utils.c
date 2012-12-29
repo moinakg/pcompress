@@ -119,11 +119,11 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, int64_t bytes)
 		SHA512_Final(cksum_buf, &ctx);
 
 	} else if (cksum == CKSUM_KECCAK256) {
-		if (Keccak_Hash(256, buf, bytes, cksum_buf) != 0)
+		if (Keccak_Hash(256, buf, bytes * 8, cksum_buf) != 0)
 			return (-1);
 
 	} else if (cksum == CKSUM_KECCAK512) {
-		if (Keccak_Hash(512, buf, bytes, cksum_buf) != 0)
+		if (Keccak_Hash(512, buf, bytes * 8, cksum_buf) != 0)
 			return (-1);
 	} else {
 		return (-1);
