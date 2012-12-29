@@ -76,6 +76,9 @@ extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, uint64_t size,
 int
 compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, int64_t bytes)
 {
+	DEBUG_STAT_EN(double strt, en);
+
+	DEBUG_STAT_EN(strt = get_wtime_millis());
 	if (cksum == CKSUM_CRC64) {
 		uint64_t *ck = (uint64_t *)cksum_buf;
 		*ck = lzma_crc64(buf, bytes, 0);
@@ -125,6 +128,8 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, int64_t bytes)
 	} else {
 		return (-1);
 	}
+	DEBUG_STAT_EN(en = get_wtime_millis());
+	DEBUG_STAT_EN(fprintf(stderr, "Checksum computed at %.3f MB/s\n", get_mb_s(bytes, strt, en)));
 	return (0);
 }
 

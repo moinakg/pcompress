@@ -522,6 +522,9 @@ slab_free(void *p, void *address)
 }
 
 int
-slab_cache_add(uint64_t size) {}
+slab_cache_add(uint64_t size)
+{
+	return (0);
+}
 
 #endif

@@ -296,7 +296,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	heap_t heap;
 	DEBUG_STAT_EN(uint32_t max_count);
 	DEBUG_STAT_EN(max_count = 0);
-	DEBUG_STAT_EN(double strt, en);
+	DEBUG_STAT_EN(double strt, en_1, en);
 
 	length = offset;
 	last_offset = 0;
@@ -342,7 +342,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		 */
 		ary_sz = 4 * ctx->rabin_poly_max_block_size;
 		fplist = (uint32_t *)(ctx->cbuf + ctx->real_chunksize - ary_sz);
-		memset(fplist, 0, ary_sz);
+		if (ctx->delta_flag) memset(fplist, 0, ary_sz);
 	}
 	memset(ctx->current_window_data, 0, RAB_POLYNOMIAL_WIN_SIZE);
 
@@ -408,8 +408,10 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		 * This is called minhashing and is used widely, for example in various
 		 * search engines to detect similar documents.
 		 */
-		fplist[j] = cur_pos_checksum & 0xFFFFFFFFUL;
-		j++;
+		if (ctx->delta_flag) {
+			fplist[j] = cur_pos_checksum & 0xFFFFFFFFUL;
+			j++;
+		}
 
 		/*
 		 * Window pos has to rotate from 0 .. RAB_POLYNOMIAL_WIN_SIZE-1
@@ -484,13 +486,13 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			}
 			ctx->blocks[blknum]->similarity_hash = cur_sketch;
 		}
-
 		blknum++;
 		last_offset = *size;
 	}
 
 process_blocks:
 	// If we found at least a few chunks, perform dedup.
+	DEBUG_STAT_EN(en_1 = get_wtime_millis());
 	DEBUG_STAT_EN(fprintf(stderr, "Original size: %" PRId64 ", blknum: %u\n", *size, blknum));
 	DEBUG_STAT_EN(fprintf(stderr, "Number of maxlen blocks: %u\n", max_count));
 	if (blknum > 2) {
@@ -578,7 +580,7 @@ process_blocks:
 						break;
 				}
 
-				if (!length && ctx->delta_flag) {
+				if (ctx->delta_flag && !length) {
 					/*
 					 * Look for similar blocks.
 					 */
@@ -710,7 +712,8 @@ process_blocks:
 			DEBUG_STAT_EN(en = get_wtime_millis());
 			DEBUG_STAT_EN(fprintf(stderr, "Deduped size: %" PRId64 ", blknum: %u, delta_calls: %u, delta_fails: %u\n",
 					     *size, blknum, delta_calls, delta_fails));
-			DEBUG_STAT_EN(fprintf(stderr, "Dedupe speed %.3f MB/s\n", get_mb_s(sz, strt, en)));
+			DEBUG_STAT_EN(fprintf(stderr, "Chunking speed %.3f MB/s, Overall Dedupe speed %.3f MB/s\n",
+					      get_mb_s(sz, strt, en_1), get_mb_s(sz, strt, en)));
 			/*
 			 * Remaining header entries: size of compressed index and size of
 			 * compressed data are inserted later via rabin_update_hdr, after actual compression!

@@ -35,7 +35,7 @@ extern "C" {
 #define	MAX_PW_LEN	16
 #define	CKSUM_MASK		0x700
 #define	CKSUM_MAX_BYTES		64
-#define	DEFAULT_CKSUM		"SKEIN256"
+#define	DEFAULT_CKSUM		"KECCAK256"
 
 #define ENCRYPT_FLAG	1
 #define DECRYPT_FLAG	0
