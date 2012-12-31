@@ -96,6 +96,15 @@ static uchar_t strides[NSTRIDES] = {3, 5, 7, 8};
 static int delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen,
 		int rle_thresh, int last_encode, int *hdr_ovr);
 
+/*
+ * Perform Delta2 encoding of the given data buffer in src. Delta Encoding
+ * processes data in blocks of 4k. After each call to delta2_encode_real()
+ * determine if any encoding was done.
+ * If no delta sequence was found in the block then it is added to the running
+ * literal span count. If delta was found in the block then the previous literal
+ * span is copied out. If copying a literal span would overflow the destination
+ * buffer then delta encoding is aborted.
+ */
 int
 delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh)
 {
@@ -190,6 +199,9 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 	return (0);
 }
 
+/*
+ * Process one block of data upto 4K in size.
+ */
 static int
 delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen,
 		   int rle_thresh, int last_encode, int *hdr_ovr)
@@ -306,6 +318,11 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 		vld2 = vl2 - vl1;
 		if (vld1 != vld2) {
 			if (snum > rle_thresh) {
+				/*
+				 * We have a series but there is some pending literal data
+				 * to be copied before the series begins. First copy that
+				 * as a literal sequence.
+				 */
 				if (gtot1 > 0) {
 					gtot1 &= MSB_SETZERO_MASK;
 					*((uint64_t *)pos2) = LE64(gtot1);
@@ -317,7 +334,9 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 				}
 
 				/*
-				 * RLE Encode delta series.
+				 * RLE Encode delta series. Store total number of bytes,
+				 * stride length, starting value and difference between
+				 * the terms.
 				 */
 				gtot2 = stride;
 				gtot2 <<= MSB_SHIFT;
@@ -341,6 +360,9 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 		pos += stride;
 	}
 
+	/*
+	 * Encode final sequence, if any.
+	 */
 	if (snum > 0) {
 		if (snum > rle_thresh) {
 			if (gtot1 > 0) {
