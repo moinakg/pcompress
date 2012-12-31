@@ -328,7 +328,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			ctx->blocks[i]->index = i; // Need to store for sorting
 			ctx->blocks[i]->length = length;
 			ctx->blocks[i]->similar = 0;
-			ctx->blocks[i]->hash = XXH_fast32(buf1+last_offset, length, 0);
+			ctx->blocks[i]->hash = XXH32(buf1+last_offset, length, 0);
 			ctx->blocks[i]->similarity_hash = ctx->blocks[i]->hash;
 			last_offset += length;
 		}
@@ -448,7 +448,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 				reset_heap(&heap, pc[ctx->delta_flag]);
 				ksmallest((int32_t *)fplist, j, &heap);
 				ctx->blocks[blknum]->similarity_hash =
-					XXH_fast32((const uchar_t *)fplist,  pc[ctx->delta_flag]*4, 0);
+					XXH32((const uchar_t *)fplist,  pc[ctx->delta_flag]*4, 0);
 				memset(fplist, 0, ary_sz);
 			}
 			blknum++;
@@ -478,11 +478,11 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 				reset_heap(&heap, pc[ctx->delta_flag]);
 				ksmallest((int32_t *)fplist, j, &heap);
 				cur_sketch =
-				    XXH_fast32((const uchar_t *)fplist,  pc[ctx->delta_flag]*4, 0);
+				    XXH32((const uchar_t *)fplist,  pc[ctx->delta_flag]*4, 0);
 			} else {
 				if (j == 0) j = 1;
 				cur_sketch =
-				    XXH_fast32((const uchar_t *)fplist, (j*4)/2, 0);
+				    XXH32((const uchar_t *)fplist, (j*4)/2, 0);
 			}
 			ctx->blocks[blknum]->similarity_hash = cur_sketch;
 		}
@@ -516,12 +516,12 @@ process_blocks:
 		 */
 		if (ctx->delta_flag) {
 			for (i=0; i<blknum; i++) {
-				ctx->blocks[i]->hash = XXH_fast32(buf1+ctx->blocks[i]->offset,
+				ctx->blocks[i]->hash = XXH32(buf1+ctx->blocks[i]->offset,
 								    ctx->blocks[i]->length, 0);
 			}
 		} else {
 			for (i=0; i<blknum; i++) {
-				ctx->blocks[i]->hash = XXH_fast32(buf1+ctx->blocks[i]->offset,
+				ctx->blocks[i]->hash = XXH32(buf1+ctx->blocks[i]->offset,
 								    ctx->blocks[i]->length, 0);
 				ctx->blocks[i]->similarity_hash = ctx->blocks[i]->hash;
 			}
@@ -618,6 +618,9 @@ process_blocks:
 
 		dedupe_index_sz = (uint64_t)blknum * RABIN_ENTRY_SIZE;
 		if (matchlen < dedupe_index_sz) {
+			DEBUG_STAT_EN(en = get_wtime_millis());
+			DEBUG_STAT_EN(fprintf(stderr, "Chunking speed %.3f MB/s, Overall Dedupe speed %.3f MB/s\n",
+					      get_mb_s(*size, strt, en_1), get_mb_s(*size, strt, en)));
 			DEBUG_STAT_EN(fprintf(stderr, "No Dedupe possible.\n"));
 			ctx->valid = 0;
 			return (0);

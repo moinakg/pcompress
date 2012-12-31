@@ -1,24 +1,4 @@
 /*
- * This file is a part of Pcompress, a chunked parallel multi-
- * algorithm lossless compression and decompression program.
- *
- * Copyright (C) 2012 Moinak Ghosh. All rights reserved.
- * Use is subject to license terms.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * moinakg@belenix.org, http://moinakg.wordpress.com/
- */
-
-/*
    xxHash - Fast Hash algorithm
    Header File
    Copyright (C) 2012, Yann Collet.
@@ -50,6 +30,33 @@
 	You can contact the author at :
 	- xxHash source repository : http://code.google.com/p/xxhash/
 */
+
+/* Notice extracted from xxHash homepage :
+
+xxHash is an extremely fast Hash algorithm, running at RAM speed limits.
+It also successfully passes all tests from the SMHasher suite.
+
+Comparison (single thread, Windows Seven 32 bits, using SMHasher on a Core 2 Duo @3GHz)
+
+Name            Speed       Q.Score   Author
+xxHash          5.4 GB/s     10
+CrapWow         3.2 GB/s      2       Andrew
+MumurHash 3a    2.7 GB/s     10       Austin Appleby
+SpookyHash      2.0 GB/s     10       Bob Jenkins
+SBox            1.4 GB/s      9       Bret Mulvey
+Lookup3         1.2 GB/s      9       Bob Jenkins
+SuperFastHash   1.2 GB/s      1       Paul Hsieh
+CityHash64      1.05 GB/s    10       Pike & Alakuijala
+FNV             0.55 GB/s     5       Fowler, Noll, Vo
+CRC32           0.43 GB/s     9
+MD5-32          0.33 GB/s    10       Ronald L. Rivest
+SHA1-32         0.28 GB/s    10
+
+Q.Score is a measure of quality of the hash function. 
+It depends on successfully passing SMHasher test set. 
+10 is a perfect score.
+*/
+
 #pragma once
 
 #if defined (__cplusplus)
@@ -58,19 +65,60 @@ extern "C" {
 
 
 //****************************
-// Hash Functions
+// Simple Hash Functions
 //****************************
 
-unsigned int XXH_fast32  (const void* input, int len, unsigned int seed);
-unsigned int XXH_strong32(const void* input, int len, unsigned int seed);
+unsigned int XXH32 (const void* input, int len, unsigned int seed);
 
 /*
-XXH_fast32() :
+XXH32() :
 	Calculate the 32-bits hash of "input", of length "len"
 	"seed" can be used to alter the result
+	This function successfully passes all SMHasher tests.
+	Speed on Core 2 Duo @ 3 GHz (single thread, SMHasher benchmark) : 5.4 GB/s
+	Note that "len" is type "int", which means it is limited to 2^31-1.
+	If your data is larger, use the advanced functions below.
+*/
 
-XXH_strong32() :
-	Same as XXH_fast(), but the resulting hash has stronger properties
+
+
+//****************************
+// Advanced Hash Functions
+//****************************
+
+void*        XXH32_init   (unsigned int seed);
+int          XXH32_feed   (void* state, const void* input, int len);
+unsigned int XXH32_result (void* state);
+
+/*
+These functions calculate the xxhash of an input provided in several small packets,
+as opposed to an input provided as a single block.
+
+You must start with :
+void* XXH32_init()
+The function returns a pointer which holds the state of calculation.
+
+This pointer must be provided as "void* state" parameter for XXH32_feed().
+XXH32_feed() can be called as many times as necessary.
+The function returns an error code, with 0 meaning OK, and all other values meaning there is an error.
+Note that "len" is type "int", which means it is limited to 2^31-1. 
+If your data is larger, it is recommended
+to chunk your data into blocks of size 2^30 (1GB) to avoid any "int" overflow issue.
+
+Finally, you can end the calculation anytime, by using XXH32_result().
+This function returns the final 32-bits hash.
+You must provide the same "void* state" parameter created by XXH32_init().
+
+Memory will be freed by XXH32_result().
+*/
+
+
+unsigned int XXH32_getIntermediateResult (void* state);
+/*
+This function does the same as XXH32_result(), generating a 32-bit hash,
+but preserve memory context.
+This way, it becomes possible to generate intermediate hashes, and then continue feeding data with XXH32_feed().
+To free memory context, use XXH32_result().
 */
 
 
