@@ -29,7 +29,7 @@ do
 		eval $cmd
 		if [ $? -ne 0 ]
 		then
-			echo "FATAL: ${cmd} errored."
+			echo "FATAL: ${cmd} errored. Cannot continue this test suite."
 			exit 1
 		fi
 		mv ${tf}.pz ${tf}.${algo}
@@ -54,8 +54,9 @@ do
 				eval $cmd
 				if [ $? -ne 0 ]
 				then
-					echo "${cmd} errored."
-					exit 1
+					echo "FATAL: Compression errored."
+					rm -f ${tf}.${algo}.pz
+					continue
 				fi
 				cmd="../../pcompress -d ${tf}.${algo}.pz ${tf}.${algo}.1"
 				echo "Running $cmd"
@@ -63,13 +64,13 @@ do
 				if [ $? -ne 0 ]
 				then
 					echo "FATAL: Decompression failed."
-					exit 1
+					rm -f ${tf}.${algo}.pz ${tf}.${algo}.1
+					continue
 				fi
 				diff ${tf}.${algo} ${tf}.${algo}.1 > /dev/null
 				if [ $? -ne 0 ]
 				then
 					echo "FATAL: Decompression was not correct"
-					exit 1
 				fi
 				rm -f ${tf}.${algo}.pz ${tf}.${algo}.1
 			done

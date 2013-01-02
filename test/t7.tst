@@ -23,14 +23,14 @@ do
 				if [ $? -ne 0 ]
 				then
 					echo "FATAL: Compression errored."
-					exit 1
+					rm -f ${tf}.pz ${tf}.1
+					continue
 				fi
 
 				pw=`cat /tmp/pwf`
 				if [ "$pw" = "sillypassword" ]
 				then
 					echo "FATAL: Password file /tmp/pwf not zeroed!"
-					exit 1
 				fi
 
 				echo "sillypassword" > /tmp/pwf
@@ -40,21 +40,20 @@ do
 				if [ $? -ne 0 ]
 				then
 					echo "FATAL: Decompression errored."
-					exit 1
+					rm -f ${tf}.pz ${tf}.1
+					continue
 				fi
 
 				diff ${tf} ${tf}.1 > /dev/null
 				if [ $? -ne 0 ]
 				then
 					echo "FATAL: Decompression was not correct"
-					exit 1
 				fi
 
 				pw=`cat /tmp/pwf`
 				if [ "$pw" = "sillypassword" ]
 				then
 					echo "FATAL: Password file /tmp/pwf not zeroed!"
-					exit 1
 				fi
 				rm -f ${tf}.pz ${tf}.1
 			done

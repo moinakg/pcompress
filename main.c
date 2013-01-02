@@ -1163,7 +1163,6 @@ redo:
 	compressed_chunk = tdat->compressed_chunk + CHUNK_FLAG_SZ;
 	rbytes = tdat->rbytes;
 	dedupe_index_sz = 0;
-	tdat->rctx->valid = 0;
 
 	/* Perform Dedup if enabled. */
 	if ((enable_rabin_scan || enable_fixed_scan)) {
@@ -2147,9 +2146,9 @@ main(int argc, char *argv[])
 		    case 's':
 			ovr = parse_numeric(&chunksize, optarg);
 			if (ovr == 1)
-				err_exit(0, "Chunk size too large %s", optarg);
+				err_exit(0, "Chunk size too large %s\n", optarg);
 			else if (ovr == 2)
-				err_exit(0, "Invalid number %s", optarg);
+				err_exit(0, "Invalid number %s\n", optarg);
 
 			if (chunksize < MIN_CHUNK) {
 				err_exit(0, "Minimum chunk size is %ld\n", MIN_CHUNK);

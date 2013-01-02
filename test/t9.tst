@@ -30,7 +30,6 @@ do
 	then
 		echo "FATAL: Compression DID NOT ERROR where expected"
 		rm -f ${tstf}.pz
-		exit 1
 	fi
 	rm -f ${tstf}.pz
 	break
@@ -47,7 +46,6 @@ do
 		then
 			echo "FATAL: Compression DID NOT ERROR where expected"
 			rm -f ${tstf}.pz
-			exit 1
 		fi
 		rm -f ${tstf}.pz
 		break
@@ -67,7 +65,7 @@ do
 		rm -f ${tstf}.pz
 		d=`dirname ${tstf}`
 		rm -f ${d}/.pc*
-		exit 1
+		continue
 	fi
 
 	echo "Corrupting file header ..."
@@ -77,9 +75,6 @@ do
 	if [ $? -eq 0 ]
 	then
 		echo "FATAL: Decompression DID NOT ERROR where expected."
-		rm -f ${tstf}.pz
-		rm -f ${tstf}.1
-		exit 1
 	fi
 
 	rm -f ${tstf}.pz
@@ -91,8 +86,8 @@ do
 	if [ $? -ne 0 ]
 	then
 		echo "FATAL: Compression errored."
-		rm -f ${tstf}.pz
-		exit 1
+		rm -f ${tstf}.pz ${tstf}.1
+		continue
 	fi
 
 	cp ${tstf}.pz ${tstf}.1.pz
@@ -104,9 +99,6 @@ do
 	then
 		echo "FATAL: Decompression DID NOT ERROR where expected."
 		rm -f ${tstf}.pz
-		rm -f ${tstf}.1
-		rm -f ${tstf}.1.pz
-		exit 1
 	fi
 
 	rm -f ${tstf}.1
@@ -121,7 +113,6 @@ do
 		rm -f ${tstf}.pz
 		rm -f ${tstf}.1
 		rm -f ${tstf}.1.pz
-		exit 1
 	fi
 
 	rm -f ${tstf}.1 ${tstf}.1.pz ${tstf}.pz
@@ -132,15 +123,14 @@ do
 	if [ $? -ne 0 ]
 	then
 		echo "FATAL: Compression errored."
-		rm -f ${tstf}.pz
-		exit 1
+		rm -f ${tstf}.pz ${tstf}.1
+		continue
 	fi
 	pw=`cat /tmp/pwf`
 	if [ "$pw" = "plainpasswd" ]
 	then
 		echo "FATAL: Password file was not zeroed"
-		rm -f /tmp/pwf ${tstf}.pz
-		exit 1
+		rm -f /tmp/pwf
 	fi
 
 	cp ${tstf}.pz ${tstf}.1.pz
@@ -154,8 +144,6 @@ do
 		echo "FATAL: Decompression DID NOT ERROR where expected."
 		rm -f ${tstf}.pz
 		rm -f ${tstf}.1
-		rm -f ${tstf}.1.pz
-		exit 1
 	fi
 
 	cp ${tstf}.1.pz ${tstf}.pz
@@ -168,10 +156,6 @@ do
 	if [ $? -eq 0 ]
 	then
 		echo "FATAL: Decompression DID NOT ERROR where expected."
-		rm -f ${tstf}.pz
-		rm -f ${tstf}.1
-		rm -f ${tstf}.1.pz
-		exit 1
 	fi
 done
 

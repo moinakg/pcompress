@@ -258,6 +258,7 @@ reset_dedupe_context(dedupe_context_t *ctx)
 {
 	memset(ctx->current_window_data, 0, RAB_POLYNOMIAL_WIN_SIZE);
 	ctx->window_pos = 0;
+	ctx->valid = 0;
 }
 
 void

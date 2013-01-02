@@ -117,7 +117,7 @@ raise_by_multiplier(int64_t *val, int mult, int power) {
 int
 parse_numeric(int64_t *val, const char *str)
 {
-	int ovr = 2;
+	int ovr = 0;
 	char *mult;
 
 	*val = strtoll(str, &mult, 0);
