@@ -161,7 +161,7 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 }
 
 int
-aes_encrypt(aes_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, ssize_t len, uint64_t id) {
+aes_encrypt(aes_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, uint64_t len, uint64_t id) {
 	AES_KEY key;
 	uchar_t *k1, *k2;
 	struct crypto_aesctr *strm;
@@ -185,7 +185,7 @@ aes_encrypt(aes_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, ssize_t len
 }
 
 int
-aes_decrypt(aes_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, ssize_t len, uint64_t id) {
+aes_decrypt(aes_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, uint64_t len, uint64_t id) {
 	AES_KEY key;
 	uchar_t *k1, *k2;
 	struct crypto_aesctr *strm;

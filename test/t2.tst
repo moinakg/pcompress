@@ -7,7 +7,7 @@ echo "#################################################"
 
 for algo in zlib ppmd
 do
-	for tf in bin.dat share.dat inc.dat
+	for tf in `cat files.lst`
 	do
 		for cksum in CRC64 SHA256 SHA512 SKEIN256 SKEIN512 KECCAK256 KECCAK512
 		do

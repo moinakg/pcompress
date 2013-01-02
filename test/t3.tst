@@ -5,7 +5,7 @@
 clean() {
 	for algo in lzfx lz4 zlib bzip2 lzma lzmaMt libbsc ppmd adapt adapt2
 	do
-		for tf in bin.dat share.dat inc.dat
+		for tf in `cat files.lst`
 		do
 			rm -f ${tf}.${algo}
 		done
@@ -22,7 +22,7 @@ do
 	../../pcompress 2>&1 | grep $algo > /dev/null
 	[ $? -ne 0 ] && continue
 
-	for tf in bin.dat share.dat inc.dat
+	for tf in `cat files.lst`
 	do
 		echo "Preparing ${algo} compressed ${tf} datafile ..."
 		cmd="../../pcompress -c ${algo} -l5 -s500k ${tf}"
@@ -43,7 +43,7 @@ do
 
 	for level in 1 3 9 14
 	do
-		for tf in bin.dat share.dat inc.dat
+		for tf in `cat files.lst`
 		do
 			for seg in 1m 100m
 			do

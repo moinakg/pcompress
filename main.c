@@ -208,7 +208,6 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 	if (lzp_preprocess) {
 		int hashsize;
 
-		type = PREPROC_TYPE_LZP;
 		hashsize = lzp_hash_size(level);
 		result = lzp_compress((const uchar_t *)src, (uchar_t *)dst, srclen,
 				      hashsize, LZP_DEFAULT_LZPMINLEN, 0);
@@ -216,6 +215,7 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 			if (!enable_delta2_encode)
 				return (-1);
 		} else {
+			type |= PREPROC_TYPE_LZP;
 			srclen = result;
 			memcpy(src, dst, srclen);
 		}
@@ -223,7 +223,6 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 	} else if (!enable_delta2_encode)  {
 		/*
 		 * Execution won't come here but just in case ...
-		 * Even Delta2 encoding below enables LZP.
 		 */
 		fprintf(stderr, "Invalid preprocessing mode\n");
 		return (-1);
@@ -241,7 +240,7 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 	}
 
 	*dest = type;
-	*((int64_t *)(dest + 1)) = htonll(srclen);
+	*((uint64_t *)(dest + 1)) = htonll(srclen);
 	_dstlen = srclen;
 	DEBUG_STAT_EN(strt = get_wtime_millis());
 	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr, data);
@@ -255,7 +254,15 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 		DEBUG_STAT_EN(fprintf(stderr, "Chunk did not compress.\n"));
 		memcpy(dest+1, src, srclen);
 		*dstlen = srclen + 1;
-		result = 0;
+		/*
+		 * If compression failed but one of the pre-processing succeeded then
+		 * type flags will be non-zero. In that case we still indicate a success
+		 * result so that decompression will reverse the pre-processing. The
+		 * type flags will indicate that compression was not done and the
+		 * decompress routine will not be called.
+		 */
+		if (type > 0)
+			result = 0;
 	}
 
 	return (result);
@@ -274,7 +281,7 @@ preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void 
 	sorc++;
 	srclen--;
 	if (type & PREPROC_COMPRESSED) {
-		*dstlen = ntohll(*((int64_t *)(sorc)));
+		*dstlen = ntohll(*((uint64_t *)(sorc)));
 		sorc += 8;
 		srclen -= 8;
 		DEBUG_STAT_EN(strt = get_wtime_millis());
@@ -295,7 +302,7 @@ preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void 
 			memcpy(src, dst, _dstlen);
 			srclen = _dstlen;
 			*dstlen = _dstlen;
-		} else {
+	} else {
 			return (result);
 		}
 	}
@@ -312,7 +319,7 @@ preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void 
 		*dstlen = result;
 	}
 
-	if (!(type & (PREPROC_COMPRESSED | PREPROC_TYPE_DELTA2 | PREPROC_TYPE_LZP))) {
+	if (!(type & (PREPROC_COMPRESSED | PREPROC_TYPE_DELTA2 | PREPROC_TYPE_LZP)) && type > 0) {
 		fprintf(stderr, "Invalid preprocessing flags: %d\n", type);
 		return (-1);
 	}
@@ -1156,6 +1163,7 @@ redo:
 	compressed_chunk = tdat->compressed_chunk + CHUNK_FLAG_SZ;
 	rbytes = tdat->rbytes;
 	dedupe_index_sz = 0;
+	tdat->rctx->valid = 0;
 
 	/* Perform Dedup if enabled. */
 	if ((enable_rabin_scan || enable_fixed_scan)) {

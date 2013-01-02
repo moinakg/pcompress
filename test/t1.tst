@@ -12,7 +12,7 @@ do
 
 	for level in 1 3 9 14
 	do
-		for tf in bin.dat share.dat inc.dat
+		for tf in `cat files.lst`
 		do
 			for seg in 1m 100m
 			do

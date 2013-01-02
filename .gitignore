@@ -1,0 +1,11 @@
+files.lst
+*.pc*
+*.o
+*.so
+pcompress
+Makefile
+test.log
+test/datafiles
+*~
+core.*
+*.kate-swp

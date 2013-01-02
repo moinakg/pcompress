@@ -74,7 +74,7 @@ typedef struct {
 /*
  * Generic message digest functions.
  */
-int compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, int64_t bytes);
+int compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes);
 int get_checksum_props(const char *name, int *cksum, int *cksum_bytes, int *mac_bytes);
 void serialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
 void deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
@@ -84,7 +84,7 @@ void deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
  */
 int init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 	       uchar_t *salt, int saltlen, uint64_t nonce, int enc_dec);
-int crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, int64_t bytes, uint64_t id);
+int crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, uint64_t bytes, uint64_t id);
 uint64_t crypto_nonce(crypto_ctx_t *cctx);
 void crypto_clean_pkey(crypto_ctx_t *cctx);
 void cleanup_crypto(crypto_ctx_t *cctx);

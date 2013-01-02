@@ -10,7 +10,7 @@ rm -f *.1
 
 for algo in lzfx adapt2
 do
-	for tf in comb_d.dat
+	for tf in `cat files.lst`
 	do
 		for feat in "-e" "-e -L" "-D -e" "-D -EE -L -e" "-e -S CRC64"
 		do

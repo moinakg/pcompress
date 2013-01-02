@@ -648,7 +648,6 @@ _last_literals:
     return (int) (((char*)op)-dest);
 }
 
-
 int LZ4_compress_limitedOutput(const char* source, 
                                char* dest, 
                                int isize, 

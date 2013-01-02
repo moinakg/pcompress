@@ -12,8 +12,9 @@ do
 
 	for level in 1 3
 	do
-		for tf in combined.dat
+		for tf in `cat files.lst`
 		do
+			rm -f ${tf}.*
 			for seg in 1m 2m 3m
 			do
 				cmd="cat ${tf} | ../../pcompress -p -c ${algo} -l ${level} -s ${seg} > ${tf}.pz"

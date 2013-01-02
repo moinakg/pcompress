@@ -59,9 +59,9 @@ inline int bsc_lzp_num_blocks(int64_t n)
 {
     int nb;
 
-    if (n <       256 * 1024)   return 1;
-    if (n <  4 * 1024 * 1024)   return 2;
-    if (n < 16 * 1024 * 1024)   return 4;
+    if (n <       256LL * 1024LL)   return 1;
+    if (n <  4LL * 1024LL * 1024LL)   return 2;
+    if (n < 16LL * 1024LL * 1024LL)   return 4;
     if (n <    LZP_MAX_BLOCK)   return 8;
 
     nb = n / LZP_MAX_BLOCK;

@@ -74,7 +74,7 @@ extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, uint64_t size,
 	uint64_t crc, uint64_t *cnt);
 
 int
-compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, int64_t bytes)
+compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes)
 {
 	DEBUG_STAT_EN(double strt, en);
 
@@ -535,7 +535,7 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 }
 
 int
-crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, int64_t bytes, uint64_t id)
+crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, uint64_t bytes, uint64_t id)
 {
 	if (cctx->crypto_alg == CRYPTO_ALG_AES) {
 		if (cctx->enc_dec == ENCRYPT_FLAG) {

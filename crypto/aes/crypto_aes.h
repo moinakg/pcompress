@@ -48,8 +48,8 @@ typedef struct {
 
 int aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 	     uint64_t nonce, int enc);
-int aes_encrypt(aes_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, ssize_t len, uint64_t id);
-int aes_decrypt(aes_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, ssize_t len, uint64_t id);
+int aes_encrypt(aes_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, uint64_t len, uint64_t id);
+int aes_decrypt(aes_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, uint64_t len, uint64_t id);
 uint64_t aes_nonce(aes_ctx_t *ctx);
 void aes_clean_pkey(aes_ctx_t *ctx);
 void aes_cleanup(aes_ctx_t *ctx);

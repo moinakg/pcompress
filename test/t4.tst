@@ -5,13 +5,11 @@ echo "#################################################"
 echo "# Test Deduplication, Delta Encoding and LZP"
 echo "#################################################"
 
-rm -f *.pz
-rm -f *.1
-
 for algo in lzfx lz4 adapt
 do
-	for tf in combined.dat comb_d.dat
+	for tf in `cat files.lst`
 	do
+		rm -f ${tf}.*
 		for feat in "-D" "-D -B3 -L" "-D -B4 -E" "-D -B2 -EE" "-D -B5 -EE -L" "-D -B2 -r" "-P" "-D -P" "-D -L -P"
 		do
 			for seg in 2m 100m

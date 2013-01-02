@@ -113,6 +113,9 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		return (-1);
 	}
 
+	if (srclen <= (MAIN_HDR + LIT_HDR + DELTA_HDR))
+		return (-1);
+
 	if (rle_thresh < MIN_THRESH)
 		return (-1);
 
@@ -121,7 +124,10 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		int rv;
 
 		hdr_ovr = 0;
+		*((uint64_t *)dst) = LE64(srclen);
+		dst += MAIN_HDR;
 		rv = delta2_encode_real(src, srclen, dst, dstlen, rle_thresh, 1, &hdr_ovr);
+		*dstlen += MAIN_HDR;
 		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 ", dstlen: %" PRIu64 "\n", srclen, *dstlen));
 		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: header overhead: %d\n", hdr_ovr));
 	} else {
@@ -456,7 +462,7 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 			rcnt = val & MSB_SETZERO_MASK;
 			pos += sizeof (rcnt);
 			if (out + rcnt > *dstlen) {
-				fprintf(stderr, "DELTA2 Decode: Destination buffer overflow. Corrupt data.\n");
+				fprintf(stderr, "DELTA2 Decode(lit): Destination buffer overflow. Corrupt data.\n");
 				return (-1);
 			}
 			memcpy(pos1, pos, rcnt);
@@ -473,7 +479,7 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 			delta = LE64(*((uint64_t *)pos));
 			pos += sizeof (delta);
 			if (out + rcnt > *dstlen) {
-				fprintf(stderr, "DELTA2 Decode: Destination buffer overflow. Corrupt data.\n");
+				fprintf(stderr, "DELTA2 Decode(delta): Destination buffer overflow. Corrupt data.\n");
 				return (-1);
 			}
 
