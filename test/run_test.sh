@@ -52,12 +52,9 @@ then
 		[ $? -ne 0 ] && continue
 
 		cd datafiles
-		(. ../${tf})
-		if [ $? -ne 0 ]
-		then
-			echo "FATAL: Test ${tf} failed"
-			failures=$((failures + 1))
-		fi
+		(. ../${tf}) 2>&1 | tee ${tf}.log
+		fails=`egrep "^FATAL:" ${tf}.log | wc -l`
+		failures=$((failures + fails))
 		cd $PDIR
 	done
 else

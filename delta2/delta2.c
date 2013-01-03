@@ -127,6 +127,8 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		*((uint64_t *)dst) = LE64(srclen);
 		dst += MAIN_HDR;
 		rv = delta2_encode_real(src, srclen, dst, dstlen, rle_thresh, 1, &hdr_ovr);
+		if (rv == -1)
+			return (rv);
 		*dstlen += MAIN_HDR;
 		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 ", dstlen: %" PRIu64 "\n", srclen, *dstlen));
 		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: header overhead: %d\n", hdr_ovr));
@@ -288,7 +290,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 
 	/*
 	 * No need to check for destination buffer overflow since
-	 * dstlen == srclen always.
+	 * dstlen >= srclen always.
 	 */
 	if ( gtot1 > (srclen - (DELTA_HDR + LIT_HDR + MAIN_HDR)) ) {
 		if (srclen == DELTA2_CHUNK) {

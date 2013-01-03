@@ -264,7 +264,6 @@ preproc_compress(compress_func_ptr cmp_func, void *src, uint64_t srclen, void *d
 		if (type > 0)
 			result = 0;
 	}
-
 	return (result);
 }
 
@@ -1489,8 +1488,12 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		else
 			flags |= FLAG_DEDUP_FIXED;
 		/* Additional scratch space for dedup arrays. */
-		compressed_chunksize += (dedupe_buf_extra(chunksize, 0, algo,
-			enable_delta_encode) - (compressed_chunksize - chunksize));
+		if (chunksize + dedupe_buf_extra(chunksize, 0, algo, enable_delta_encode)
+		    > compressed_chunksize) {
+			compressed_chunksize += (chunksize +
+			    dedupe_buf_extra(chunksize, 0, algo, enable_delta_encode)) -
+			    compressed_chunksize;
+		}
 	}
 
 	if (encrypt_type) {
