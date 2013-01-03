@@ -1,3 +1,67 @@
+== 1.2.0 Major Stable Release ==
+Fix calculation of extra scratch space for Dedupe.
+Add missing return value check in small buffer Delta2.
+Update test failure detection in test driver.
+Fix numeric parsing.
+Fix dedupe bug introduced in last commit.
+Reset valid flag when resetting dedupe context.
+Cleanup test suites.
+Do not abort test suite on failure of a test case.
+Fix Delta2 handling for small buffers.
+Fix LZP handling during preprocessing.
+Fix type flag handling during preprocessing.
+Update test cases to use configurable list of test corpus files.
+Update some more int64_t datatypes to uint64_t
+Update to latest XXHash version.
+Fix Keccak invocation and reset default checksum back to SKEIN 256.
+Improve Dedupe performance.
+Fix compiler warning in allocator code.
+Major enhancements to Delta2 encoding.
+Fix the byteswap macros.
+Start adding assertions.
+Introduce strict compiler flags and fix scores of warnings/issues.
+Avoid different optimization flags for Dedupe sources.
+Fix liberal mixing of uint64_t and int64_t (should all be uint64_t).
+Fix corner case crash when decompressing.
+Fix Delta2 decode handling when not compressing.
+More debug statements and other minor changes.
+Avoid transposing below-threshold spans. Reduces compression ratio.
+Use little-endian storage format for numbers to optimize for x86.
+Improve embedded table detection.
+Reduce Delta2 header sizes.
+Fix preprocessing behavior when LZP does not compress but Delta2 works.
+Improve Delta2 scanning speed and effectiveness.
+Add destination buffer overflow check in Delta2.
+Add rough speed computation.
+More tweaks to Delta2 implementation.
+Ability to run individual test suites from makefile.
+Silence more Gcc warnings.
+Update testing note.
+Improve 64-bit compiler and platform checks.
+Ensure core dumps are enabled during testing.
+Enable building with alternate Zlib and Bzlib.
+Fix correct setting of output size when using Delta2 without LZP.
+README formatting.
+Make Delta2 encoding independent of LZP.
+Tweak Delta2 parameters.
+Update README and test cases.
+Update README to align with current features/behavior.
+Fine tune transpose parameters.
+Fix minor nits.
+Change confusing structure member name.
+Add Matrix Transpose of Dedupe index to compress it better.
+Fix handling of Dedupe index compression failure.
+Ensure intermediate file cleanup in tests.
+Update to latest LZ4.
+Get rid of size_t in places where 64-bitness is assumed.
+Add support for 64-bit Keccak implementation.
+Sanitize error message from tests.
+Add more tests.
+Improve platform detection in config script.
+Add adaptive delta encoding test.
+Implement Adaptive Delta Encoding (Delta2).
+Work in progress global dedupe config setup.
+
 == 1.1.0 Stable Release ==
 Fix building without Libbsc support.
 Add more tests for corrupted encrypted files.
@@ -14,6 +78,7 @@ Fix corner case dedupe bug in error handling flow.
 Bump archive version signature.
 Work in progress global dedupe config loader.
 Use fixed rolling-hash mask for better block size approximation.
+
 == 1.0.0 Stable Release ==
 Fix chunk flag setup when compression fails in adaptive mode.
 Prevent display of non-fatal errors during compression.
@@ -27,6 +92,7 @@ Tweak chunking parameters for better block size distribution and dedupe ratio.
 Add some more debug mode info.
 Minor fix for adapt mode.
 Use Libbsc for XML data in adapt2 mode.
+
 == 0.9.1 Minor update Release ==
 Portability to Debian based distros.
 Enable SSE4/AVX detection for AMD platforms (Bulldozer has both).
@@ -49,6 +115,7 @@ Fix polynomial computation.
 Fix incorrect block length when doing fixed-block dedupe.
 Remove unused structure member.
 Switch to multiplicative rolling hash for good
+
 == 0.8.5 Update Release ==
 Update adaptive mode heuristic based on algorithms.
 Remove incorrect check in PPMd decompression code.
@@ -66,6 +133,7 @@ Speed up Hash computation for dedupe blocks.
 Add support for Fixed-Block deduplication.
 Reduce dedupe loop checks for slight speed edge.
 Implement K-min-values Sketch for Similarity detection.
+
 == 0.8.1 Bugfix Release ==
 Fix return code handling in LZP pre-compression, crashed adaptive modes.
 Allow user-specified minimum Dedupe block size.
@@ -81,6 +149,7 @@ Import Skein code from NIST CD submission
 Make checksum algorithms pluggable
 Fix handling of huge buffers (>2GB) in LZP
 Cleanup of some buffer sizing code
+
 == 0.8 Beta release ==
 Add support for libbsc a high-performance block sorting compressor.
 Enable external algorithm threading for single chunk compressed files.
@@ -109,6 +178,7 @@ Slight improvement to similarity computation
 A simple mechanism to include DEBUG mode stats
 Implement secondary sketch based on character counts to refine similarity checksum.
 Proper checksum update for last block.
+
 == 0.7 Beta release ==
 Bump version to 0.7
 Fix handling of compression flags in adaptive mode

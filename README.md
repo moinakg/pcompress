@@ -106,8 +106,8 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
                   for data containing tables of numerical values especially if those are
                   in an arithmetic series. In this implementation basic Delta Encoding is
                   combined with Run-Length encoding and Matrix transpose
-       NOTE -     If data has mixed textual and numeric table components then both -L and
-                  -P can be used together.
+       NOTE -     Both -L and -P can be used together to give maximum benefit on most
+                  datasets.
 
        '-S' <cksum>
             -     Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512, SHA256 and
@@ -125,6 +125,8 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
                   gives lower dedupe ratio than content-aware dedupe (-D) and does not
                   support delta compression.
 
+       '-B' <1..5>
+            -     Specify an average Dedupe block size. 1 - 4K, 2 - 8K ... 5 - 64K.
        '-M' -     Display memory allocator statistics
        '-C' -     Display compression statistics
 
