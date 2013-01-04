@@ -54,6 +54,9 @@ m64_flag=
 zlib_prefix=
 bzlib_prefix=
 
+rm -rf ./buildtmp
+mkdir ./buildtmp
+
 # Try a simple compilation
 cat << _EOF > tst.c
 #include <stdio.h>
@@ -236,12 +239,14 @@ do
 	then
 		if [ -f "${lib}/libcrypto.so" -o -h "${lib}/libcrypto.so" ]
 		then
-			openssl_libdir=${lib}
+			openssl_libdir="${lib}"
+			(cd ./buildtmp; ln -s ${openssl_libdir}/libcrypto.so)
 			break
 		else
 			if [ -f "${lib}/libcrypto.a" ]
 			then
-				openssl_libdir=${lib}
+				openssl_libdir="${lib}"
+				(cd ./buildtmp; ln -s ${openssl_libdir}/libcrypto.a)
 				break
 			fi
 		fi
@@ -280,6 +285,65 @@ then
 fi
 
 
+# Check for OpenSSL version
+cat << __EOF > tst.c
+#include <stdlib.h>
+#include <openssl/opensslv.h>
+
+int
+main(void)
+{
+	if (OPENSSL_VERSION_NUMBER < 0x0090805fL)
+		exit (1);
+	return (0);
+}
+__EOF
+
+gcc ${m64_flag} -I${openssl_incdir} -L${openssl_libdir} tst.c -o tst
+if [ $? -ne 0 ]
+then
+	echo "Unable to compile OpenSSL test program please check OpenSSL installation."
+	exit 1
+fi
+./tst
+if [ $? -ne 0 ]
+then
+	echo "OpenSSL version too old. At least version 0.9.8e is required.\n"
+	exit 1
+fi
+
+# Check for HMAC_CTX_copy function
+cat << __EOF > tst.c
+#include <stdlib.h>
+#include <openssl/sha.h>
+#include <openssl/rand.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+
+int
+main(void)
+{
+	unsigned char key[16];
+	HMAC_CTX *ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
+	HMAC_CTX *ctx1 = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
+
+	HMAC_CTX_init(ctx);
+	HMAC_Init_ex(ctx, key, 16, EVP_sha256(), NULL);
+	HMAC_CTX_copy(ctx1, ctx);
+
+	return (0);
+}
+__EOF
+
+gcc ${m64_flag} -I${openssl_incdir} -L${openssl_libdir} -O0 -g tst.c -o tst -lcrypto >/dev/null 2>&1
+if [ $? -ne 0 ]
+then
+	openssl_incdir="${openssl_incdir} -D__OSSL_OLD__"
+fi
+
+rm -f tst*
+openssl_libdir="${openssl_libdir},--enable-new-dtags"
+
 # Detect other library packages
 for libspec in "libbz2:${bzlib_prefix}" "libz:${zlib_prefix}"
 do
@@ -306,12 +370,14 @@ do
 		then
 			if [ -f "${lib}/${libname}.so" -o -h "${lib}/${libname}.so" ]
 			then
-				eval "${libname}_libdir=${lib}"
+				eval "${libname}_libdir=${lib},--enable-new-dtags"
+				(cd ./buildtmp; ln -s ${lib}/${libname}.so)
 				break
 			else
 				if [ -f "${lib}/${libname}.a" ]
 				then
-					eval "${libname}_libdir=${lib}"
+					eval "${libname}_libdir=${lib},--enable-new-dtags"
+					(cd ./buildtmp; ln -s ${lib}/${libname}.a)
 					break
 				fi
 			fi

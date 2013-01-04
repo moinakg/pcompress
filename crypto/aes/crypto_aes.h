@@ -38,7 +38,7 @@ extern "C" {
 #ifndef KEYLEN
 #define	KEYLEN 16
 #endif
-#define	PBE_ROUNDS 100
+#define	PBE_ROUNDS 1000
 
 typedef struct {
 	uint64_t nonce;

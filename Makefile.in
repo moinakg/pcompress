@@ -147,12 +147,12 @@ COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
 	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I./crypto/sha2 \
 	-I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ \
-	-I./crypto/keccak -I./transpose $(EXTRA_CPPFLAGS) -pedantic -Wall -Werror -std=gnu99 \
+	-I./crypto/keccak -I./transpose $(EXTRA_CPPFLAGS) -pedantic -Wall -std=gnu99 \
 	-fno-strict-aliasing -Wno-unused-but-set-variable -Wno-enum-compare
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
-LDLIBS = -ldl -L@LIBBZ2_DIR@ -lbz2 -L@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
-	-L@OPENSSL_LIBDIR@ -lcrypto -lrt $(EXTRA_LDFLAGS)
+LDLIBS = -ldl -L./buildtmp -Wl,-R@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,-R@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
+	-L./buildtmp -Wl,-R@OPENSSL_LIBDIR@ -lcrypto -lrt $(EXTRA_LDFLAGS)
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
 $(SKEIN_BLOCK_OBJ) @SHA256ASM_OBJS@ @SHA256_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
@@ -270,6 +270,7 @@ clean:
 	$(RM) $(PROG) $(OBJS) $(BAKFILES)
 	$(RM) test.log
 	$(RM_RF) test/datafiles
+	$(RM_RF) buildtmp
 
 distclean: clean
 	$(RM) Makefile

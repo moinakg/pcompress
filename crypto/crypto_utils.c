@@ -73,6 +73,79 @@ extern uint64_t lzma_crc64(const uint8_t *buf, uint64_t size, uint64_t crc);
 extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, uint64_t size,
 	uint64_t crc, uint64_t *cnt);
 
+#ifdef __OSSL_OLD__
+int
+HMAC_CTX_copy(HMAC_CTX *dctx, HMAC_CTX *sctx)
+{
+	if (!EVP_MD_CTX_copy(&dctx->i_ctx, &sctx->i_ctx))
+		return (0);
+	if (!EVP_MD_CTX_copy(&dctx->o_ctx, &sctx->o_ctx))
+		return (0);
+	if (!EVP_MD_CTX_copy(&dctx->md_ctx, &sctx->md_ctx))
+		return (0);
+
+	memcpy(dctx->key, sctx->key, HMAC_MAX_MD_CBLOCK);
+	dctx->key_length = sctx->key_length;
+	dctx->md = sctx->md;
+	return (1);
+}
+
+int
+PKCS5_PBKDF2_HMAC(const char *pass, int passlen,
+	const unsigned char *salt, int saltlen, int iter,
+	const EVP_MD *digest,
+	int keylen, unsigned char *out)
+{
+	unsigned char digtmp[EVP_MAX_MD_SIZE], *p, itmp[4];
+	int cplen, j, k, tkeylen, mdlen;
+	unsigned long i = 1;
+	HMAC_CTX hctx;
+
+	mdlen = EVP_MD_size(digest);
+	if (mdlen < 0)
+		return 0;
+
+	HMAC_CTX_init(&hctx);
+	p = out;
+	tkeylen = keylen;
+	if(!pass)
+		passlen = 0;
+	else if(passlen == -1)
+		passlen = strlen(pass);
+	while(tkeylen)
+	{
+		if(tkeylen > mdlen)
+			cplen = mdlen;
+		else
+			cplen = tkeylen;
+		/* We are unlikely to ever use more than 256 blocks (5120 bits!)
+		 * but just in case...
+		 */
+		itmp[0] = (unsigned char)((i >> 24) & 0xff);
+		itmp[1] = (unsigned char)((i >> 16) & 0xff);
+		itmp[2] = (unsigned char)((i >> 8) & 0xff);
+		itmp[3] = (unsigned char)(i & 0xff);
+		HMAC_Init_ex(&hctx, pass, passlen, digest, NULL);
+		HMAC_Update(&hctx, salt, saltlen);
+		HMAC_Update(&hctx, itmp, 4);
+		HMAC_Final(&hctx, digtmp, NULL);
+		memcpy(p, digtmp, cplen);
+		for(j = 1; j < iter; j++)
+		{
+			HMAC(digest, pass, passlen,
+			     digtmp, mdlen, digtmp, NULL);
+			for(k = 0; k < cplen; k++)
+				p[k] ^= digtmp[k];
+		}
+		tkeylen-= cplen;
+		i++;
+		p+= cplen;
+	}
+	HMAC_CTX_cleanup(&hctx);
+	return (1);
+}
+#endif
+
 int
 compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes)
 {
@@ -360,14 +433,22 @@ hmac_update(mac_ctx_t *mctx, uchar_t *data, uint64_t len)
 
 	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_CRC64) {
 		if (cksum_provider == PROVIDER_OPENSSL) {
+#ifndef __OSSL_OLD__
 			if (HMAC_Update((HMAC_CTX *)(mctx->mac_ctx), data, len) == 0)
 				return (-1);
+#else
+			HMAC_Update((HMAC_CTX *)(mctx->mac_ctx), data, len);
+#endif
 		} else {
 			opt_HMAC_SHA256_Update((HMAC_SHA256_Context *)(mctx->mac_ctx), data, len);
 		}
 	} else if (cksum == CKSUM_SHA512) {
+#ifndef __OSSL_OLD__
 		if (HMAC_Update((HMAC_CTX *)(mctx->mac_ctx), data, len) == 0)
 			return (-1);
+#else
+		HMAC_Update((HMAC_CTX *)(mctx->mac_ctx), data, len);
+#endif
 
 	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
 		// Keccak takes data length in bits so we have to scale

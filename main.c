@@ -620,7 +620,7 @@ start_decompress(const char *filename, const char *to_filename)
 	struct wdata w;
 	int compfd = -1, i, p;
 	int uncompfd = -1, err, np, bail;
-	int nprocs, thread = 0, level;
+	int nprocs = 1, thread = 0, level;
 	short version, flags;
 	int64_t chunksize, compressed_chunksize;
 	struct cmp_data **dary, *tdat;
