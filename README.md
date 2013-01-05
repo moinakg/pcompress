@@ -130,9 +130,6 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
        '-M' -     Display memory allocator statistics
        '-C' -     Display compression statistics
 
-NOTE: It is recommended not to use '-L' with libbsc compression since libbsc uses
-      LZP internally as well.
-
     Encryption flags:
        '-e'       Encrypt chunks with AES. The password can be prompted from the user
                   or read from a file. Whether 128-Bit or 256-Bit keys are used depends
