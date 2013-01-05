@@ -1,4 +1,9 @@
 == 1.2.0 Major Stable Release ==
+Fix issue #1 and issue #2.
+Enable building with older openssl (at least 0.9.8e).
+Add variants of missing functions in older openssl versions.
+Allow proper linking with libraries in alternate locations and setting RUNPATH.
+Increase hash rounds for nonce generation.
 Fix calculation of extra scratch space for Dedupe.
 Add missing return value check in small buffer Delta2.
 Update test failure detection in test driver.
