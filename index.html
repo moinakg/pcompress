@@ -43,12 +43,50 @@
 
 <p>Pcompress is an attempt to revisit <strong>Data Compression</strong> using unique combinations of existing and some new techniques. Both high compression ratio and performance are key goals along with the ability to leverage all the cores on a multi-core CPU. It also aims to bring to the table scalable, high-throughput Global <strong>Deduplication</strong> of archival storage. The deduplication capability is also available for single-file compression modes providing very interesting capabilities. Other projects providing some of these features include <a href="http://ck.kolivas.org/apps/lrzip/">Lrzip</a>, <a href="http://www.exdupe.com/">eXdupe</a>. Full archivers providing some of the similar features include the excellent <a href="http://freearc.org/">FreeArc</a> and <a href="http://peazip.sourceforge.net/">PeaZIP</a>. Pcompress is not an archiver but provides a unique combination of features to both maximize compression ratio and provide high speed.</p>
 
-<p>Pcompress can do both compression and decompression in parallel by splitting input data into chunks. It has a modular structure and includes support for multiple algorithms like LZMA, Bzip2, PPMD, etc, with SKEIN/SHA checksums for data integrity. It can also do Lempel-Ziv-Prediction pre-compression (derived from libbsc) to improve compression ratios across the board. SSE optimizations for the bundled LZMA are included. It also implements chunk-level Content-Aware Deduplication and Delta Compression features
-based on a rolling hash algorithm derived from the Rabin Fingerprinting approach. Other open-source deduplication software like <a href="http://opendedup.org/">OpenDedup</a> and <a href="http://www.lessfs.com/wordpress/">LessFS</a> use fixed block dedupe while <a href="http://backuppc.sourceforge.net/">BackupPC</a> does file-level dedupe only (single-instance storage). Of course OpenDedup and LessFS are Fuse based filesystems doing inline dedupe of primary storage while Pcompress is only meant for archival storage as of today.</p>
+<h1>Features</h1>
 
-<p>Delta Compression is implemented via the widely popular bsdiff algorithm. Chunk Similarity is detected using an adaptation of <a href="http://en.wikipedia.org/wiki/MinHash">MinHashing</a>. It has low metadata overhead and overlaps I/O and compression to achieve maximum parallelism. It also bundles a simple mempool allocator to speed repeated allocation of similar chunks. It can work in pipe mode, reading from stdin and writing to stdout. It also provides adaptive compression modes in which some simple data heuristics are applied in an attempt to select a good algorithm per chunk.</p>
-
-<p>Pcompress also supports encryption via AES and uses Scrypt from <a href="http://www.tarsnap.com/">Tarsnap</a> for secure Password Based Key generation.</p>
+<ul>
+<li>
+<strong>Parallel</strong>: Compress and Decompress in parallel by splitting input data into chunks. With Content-Aware Deduplication chunks are split at a content-defined boundary to improve Dedulication and compression.</li>
+<li>
+<strong>Scalable</strong>: Chunks are independent and can scale to any number of cores provided enough memory is available.</li>
+<li>
+<strong>Deduplication</strong>: High-speed Content-aware chunk-level Deduplication based on Rabin fingerprinting. Duplicate comparison uses exact byte-for-byte comparison and techniques to reduce Dedupe index size.</li>
+<li>
+<strong>Delta Compression</strong>: Deduplication also provides Delta Compression of closely matching chunks using <a href="http://www.daemonology.net/bsdiff/">Bsdiff</a>. <a href="http://en.wikipedia.org/wiki/MinHash">Minhashing</a> is used to detect similar chunks.</li>
+<li>
+<strong>Fixed Block option</strong>: Fixed block Deduplication is also supported and works extremely fast.</li>
+<li>
+<strong>Metadata Compression</strong>: The Dedupe Index is transformed and compressed.</li>
+<li>
+<strong>Multiple Algorithms</strong>: Support for multiple compression algorithms like LZMA, LZMA-Multithreaded, Bzip2, PPMD, LZ4 etc. Adaptive modes allow selecting an algorithm per chunk based on heuristics.</li>
+<li>
+<strong>Strong Data Integrity</strong>: Strong Data Integrity verification with option of using SKEIN, SHA2 or KECCAK. Headers are also checksummed using CRC32.</li>
+<li>
+<strong>Filters</strong>: Pre-compression filters: LZP, Delta2. These improve compression ratio across the board at a little extra computational cost.</li>
+<li>
+<strong>LZP</strong>: LZP (Lempel-Ziv Prediction) searches for repeating patterns of bytes.</li>
+<li>
+<strong>Delta2</strong>: Delta2 Encoding probes for embedded tables of numeric data and Run Length encodes arithmetic sequences at high throughput.</li>
+<li>
+<strong>Matrix Transform</strong>: A form of <a href="http://moinakg.wordpress.com/2012/12/13/linear-algebra-meets-data-compression/">Matrix transpose</a> is used to better compress the Dedupe Index.</li>
+<li>
+<strong>Encryption</strong>: Support for AES Encryption using Key generation based on the strong <a href="http://en.wikipedia.org/wiki/Scrypt">Scrypt</a> algorithm. AES is used in CTR mode.</li>
+<li>
+<strong>Message Authentication</strong>: Encryption mode uses HMAC, Skein MAC or Keccak MAC for Data Integrity and Authentication. The MAC approach from iSCSI is followed for improved security (<a href="http://tonyarcieri.com/all-the-crypto-code-youve-ever-written-is-probably-broken">http://tonyarcieri.com/all-the-crypto-code-youve-ever-written-is-probably-broken</a>.</li>
+<li>
+<strong>Metadata</strong>: Low metadata overhead.</li>
+<li>
+<strong>Overlapped processing</strong>: Overlapped computation and I/O to maximize throughput.</li>
+<li>
+<strong>Streamable</strong>: Ability to work in streaming pipe mode reading from stdin and writing to stdout.</li>
+<li>
+<strong>Custom Allocator</strong>: Uses an internal mempool allocator to speed up repeated allocation of similarly sized chunks. Option to disable this at runtime is provided.</li>
+<li>
+<strong>Solid Mode</strong>: Given enough available memory an entire file can be compressed inside a single chunk. This however is mostly a single-threaded operation.</li>
+<li>
+<strong>Padding</strong>: A compressed archive or file can be zero-padded to round off to a multiple of a block size for certain storage media like Tapes.</li>
+</ul><p>Other open-source deduplication software like <a href="http://opendedup.org/">OpenDedup</a> and <a href="http://www.lessfs.com/wordpress/">LessFS</a> use fixed block dedupe only. Some software like <a href="http://backuppc.sourceforge.net/">BackupPC</a> does file-level dedupe only (single-instance storage). Of course OpenDedup and LessFS are Fuse based filesystems doing inline dedupe of primary storage while Pcompress is only meant for archival storage as of today.</p>
 
 <p>NOTE: This utility is Not an archiver. It compresses only single files or datastreams. To archive use something else like tar, cpio or pax.</p>
 
@@ -72,7 +110,7 @@ based on a rolling hash algorithm derived from the Rabin Fingerprinting approach
 
 <h1>Release Downloads</h1>
 
-<p><a href="https://github.com/moinakg/pcompress/downloads">https://github.com/moinakg/pcompress/downloads</a></p>
+<p><a href="http://code.google.com/p/pcompress/downloads/list">http://code.google.com/p/pcompress/downloads/list</a></p>
 
 <h1>Usage</h1>
 
@@ -139,6 +177,14 @@ Other flags:
    '-L' -     Enable LZP pre-compression. This improves compression ratio of all
               algorithms with some extra CPU and very low RAM overhead. Using
               delta encoding in conjunction with this may not always be beneficial.
+
+   '-P' -     Enable Adaptive Delta Encoding. It can improve compresion ratio further
+              for data containing tables of numerical values especially if those are
+              in an arithmetic series. In this implementation basic Delta Encoding is
+              combined with Run-Length encoding and Matrix transpose
+   NOTE -     Both -L and -P can be used together to give maximum benefit on most
+              datasets.
+
    '-S' &lt;cksum&gt;
         -     Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512, SHA256 and
               SHA512. Default one is SKEIN256. The implementation actually uses SKEIN
@@ -212,7 +258,10 @@ LZ4 - Very Fast, better compression than LZFX.
 Zlib    - Fast, better compression.
       Levels: 1 - 9
 Bzip2   - Slow, much better compression than Zlib.
-      Levels: 1 - 9</p>
+      Levels: 1 - 9
+Libbsc  - A new Block-Sorting compressor similar conceptually to Bzip2 but gives
+          much better compression.
+          Levels: 1 - 9</p>
 
 <p>LZMA    - Very slow. Extreme compression.
       Levels: 1 - 14
@@ -221,6 +270,9 @@ Bzip2   - Slow, much better compression than Zlib.
           13 and 14 use larger dictionaries upto 256MB and really suck up
           RAM. Use these levels only if you have at the minimum 4GB RAM on
           your system.</p>
+
+<p>LzmaMt  - Extreme compression, faster than plain LZMA as it is multithreaded.
+          Compression ratio is only slightly less than plain LZMA.</p>
 
 <p>PPMD    - Slow. Extreme compression for Text, average compression for binary.
           In addition PPMD decompression time is also high for large chunks.
@@ -240,13 +292,27 @@ Adapt2  - Ultra slow synthetic mode. Both LZMA and PPMD are tried per chunk and
           dedupe, it uses upto 3.5GB physical RAM and requires 6GB of virtual
           memory space.</p>
 
-<p>It is possible for a single chunk to span the entire file if enough RAM is available. However for adaptive modes to be effective for large files, especially multi-file archives splitting into chunks is required so that best compression algorithm can be selected for textual and binary portions.</p>
+<p>It is possible for a single chunk to span the entire file if enough RAM is available. However for adaptive modes to be effective for large files, especially multi-file archives, splitting into chunks is required so that best compression algorithm can be selected for textual and binary portions.</p>
 
-<h1>Caveats</h1>
+<h1>Memory Usage</h1>
 
-<p>This utility is not meant for resource constrained environments. Minimum memory usage (RES/RSS) with barely meaningful settings is around 10MB. This occurs when using the minimal LZFX compression algorithm at level 2 with a 1MB chunk size and running 2 threads.</p>
+<p>As can be seen from above memory usage can vary greatly based on compression/
+pre-processing algorithms and chunk size. A variety of configurations are possible
+depending on resource availability in the system.</p>
 
-<p>Normally this utility requires lots of RAM depending on compression algorithm, compression level, and dedupe being enabled. Larger chunk sizes can give better compression ratio but at the same time use more RAM.</p>
+<p>The minimum possible meaningful settings while still giving about 50% compression
+ratio and very high speed is with the LZFX algorithm with 1MB chunk size and 2
+threads:</p>
+
+<pre><code>    pcompress -c lzfx -l2 -s1m -t2 &lt;file&gt;
+</code></pre>
+
+<p>This uses about 6MB of physical RAM (RSS). Earlier versions of the utility before
+the 0.9 release comsumed much more memory. This was improved in the later versions.
+When using Linux the virtual memory consumption may appear to be very high but it
+is just address space usage rather than actual RAM and should be ignored. It is only
+the RSS that matters. This is a result of the memory arena mechanism in Glibc that
+improves malloc() performance for multi-threaded applications.</p>
       </section>
       <footer>
         <p>Project maintained by <a href="https://github.com/moinakg">moinakg</a></p>
