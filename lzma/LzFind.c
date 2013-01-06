@@ -3,7 +3,11 @@
 
 #include <string.h>
 #ifdef __USE_SSE_INTRIN__
+#ifdef __SSE3__
+#include <pmmintrin.h>
+#else
 #include <emmintrin.h>
+#endif
 #endif
 
 #include "LzFind.h"
@@ -409,8 +413,13 @@ UInt32 * GetMatchesSpec1(UInt32 lenLimit, UInt32 curMatch, UInt32 pos, const Byt
          int mask;
          UInt32 byt;
          while (lenLimit - len > 16) {
+#ifdef __SSE3__
+           __m128i span1 = _mm_lddqu_si128((__m128i *)(pb+len));
+           __m128i span2 = _mm_lddqu_si128((__m128i *)(cur+len));
+#else
            __m128i span1 = _mm_loadu_si128((__m128i *)(pb+len));
            __m128i span2 = _mm_loadu_si128((__m128i *)(cur+len));
+#endif
            mask = _mm_movemask_epi8(_mm_cmpeq_epi8(span1, span2)) ^ 0xffff;
            if (mask) {
              byt = __builtin_ctz(mask);
@@ -504,8 +513,13 @@ static void SkipMatchesSpec(UInt32 lenLimit, UInt32 curMatch, UInt32 pos, const 
         int mask;
         UInt32 byt;
         while (lenLimit - len > 16) {
+#ifdef __SSE3__
+          __m128i span1 = _mm_lddqu_si128((__m128i *)(pb+len));
+          __m128i span2 = _mm_lddqu_si128((__m128i *)(cur+len));
+#else
           __m128i span1 = _mm_loadu_si128((__m128i *)(pb+len));
           __m128i span2 = _mm_loadu_si128((__m128i *)(cur+len));
+#endif
           mask = _mm_movemask_epi8(_mm_cmpeq_epi8(span1, span2)) ^ 0xffff;
           if (mask) {
             byt = __builtin_ctz(mask);
