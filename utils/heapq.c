@@ -17,6 +17,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <heapq.h>
 
 #ifndef NDEBUG
@@ -71,7 +72,7 @@ _siftupmax(heap_t *h, __TYPE spos, __TYPE epos)
     heap = h->ary;
 #ifdef ERROR_CHK
     if (spos >= endpos) {
-        fprintf(stderr, "_siftupmax: index out of range: %u, len: %u\n", spos, endpos);
+        fprintf(stderr, "_siftupmax: index out of range: %" PRId64 ", len: %" PRId64 "\n", spos, endpos);
         return -1;
     }
 #endif
@@ -118,7 +119,7 @@ _siftupmax_s(heap_t *h, __TYPE spos)
     heap = h->ary;
 #ifdef ERROR_CHK
     if (spos >= endpos) {
-        fprintf(stderr, "_siftupmax: index out of range: %u, len: %u\n", spos, endpos);
+        fprintf(stderr, "_siftupmax: index out of range: %" PRId64 ", len: %" PRId64 "\n", spos, endpos);
         return -1;
     }
 #endif

@@ -72,9 +72,9 @@
 
 #include "rabin_dedup.h"
 
-#define	FORTY_PCNT(x) ((x)/5 << 1)
-#define	FIFTY_PCNT(x) ((x) >> 1)
-#define	SIXTY_PCNT(x) (((x) >> 1) + ((x) >> 3))
+#define	DELTA_EXTRA2_PCT(x) ((x) >> 1)
+#define	DELTA_EXTRA_PCT(x) (((x) >> 1) + ((x) >> 3))
+#define	DELTA_NORMAL_PCT(x) (((x) >> 1) + ((x) >> 2) + ((x) >> 3))
 
 extern int lzma_init(void **data, int *level, int nthreads, int64_t chunksize,
 		     int file_version, compress_op_t op);
@@ -203,7 +203,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 			ctx->delta_flag = 3;
 		}
 	} else if (delta_flag == DELTA_EXTRA) {
-		ctx->delta_flag = 1;
+		ctx->delta_flag = 2;
 	}
 
 	if (!fixed_flag)
@@ -292,7 +292,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	uchar_t *buf1 = (uchar_t *)buf;
 	uint32_t length;
 	uint64_t cur_roll_checksum, cur_pos_checksum;
-	uint32_t *fplist;
+	uint32_t *ctx_heap;
 	rabin_blockentry_t **htab;
 	heap_t heap;
 	DEBUG_STAT_EN(uint32_t max_count);
@@ -341,9 +341,8 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		 * Initialize arrays for sketch computation. We re-use memory allocated
 		 * for the compressed chunk temporarily.
 		 */
-		ary_sz = 4 * ctx->rabin_poly_max_block_size;
-		fplist = (uint32_t *)(ctx->cbuf + ctx->real_chunksize - ary_sz);
-		if (ctx->delta_flag) memset(fplist, 0, ary_sz);
+		ary_sz = ctx->rabin_poly_max_block_size;
+		ctx_heap = (uint32_t *)(ctx->cbuf + ctx->real_chunksize - ary_sz);
 	}
 	memset(ctx->current_window_data, 0, RAB_POLYNOMIAL_WIN_SIZE);
 
@@ -398,23 +397,6 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
 
 		/*
-		 * Retain a list of all fingerprints in the block. We then compute
-		 * the K min values sketch from that list and generate a super sketch
-		 * by hashing over the K min values sketch. We only store the least
-		 * significant 32 bits of the fingerprint. This uses less memory,
-		 * requires smaller memset() calls and generates a sufficiently large
-		 * number of similarity matches without false positives - determined
-		 * by experimentation.
-		 * 
-		 * This is called minhashing and is used widely, for example in various
-		 * search engines to detect similar documents.
-		 */
-		if (ctx->delta_flag) {
-			fplist[j] = cur_pos_checksum & 0xFFFFFFFFUL;
-			j++;
-		}
-
-		/*
 		 * Window pos has to rotate from 0 .. RAB_POLYNOMIAL_WIN_SIZE-1
 		 * We avoid a branch here by masking. This requires RAB_POLYNOMIAL_WIN_SIZE
 		 * to be power of 2
@@ -432,25 +414,32 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			ctx->blocks[blknum]->offset = last_offset;
 			ctx->blocks[blknum]->index = blknum; // Need to store for sorting
 			ctx->blocks[blknum]->length = length;
-
 			DEBUG_STAT_EN(if (length >= ctx->rabin_poly_max_block_size) max_count++);
+
 			/*
 			 * Reset the heap structure and find the K min values if Delta Compression
 			 * is enabled. We use a min heap mechanism taken from the heap based priority
 			 * queue implementation in Python.
-			 * Here K = 60% or 40%. We are aiming to detect either 60% (default) or 40%
-			 * similarity on average.
+			 * Here K = similarity extent = 87% or 62% or 50%.
+			 * 
+			 * Once block contents are arranged in a min heap we compute the K min values
+			 * sketch by hashing over the heap till K%. We interpret the raw bytes as a
+			 * sequence of 64-bit integers.
+			 * This is called minhashing and is used widely, for example in various
+			 * search engines to detect similar documents.
 			 */
 			if (ctx->delta_flag) {
-				pc[1] = SIXTY_PCNT(j);
-				pc[2] = FIFTY_PCNT(j);
-				pc[3] = FORTY_PCNT(j);
+				memcpy(ctx_heap, buf1+last_offset, length);
+				length /= 8;
+				pc[1] = DELTA_NORMAL_PCT(length);
+				pc[2] = DELTA_EXTRA_PCT(length);
+				pc[3] = DELTA_EXTRA2_PCT(length);
 
 				reset_heap(&heap, pc[ctx->delta_flag]);
-				ksmallest((int32_t *)fplist, j, &heap);
+				ksmallest((int64_t *)ctx_heap, length, &heap);
+
 				ctx->blocks[blknum]->similarity_hash =
-					XXH32((const uchar_t *)fplist,  pc[ctx->delta_flag]*4, 0);
-				memset(fplist, 0, ary_sz);
+					XXH32((const uchar_t *)ctx_heap,  pc[ctx->delta_flag]*8, 0);
 			}
 			blknum++;
 			last_offset = i+1;
@@ -466,26 +455,30 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 				sizeof (rabin_blockentry_t));
 		ctx->blocks[blknum]->offset = last_offset;
 		ctx->blocks[blknum]->index = blknum;
-		ctx->blocks[blknum]->length = *size - last_offset;
+		length = *size - last_offset;
+		ctx->blocks[blknum]->length = length;
 
 		if (ctx->delta_flag) {
 			uint64_t cur_sketch;
 			uint64_t pc[3];
 
-			if (j > 1) {
-				pc[1] = SIXTY_PCNT(j);
-				pc[2] = FIFTY_PCNT(j);
-				pc[3] = FORTY_PCNT(j);
+			if (length > ctx->rabin_poly_min_block_size) {
+				memcpy(ctx_heap, buf1+last_offset, length);
+				length /= 8;
+				pc[1] = DELTA_NORMAL_PCT(length);
+				pc[2] = DELTA_EXTRA_PCT(length);
+				pc[3] = DELTA_EXTRA2_PCT(length);
+
 				reset_heap(&heap, pc[ctx->delta_flag]);
-				ksmallest((int32_t *)fplist, j, &heap);
+				ksmallest((int64_t *)ctx_heap, length, &heap);
 				cur_sketch =
-				    XXH32((const uchar_t *)fplist,  pc[ctx->delta_flag]*4, 0);
+				    XXH32((const uchar_t *)ctx_heap,  pc[ctx->delta_flag]*8, 0);
+				ctx->blocks[blknum]->similarity_hash = cur_sketch;
 			} else {
-				if (j == 0) j = 1;
 				cur_sketch =
-				    XXH32((const uchar_t *)fplist, (j*4)/2, 0);
+				    XXH32((const uchar_t *)(buf1+last_offset), length, 0);
+				ctx->blocks[blknum]->similarity_hash = cur_sketch;
 			}
-			ctx->blocks[blknum]->similarity_hash = cur_sketch;
 		}
 		blknum++;
 		last_offset = *size;

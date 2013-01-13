@@ -1,6 +1,6 @@
 #ifndef __HEAPQ_H_
 
-#define __TYPE int32_t
+#define __TYPE int64_t
 
 typedef struct {
     __TYPE *ary;

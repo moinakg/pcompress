@@ -134,11 +134,12 @@ static void split(bsize_t *I,bsize_t *V,bsize_t start,bsize_t len,bsize_t h)
 
 static void qsufsort(bsize_t *I,bsize_t *V,u_char *oldbuf,bsize_t oldsize)
 {
-	bsize_t buckets[256];
+	bsize_t buckets[257];
+	bsize_t *bkts;
 	bsize_t i,h,len;
 
 #ifdef __USE_SSE_INTRIN__
-	if (((bsize_t)buckets & (16 - 1)) == 0) { // 16-byte aligned ?
+	if (((size_t)buckets & (16 - 1)) == 0) { // 16-byte aligned ?
 		int iters;
 		uchar_t *pos;
 
@@ -159,9 +160,18 @@ static void qsufsort(bsize_t *I,bsize_t *V,u_char *oldbuf,bsize_t oldsize)
 #ifdef __USE_SSE_INTRIN__
 	}
 #endif
-	for(i=0;i<oldsize;i++) buckets[oldbuf[i]]++;
-	for(i=1;i<256;i++) buckets[i]+=buckets[i-1];
-	for(i=255;i>0;i--) buckets[i]=buckets[i-1];
+	/* We want to do this:
+	 * for(i=0;i<oldsize;i++) buckets[oldbuf[i]]++;
+	 * for(i=1;i<256;i++) buckets[i]+=buckets[i-1];
+	 * for(i=255;i>0;i--) buckets[i]=buckets[i-1];
+	 * buckets[0]=0;
+	 * 
+	 * However the code below uses an array larger by 1 element and is able to
+	 * avoid the 3rd loop.
+	 */
+	bkts = &buckets[1];
+	for(i=0;i<oldsize;i++) bkts[oldbuf[i]]++;
+	for(i=1;i<256;i++) bkts[i]+=bkts[i-1];
 	buckets[0]=0;
 
 	for(i=0;i<oldsize;i++) I[++buckets[oldbuf[i]]]=i;
@@ -311,9 +321,8 @@ bsdiff(u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t newsize,
 					0,oldsize,&pos);
 
 			for(;scsc<scan+len;scsc++)
-			if((scsc+lastoffset<oldsize) &&
-				(oldbuf[scsc+lastoffset] == newbuf[scsc]))
-				oldscore++;
+				oldscore += ((scsc+lastoffset<oldsize) &&
+					(oldbuf[scsc+lastoffset] == newbuf[scsc]));
 
 			if(((len==oldscore) && (len!=0)) || 
 				(len>oldscore+sz)) break;
@@ -326,7 +335,7 @@ bsdiff(u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t newsize,
 		if((len!=oldscore) || (scan==newsize)) {
 			s=0;Sf=0;lenf=0;
 			for(i=0;(lastscan+i<scan)&&(lastpos+i<oldsize);) {
-				if(oldbuf[lastpos+i]==newbuf[lastscan+i]) s++;
+				s += (oldbuf[lastpos+i]==newbuf[lastscan+i]);
 				i++;
 				if(s*2-i>Sf*2-lenf) { Sf=s; lenf=i; };
 			};
@@ -335,7 +344,7 @@ bsdiff(u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t newsize,
 			if(scan<newsize) {
 				s=0;Sb=0;
 				for(i=1;(scan>=lastscan+i)&&(pos>=i);i++) {
-					if(oldbuf[pos-i]==newbuf[scan-i]) s++;
+					s += (oldbuf[pos-i]==newbuf[scan-i]);
 					if(s*2-i>Sb*2-lenb) { Sb=s; lenb=i; };
 				};
 			};
@@ -344,10 +353,9 @@ bsdiff(u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t newsize,
 				overlap=(lastscan+lenf)-(scan-lenb);
 				s=0;Ss=0;lens=0;
 				for(i=0;i<overlap;i++) {
-					if(newbuf[lastscan+lenf-overlap+i]==
-					   oldbuf[lastpos+lenf-overlap+i]) s++;
-					if(newbuf[scan-lenb+i]==
-					   oldbuf[pos-lenb+i]) s--;
+					s += (newbuf[lastscan+lenf-overlap+i]==
+					   oldbuf[lastpos+lenf-overlap+i]);
+					s -= (newbuf[scan-lenb+i]==oldbuf[pos-lenb+i]);
 					if(s>Ss) { Ss=s; lens=i+1; };
 				};
 

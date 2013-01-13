@@ -24,6 +24,7 @@
 
 #include <utils.h>
 #include <stdio.h>
+#include <string.h>
 
 #define ZERO_MASK (32768)
 #define DATA_MASK (32767)
@@ -33,15 +34,25 @@ int
 zero_rle_encode(const void *ibuf, const unsigned int ilen,
 	void *obuf, unsigned int *olen)
 {
-	unsigned int pos1, pos2;
+	unsigned int pos1, pos2, sz;
 	unsigned short count;
 	const uchar_t *ib = (const uchar_t *)ibuf;
 	uchar_t *ob = (uchar_t *)obuf;
+	uint64_t val;
 
+	sz = sizeof (val) - 1;
 	pos2 = 0;
 	for (pos1=0; pos1<ilen && pos2<*olen;) {
 		count = 0;
 		if (ib[pos1] == 0) {
+			/*
+			 * We have a run of zeroes. Count them and store only the count.
+			 */
+			while (pos1 < (ilen - sz) && count < (COUNT_MAX - sz)) {
+				val = *((uint64_t *)(ib+pos1));
+				if (val) break;
+				pos1 += sizeof (val); count += sizeof (val);
+			}
 			for (;pos1<ilen && ib[pos1]==0 && count<COUNT_MAX; pos1++) count++;
 			count |= ZERO_MASK;
 			*((unsigned short *)(ob + pos2)) = htons(count);
@@ -93,11 +104,24 @@ zero_rle_decode(const void* ibuf, unsigned int ilen,
 		pos1 += 2;
 		if (count & ZERO_MASK) {
 			count &= DATA_MASK;
-			for (i=0; i<count && pos2<*olen; i++)
-				ob[pos2++] = 0;
+			if (pos2 + count > *olen) {
+				fprintf(stderr, "Output buffer overflow in Zero RLE decode.\n");
+				return (-1);
+			}
+			memset(ob+pos2, 0, count);
+			pos2 += count;
 		} else {
-			for (i=0; i<count && pos1<ilen && pos2<*olen; i++)
-				ob[pos2++] = ib[pos1++];
+			if (pos1 + count > ilen) {
+				fprintf(stderr, "Input underflow in Zero RLE decode.\n");
+				return (-1);
+			}
+			if (pos2 + count > *olen) {
+				fprintf(stderr, "Output buffer overflow in Zero RLE decode.\n");
+				return (-1);
+			}
+			memcpy(ob+pos2, ib+pos1, count);
+			pos2 += count;
+			pos1 += count;
 		}
 	}
 	i = *olen;
