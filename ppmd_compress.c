@@ -64,6 +64,7 @@ ppmd_stats(int show)
 void
 ppmd_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->delta2_span = 100;
+	data->deltac_min_distance = FOURM;
 }
 
 int

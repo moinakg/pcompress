@@ -116,7 +116,8 @@ dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta
  */
 dedupe_context_t *
 create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz,
-    const char *algo, int delta_flag, int fixed_flag, int file_version, compress_op_t op) {
+    const char *algo, const algo_props_t *props, int delta_flag, int fixed_flag,
+    int file_version, compress_op_t op) {
 	dedupe_context_t *ctx;
 	uint32_t i;
 
@@ -189,6 +190,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx->rabin_avg_block_mask = RAB_BLK_MASK;
 	ctx->rabin_poly_min_block_size = dedupe_min_blksz(rab_blk_sz);
 	ctx->delta_flag = 0;
+	ctx->deltac_min_distance = props->deltac_min_distance;
 
 	/*
 	 * Scale down similarity percentage based on avg block size unless user specified
@@ -582,12 +584,20 @@ process_blocks:
 					while (1) {
 						if (be->similarity_hash == ctx->blocks[i]->similarity_hash &&
 						    be->length == ctx->blocks[i]->length) {
-							ctx->blocks[i]->similar = SIMILAR_PARTIAL;
-							ctx->blocks[i]->other = be;
-							be->similar = SIMILAR_REF;
-							matchlen += (be->length>>1);
-							length = 1;
-							break;
+							uint64_t off_diff;
+							if (be->offset > ctx->blocks[i]->offset)
+								off_diff = be->offset - ctx->blocks[i]->offset;
+							else
+								off_diff = ctx->blocks[i]->offset - be->offset;
+
+							if (off_diff > ctx->deltac_min_distance) {
+								ctx->blocks[i]->similar = SIMILAR_PARTIAL;
+								ctx->blocks[i]->other = be;
+								be->similar = SIMILAR_REF;
+								matchlen += (be->length>>1);
+								length = 1;
+								break;
+							}
 						}
 						if (be->next)
 							be = be->next;

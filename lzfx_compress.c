@@ -42,6 +42,7 @@ lz_fx_stats(int show)
 void
 lz_fx_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->delta2_span = 50;
+	data->deltac_min_distance = FOURM;
 }
 
 int

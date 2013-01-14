@@ -99,6 +99,7 @@ void
 adapt_props(algo_props_t *data, int level, uint64_t chunksize)
 {
 	data->delta2_span = 200;
+	data->deltac_min_distance = EIGHTM;
 }
 
 int

@@ -57,6 +57,7 @@ lz4_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->decompress_mt_capable = 0;
 	data->buf_extra = lz4_buf_extra(chunksize);
 	data->delta2_span = 100;
+	data->deltac_min_distance = FOURM;
 }
 
 int

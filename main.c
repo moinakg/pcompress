@@ -951,7 +951,7 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 		if (enable_rabin_scan || enable_fixed_scan) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
-			    algo, enable_delta_encode, enable_fixed_scan, version, DECOMPRESS);
+			    algo, &props, enable_delta_encode, enable_fixed_scan, version, DECOMPRESS);
 			if (tdat->rctx == NULL) {
 				UNCOMP_BAIL;
 			}
@@ -1673,7 +1673,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		}
 		if (enable_rabin_scan || enable_fixed_scan) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
-			    algo, enable_delta_encode, enable_fixed_scan, VERSION, COMPRESS);
+			    algo, &props, enable_delta_encode, enable_fixed_scan, VERSION, COMPRESS);
 			if (tdat->rctx == NULL) {
 				COMP_BAIL;
 			}
@@ -1789,7 +1789,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 * Read the first chunk into a spare buffer (a simple double-buffering).
 	 */
 	if (enable_rabin_split) {
-		rctx = create_dedupe_context(chunksize, 0, 0, algo, enable_delta_encode,
+		rctx = create_dedupe_context(chunksize, 0, 0, algo, &props, enable_delta_encode,
 		    enable_fixed_scan, VERSION, COMPRESS);
 		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 	} else {

@@ -159,12 +159,12 @@ typedef struct {
 	uint64_t real_chunksize;
 	short valid;
 	void *lzma_data;
-	int level, delta_flag, fixed_flag;
+	int level, delta_flag, fixed_flag, deltac_min_distance;
 } dedupe_context_t;
 
 extern dedupe_context_t *create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, 
-	int rab_blk_sz, const char *algo, int delta_flag, int fixed_flag, int file_version,
-	compress_op_t op);
+	int rab_blk_sz, const char *algo, const algo_props_t *props, int delta_flag, int fixed_flag,
+	int file_version, compress_op_t op);
 extern void destroy_dedupe_context(dedupe_context_t *ctx);
 extern unsigned int dedupe_compress(dedupe_context_t *ctx, unsigned char *buf, 
 	uint64_t *size, uint64_t offset, uint64_t *rabin_pos);

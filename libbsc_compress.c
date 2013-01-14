@@ -80,6 +80,10 @@ libbsc_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->c_max_threads = 8;
 	data->d_max_threads = 8;
 	data->delta2_span = 150;
+	if (chunksize > (EIGHTM * 2)) 
+		data->deltac_min_distance = FOURM;
+	else
+		data->deltac_min_distance = EIGHTM;
 }
 
 int

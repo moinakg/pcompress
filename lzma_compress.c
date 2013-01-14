@@ -53,6 +53,10 @@ lzma_mt_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->buf_extra = 0;
 	data->c_max_threads = 2;
 	data->delta2_span = 150;
+	if (level < 12)
+		data->deltac_min_distance = (EIGHTM * 16);
+	else
+		data->deltac_min_distance = (EIGHTM * 32);
 }
 
 void
@@ -61,6 +65,10 @@ lzma_props(algo_props_t *data, int level, uint64_t chunksize) {
 	data->decompress_mt_capable = 0;
 	data->buf_extra = 0;
 	data->delta2_span = 150;
+	if (level < 12)
+		data->deltac_min_distance = (EIGHTM * 16);
+	else
+		data->deltac_min_distance = (EIGHTM * 32);
 }
 
 /*

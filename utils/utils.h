@@ -42,6 +42,8 @@ extern "C" {
 
 #define	DATA_TEXT	1
 #define	DATA_BINARY	2
+#define	EIGHTM		(8UL * 1024UL * 1024UL)
+#define	FOURM		(4UL * 1024UL * 1024UL)
 
 #if !defined(sun) && !defined(__sun)
 #define uchar_t u_char
@@ -127,6 +129,7 @@ typedef struct {
 	int c_max_threads;
 	int d_max_threads;
 	int delta2_span;
+	int deltac_min_distance;
 } algo_props_t;
 
 typedef enum {
