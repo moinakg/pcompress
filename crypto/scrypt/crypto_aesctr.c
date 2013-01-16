@@ -29,10 +29,11 @@
 
 #include <stdint.h>
 #include <stdlib.h>
-
 #include <openssl/aes.h>
-
-#include "sysendian.h"
+#ifdef __USE_SSE_INTRIN__
+#include <emmintrin.h>
+#endif
+#include <utils.h>
 
 #include "crypto_aesctr.h"
 
@@ -40,7 +41,7 @@ struct crypto_aesctr {
 	AES_KEY * key;
 	uint64_t nonce;
 	uint64_t bytectr;
-	uint8_t buf[16];
+	uint8_t buf[16] __attribute__((aligned(16)));
 };
 
 /**
@@ -83,17 +84,25 @@ crypto_aesctr_stream(struct crypto_aesctr * stream, const uint8_t * inbuf,
 {
 	uint8_t pblk[16];
 	size_t pos;
-	int bytemod;
+	int bytemod, last;
 
-	for (pos = 0; pos < buflen; pos++) {
+	last = 0;
+	pos = 0;
+	*((uint64_t *)pblk) = htonll(stream->nonce);
+
+do_last:
+	for (; pos < buflen; pos++) {
 		/* How far through the buffer are we? */
-		bytemod = stream->bytectr % 16;
+		bytemod = stream->bytectr & (16 - 1);
 
 		/* Generate a block of cipherstream if needed. */
 		if (bytemod == 0) {
-			be64enc(pblk, stream->nonce);
-			be64enc(pblk + 8, stream->bytectr / 16);
+			*((uint64_t *)(pblk + 8)) = htonll(stream->bytectr / 16);
 			AES_encrypt(pblk, stream->buf, stream->key);
+#ifdef __USE_SSE_INTRIN__
+			if (!last)
+				break;
+#endif
 		}
 
 		/* Encrypt a byte. */
@@ -102,6 +111,24 @@ crypto_aesctr_stream(struct crypto_aesctr * stream, const uint8_t * inbuf,
 		/* Move to the next byte of cipherstream. */
 		stream->bytectr += 1;
 	}
+#ifdef __USE_SSE_INTRIN__
+	if (last) return;
+	for (; pos < buflen-15; pos += 16) {
+		__m128i cblk, dat, odat;
+
+		__builtin_prefetch(outbuf+pos, 1, 0);
+		__builtin_prefetch(inbuf+pos, 0, 0);
+		cblk = _mm_load_si128((__m128i *)(stream->buf));
+		dat = _mm_loadu_si128((__m128i *)(inbuf+pos));
+		odat = _mm_xor_si128(cblk, dat);
+		_mm_storeu_si128((__m128i *)(outbuf+pos), odat);
+		stream->bytectr += 16;
+		*((uint64_t *)(pblk + 8)) = htonll(stream->bytectr / 16);
+		AES_encrypt(pblk, stream->buf, stream->key);
+	}
+	last = 1;
+	goto do_last;
+#endif
 }
 
 /**

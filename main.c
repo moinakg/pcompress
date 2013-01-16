@@ -378,7 +378,9 @@ redo:
 	 */
 	if (encrypt_type) {
 		unsigned int len;
+		DEBUG_STAT_EN(double strt, en);
 
+		DEBUG_STAT_EN(strt = get_wtime_millis());
 		len = mac_bytes;
 		deserialize_checksum(checksum, tdat->compressed_chunk + cksum_bytes, mac_bytes);
 		memset(tdat->compressed_chunk + cksum_bytes, 0, mac_bytes);
@@ -402,11 +404,15 @@ redo:
 			sem_post(&tdat->cmp_done_sem);
 			return (NULL);
 		}
+		DEBUG_STAT_EN(en = get_wtime_millis());
+		DEBUG_STAT_EN(fprintf(stderr, "HMAC Verification speed %.3f MB/s\n",
+			      get_mb_s(tdat->rbytes + sizeof (tdat->len_cmp_be), strt, en)));
 
 		/*
 		 * Encryption algorithm should not change the size and
 		 * encryption is in-place.
 		 */
+		DEBUG_STAT_EN(strt = get_wtime_millis());
 		rv = crypto_buf(&crypto_ctx, cseg, cseg, tdat->len_cmp, tdat->id);
 		if (rv == -1) {
 			/*
@@ -417,6 +423,9 @@ redo:
 			sem_post(&tdat->cmp_done_sem);
 			return (NULL);
 		}
+		DEBUG_STAT_EN(en = get_wtime_millis());
+		DEBUG_STAT_EN(fprintf(stderr, "Decryption speed %.3f MB/s\n",
+			      get_mb_s(tdat->len_cmp, strt, en)));
 	} else if (mac_bytes > 0) {
 		/*
 		 * Verify header CRC32 in non-crypto mode.
@@ -1301,11 +1310,13 @@ plain_index:
 	 */
 	if (encrypt_type) {
 		int ret;
+		DEBUG_STAT_EN(double strt, en);
 
 		/*
 		 * Encryption algorithm must not change the size and
 		 * encryption is in-place.
 		 */
+		DEBUG_STAT_EN(strt = get_wtime_millis());
 		ret = crypto_buf(&crypto_ctx, compressed_chunk, compressed_chunk,
 			tdat->len_cmp, tdat->id);
 		if (ret == -1) {
@@ -1318,6 +1329,9 @@ plain_index:
 			sem_post(&tdat->cmp_done_sem);
 			return (0);
 		}
+		DEBUG_STAT_EN(en = get_wtime_millis());
+		DEBUG_STAT_EN(fprintf(stderr, "Encryption speed %.3f MB/s\n",
+			      get_mb_s(tdat->len_cmp, strt, en)));
 	}
 
 	if ((enable_rabin_scan || enable_fixed_scan) && tdat->rctx->valid) {
@@ -1364,14 +1378,19 @@ plain_index:
 		uchar_t *mac_ptr;
 		unsigned int hlen;
 		uchar_t chash[mac_bytes];
+		DEBUG_STAT_EN(double strt, en);
 
 		/* Clean out mac_bytes to 0 for stable HMAC. */
+		DEBUG_STAT_EN(strt = get_wtime_millis());
 		mac_ptr = tdat->cmp_seg + sizeof (tdat->len_cmp) + cksum_bytes;
 		memset(mac_ptr, 0, mac_bytes);
 		hmac_reinit(&tdat->chunk_hmac);
 		hmac_update(&tdat->chunk_hmac, tdat->cmp_seg, tdat->len_cmp);
 		hmac_final(&tdat->chunk_hmac, chash, &hlen);
 		serialize_checksum(chash, mac_ptr, hlen);
+		DEBUG_STAT_EN(en = get_wtime_millis());
+		DEBUG_STAT_EN(fprintf(stderr, "HMAC Computation speed %.3f MB/s\n",
+			      get_mb_s(tdat->len_cmp, strt, en)));
 	} else {
 		/*
 		 * Compute header CRC32 in non-crypto mode.
@@ -2142,7 +2161,7 @@ main(int argc, char *argv[])
 			do_compress = 1;
 			algo = optarg;
 			if (init_algo(algo, 1) != 0) {
-				err_exit(1, "Invalid algorithm %s\n", optarg);
+				err_exit(0, "Invalid algorithm %s\n", optarg);
 			}
 			break;
 
