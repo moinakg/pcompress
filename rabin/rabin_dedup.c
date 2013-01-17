@@ -214,7 +214,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		ctx->blknum = chunksize / ctx->rabin_poly_avg_block_size;
 
 	if (chunksize % ctx->rabin_poly_min_block_size)
-		ctx->blknum++;
+		++(ctx->blknum);
 
 	if (ctx->blknum > RABIN_MAX_BLOCKS) {
 		fprintf(stderr, "Chunk size too large for dedup.\n");
@@ -313,7 +313,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		blknum = *size / ctx->rabin_poly_avg_block_size;
 		j = *size % ctx->rabin_poly_avg_block_size;
 		if (j)
-			blknum++;
+			++blknum;
 		else
 			j = ctx->rabin_poly_avg_block_size;
 
@@ -369,7 +369,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
 
 			ctx->window_pos = (ctx->window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
-			length++;
+			++length;
 			if (length < ctx->rabin_poly_min_block_size) continue;
 
 			// If we hit our special value update block offset
@@ -404,7 +404,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		 * to be power of 2
 		 */
 		ctx->window_pos = (ctx->window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
-		length++;
+		++length;
 		if (length < ctx->rabin_poly_min_block_size) continue;
 
 		// If we hit our special value or reached the max block size update block offset
@@ -416,7 +416,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			ctx->blocks[blknum]->offset = last_offset;
 			ctx->blocks[blknum]->index = blknum; // Need to store for sorting
 			ctx->blocks[blknum]->length = length;
-			DEBUG_STAT_EN(if (length >= ctx->rabin_poly_max_block_size) max_count++);
+			DEBUG_STAT_EN(if (length >= ctx->rabin_poly_max_block_size) ++max_count);
 
 			/*
 			 * Reset the heap structure and find the K min values if Delta Compression
@@ -443,7 +443,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 				ctx->blocks[blknum]->similarity_hash =
 					XXH32((const uchar_t *)ctx_heap,  pc[ctx->delta_flag]*8, 0);
 			}
-			blknum++;
+			++blknum;
 			last_offset = i+1;
 			length = 0;
 			j = 0;
@@ -482,7 +482,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 				ctx->blocks[blknum]->similarity_hash = cur_sketch;
 			}
 		}
-		blknum++;
+		++blknum;
 		last_offset = *size;
 	}
 
@@ -614,7 +614,7 @@ process_blocks:
 					ctx->blocks[i]->next = 0;
 					ctx->blocks[i]->similar = 0;
 					be->next = ctx->blocks[i];
-					DEBUG_STAT_EN(hash_collisions++);
+					DEBUG_STAT_EN(++hash_collisions);
 				}
 			}
 		}
@@ -641,19 +641,19 @@ process_blocks:
 		for (i=0; i<blknum;) {
 			dedupe_index[pos] = i;
 			ctx->blocks[i]->index = pos;
-			pos++;
+			++pos;
 			length = 0;
 			j = i;
 			if (ctx->blocks[i]->similar == 0) {
 				while (i< blknum && ctx->blocks[i]->similar == 0 &&
 				   length < RABIN_MAX_BLOCK_SIZE) {
 					length += ctx->blocks[i]->length;
-					i++;
-					DEBUG_STAT_EN(merge_count++);
+					++i;
+					DEBUG_STAT_EN(++merge_count);
 				}
 				ctx->blocks[j]->length = length;
 			} else {
-				i++;
+				++i;
 			}
 		}
 		DEBUG_STAT_EN(fprintf(stderr, "Merge count: %u\n", merge_count));
@@ -684,12 +684,12 @@ process_blocks:
 					 */
 					oldbuf = buf1 + be->other->offset;
 					newbuf = buf1 + be->offset;
-					DEBUG_STAT_EN(delta_calls++);
+					DEBUG_STAT_EN(++delta_calls);
 
 					bsz = bsdiff(oldbuf, be->other->length, newbuf, be->length,
 					    ctx->cbuf + pos1, buf1 + *size, matchlen);
 					if (bsz == 0) {
-						DEBUG_STAT_EN(delta_fails++);
+						DEBUG_STAT_EN(++delta_fails);
 						memcpy(ctx->cbuf + pos1, newbuf, be->length);
 						dedupe_index[i] = htonl(be->length);
 						pos1 += be->length;
