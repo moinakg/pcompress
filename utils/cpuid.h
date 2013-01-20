@@ -26,6 +26,8 @@
 #ifndef __CPUID_H__
 #define __CPUID_H__
 
+#include "utils.h"
+
 #ifdef	__x86_64__
 #define VENDOR_STR_MAX          16
 #define BRAND_STR_MAX           64

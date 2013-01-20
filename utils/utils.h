@@ -146,6 +146,7 @@ typedef enum {
 
 typedef struct {
 	int sse_level;
+	int sse_sub_level;
 	int avx_level;
 	proc_type_t proc_type;
 } processor_info_t;

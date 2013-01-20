@@ -29,6 +29,10 @@
 #include "cpuid.h"
 
 #ifdef	__x86_64__
+
+#define SSE4_1_FLAG     0x080000
+#define SSE4_2_FLAG     0x100000
+
 void
 exec_cpuid(uint32_t *regs)
 {
@@ -107,6 +111,7 @@ cpuid_basic_identify(processor_info_t *pc)
 	raw.vendor_str[12] = 0;
 	pc->avx_level = 0;
 	pc->sse_level = 0;
+	pc->sse_sub_level = 0;
 
 	if (strcmp(raw.vendor_str, "GenuineIntel") == 0) {
 		pc->proc_type = PROC_X64_INTEL;
@@ -119,8 +124,12 @@ cpuid_basic_identify(processor_info_t *pc)
 	if (raw.basic_cpuid[0][0] >= 1) {
 		// ECX has SSE 4.2 and AVX flags
 		// Bit 20 is SSE 4.2 and bit 28 indicates AVX
-		if (raw.basic_cpuid[1][2] & (1 << 20)) {
+		if (raw.basic_cpuid[1][2] & SSE4_1_FLAG) {
 			pc->sse_level = 4;
+			pc->sse_sub_level = 1;
+			if (raw.basic_cpuid[1][2] & SSE4_2_FLAG) {
+				pc->sse_sub_level = 2;
+			}
 		} else {
 			pc->sse_level = 3;
 		}

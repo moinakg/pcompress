@@ -50,9 +50,11 @@ yasm=yasm
 keccak_srcs=
 keccak_hdrs=
 keccak_srcs_asm=
-m64_flag=
+extra_opt_flags=
 zlib_prefix=
 bzlib_prefix=
+sse_detect=1
+default_sse="-msse2"
 
 rm -rf ./buildtmp
 mkdir ./buildtmp
@@ -98,7 +100,7 @@ then
 
 	# If m64 compilation succeeds we assume platform to be 64-bit capable but
 	# explicit flag is reqd.
-	m64_flag="-m64"
+	extra_opt_flags="-m64"
 fi
 rm -f tst tst.c
 
@@ -137,6 +139,9 @@ do
 	;;
 	--use-key256)
 		keylen='-DKEYLEN=32'
+	;;
+	--no-sse-check)
+		sse_detect=0
 	;;
 	--help) usage $0;;
 	*)
@@ -182,6 +187,33 @@ then
 	echo ""
 	exit 1
 fi
+
+# SSE Detection
+if [ $sse_detect -eq 1 ]
+then
+	gcc -o sse_level ./utils/sse_level.c ./utils/cpuid.c -I./utils
+	if [ $? -ne 0 ]
+	then
+		echo "ERROR:"
+		echo "Failed to build SSE detection utility."
+		echo ""
+		exit 1
+	fi
+	sse_ver=`./sse_level`
+	if [ $? -ne 0 ]
+	then
+		rm -f sse_level
+		echo "ERROR:"
+		echo "SSE version detection utility. Try configuring with --no-sse-check option."
+		echo ""
+		exit 1
+	fi
+	rm -f sse_level
+	extra_opt_flags="${extra_opt_flags} -msse${sse_ver}"
+else
+	extra_opt_flags="${extra_opt_flags} ${default_sse}"
+fi
+
 
 echo $plat | egrep 'x86_64|amd64' > /dev/null
 if [ $? -eq 0 ]
@@ -299,7 +331,7 @@ main(void)
 }
 __EOF
 
-gcc ${m64_flag} -I${openssl_incdir} -L${openssl_libdir} tst.c -o tst
+gcc ${extra_opt_flags} -I${openssl_incdir} -L${openssl_libdir} tst.c -o tst
 if [ $? -ne 0 ]
 then
 	echo "Unable to compile OpenSSL test program please check OpenSSL installation."
@@ -335,7 +367,7 @@ main(void)
 }
 __EOF
 
-gcc ${m64_flag} -I${openssl_incdir} -L${openssl_libdir} -O0 -g tst.c -o tst -lcrypto >/dev/null 2>&1
+gcc ${extra_opt_flags} -I${openssl_incdir} -L${openssl_libdir} -O0 -g tst.c -o tst -lcrypto >/dev/null 2>&1
 if [ $? -ne 0 ]
 then
 	openssl_incdir="${openssl_incdir} -D__OSSL_OLD__"
@@ -465,7 +497,7 @@ sha256asmobjsvar="SHA256ASM_OBJS"
 sha256objsvar="SHA256_OBJS"
 yasmvar="YASM"
 fptr_flag_var="FPTR_FLAG"
-m64_flag_var="M64_FLAG"
+extra_opt_flags_var="EXTRA_OPT_FLAGS"
 
 openssllibdirvar="OPENSSL_LIBDIR"
 opensslincdirvar="OPENSSL_INCDIR"
@@ -517,6 +549,6 @@ s#@${keccak_srcs_var}@#${keccak_srcs}#g
 s#@${keccak_hdrs_var}@#${keccak_hdrs}#g
 s#@${keccak_srcs_var}@#${keccak_srcs}#g
 s#@${keccak_srcs_asm_var}@#${keccak_srcs_asm}#g
-s#@${m64_flag_var}@#${m64_flag}#g
+s#@${extra_opt_flags_var}@#${extra_opt_flags}#g
 " > Makefile
 
