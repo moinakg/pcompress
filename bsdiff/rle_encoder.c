@@ -53,7 +53,7 @@ zero_rle_encode(const void *ibuf, const unsigned int ilen,
 				if (val) break;
 				pos1 += sizeof (val); count += sizeof (val);
 			}
-			for (;pos1<ilen && ib[pos1]==0 && count<COUNT_MAX; pos1++) count++;
+			for (;pos1<ilen && ib[pos1]==0 && count<COUNT_MAX; pos1++) ++count;
 			count |= ZERO_MASK;
 			*((unsigned short *)(ob + pos2)) = htons(count);
 			pos2 += 2;
@@ -75,7 +75,7 @@ zero_rle_encode(const void *ibuf, const unsigned int ilen,
 					}
 				}
 				ob[pos2++] = ib[pos1++];
-				count++;
+				++count;
 			}
 			*((unsigned short *)(ob + pos3)) = htons(count);
 		}

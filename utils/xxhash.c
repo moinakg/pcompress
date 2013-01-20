@@ -109,7 +109,15 @@ static inline unsigned int XXH_swap32 (unsigned int x) {
                  }
 #endif
 
-
+#if defined(__USE_SSE_INTRIN__) && defined(__SSE4_1__)
+#include <smmintrin.h>
+static inline __m128i _x_mm_rotl_epi32(const __m128i a, int bits)
+{
+	__m128i tmp1 = _mm_slli_epi32(a, bits);
+	__m128i tmp2 = _mm_srli_epi32(a, 32 - bits);
+	return (_mm_or_si128(tmp1, tmp2));
+}
+#endif
 
 //**************************************
 // Constants
@@ -146,7 +154,84 @@ unsigned int XXH32(const void* input, int len, unsigned int seed)
 	const unsigned char* const bEnd = p + len;
 	unsigned int h32;
 
-	if (len>=16)
+	if (len>=256)
+	{
+		const unsigned char* const limit = bEnd - 32;
+		unsigned int v1 = seed + PRIME32_1 + PRIME32_2;
+		unsigned int v2 = seed + PRIME32_2;
+		unsigned int v3 = seed + 0;
+		unsigned int v4 = seed - PRIME32_1;
+#if defined(__USE_SSE_INTRIN__) && defined(__SSE4_1__)
+		unsigned int vx[4], vx1[4];
+
+		__m128i accum = _mm_set_epi32(v4, v3, v2, v1);
+		__m128i accum1 = _mm_set_epi32(v4, v3, v2, v1);
+		__m128i prime1 = _mm_set1_epi32(PRIME32_1);
+		__m128i prime2 = _mm_set1_epi32(PRIME32_2);
+
+		/*
+		 * 4-way SIMD calculations with 4 ints in two blocks for 2 accumulators will
+		 * interleave to some extent on a hyperthreaded processor providing 10% - 14%
+		 * speedup over original xxhash depending on processor. We could have used
+		 * aligned loads but we actually want the unaligned penalty. It helps to
+		 * interleave better for a slight benefit over aligned loads here!
+		 */
+		do {
+			__m128i mem = _mm_loadu_si128((__m128i *)p);
+			p += 16;
+			mem = _mm_mullo_epi32(mem, prime2);
+			accum = _mm_add_epi32(accum, mem);
+			accum = _x_mm_rotl_epi32(accum, 13);
+			accum = _mm_mullo_epi32(accum, prime1);
+
+			mem = _mm_loadu_si128((__m128i *)p);
+			p += 16;
+			mem = _mm_mullo_epi32(mem, prime2);
+			accum1 = _mm_add_epi32(accum1, mem);
+			accum1 = _x_mm_rotl_epi32(accum1, 13);
+			accum1 = _mm_mullo_epi32(accum1, prime1);
+		} while (p<=limit);
+
+		_mm_storeu_si128((__m128i *)vx, accum);
+		_mm_storeu_si128((__m128i *)vx1, accum1);
+
+		/*
+		 * Combine the two accumulators into a single hash value.
+		 */
+		v1 = vx[0];
+		v2 = vx[1];
+		v3 = vx[2];
+		v4 = vx[3];
+		v1 += vx1[0] * PRIME32_2; v1 = XXH_rotl32(v1, 13); v1 *= PRIME32_1;
+		v2 += vx1[1] * PRIME32_2; v2 = XXH_rotl32(v2, 13); v2 *= PRIME32_1;
+		v3 += vx1[2] * PRIME32_2; v3 = XXH_rotl32(v3, 13); v3 *= PRIME32_1;
+		v4 += vx1[3] * PRIME32_2; v4 = XXH_rotl32(v4, 13); v4 *= PRIME32_1;
+		h32 = XXH_rotl32(v1, 1) + XXH_rotl32(v2, 7) + XXH_rotl32(v3, 12) + XXH_rotl32(v4, 18);
+#else
+		unsigned int vx1 = seed + PRIME32_1 + PRIME32_2;
+		unsigned int vx2 = seed + PRIME32_2;
+		unsigned int vx3 = seed + 0;
+		unsigned int vx4 = seed - PRIME32_1;
+
+		do
+		{
+			v1 += XXH_LE32(p) * PRIME32_2; v1 = XXH_rotl32(v1, 13); v1 *= PRIME32_1; p+=4;
+			v2 += XXH_LE32(p) * PRIME32_2; v2 = XXH_rotl32(v2, 13); v2 *= PRIME32_1; p+=4;
+			v3 += XXH_LE32(p) * PRIME32_2; v3 = XXH_rotl32(v3, 13); v3 *= PRIME32_1; p+=4;
+			v4 += XXH_LE32(p) * PRIME32_2; v4 = XXH_rotl32(v4, 13); v4 *= PRIME32_1; p+=4;
+
+			vx1 += XXH_LE32(p) * PRIME32_2; vx1 = XXH_rotl32(vx1, 13); vx1 *= PRIME32_1; p+=4;
+			vx2 += XXH_LE32(p) * PRIME32_2; vx2 = XXH_rotl32(vx2, 13); vx2 *= PRIME32_1; p+=4;
+			vx3 += XXH_LE32(p) * PRIME32_2; vx3 = XXH_rotl32(vx3, 13); vx3 *= PRIME32_1; p+=4;
+			vx4 += XXH_LE32(p) * PRIME32_2; vx4 = XXH_rotl32(vx4, 13); vx4 *= PRIME32_1; p+=4;
+		} while (p<=limit) ;
+		v1 += vx1 * PRIME32_2; v1 = XXH_rotl32(v1, 13); v1 *= PRIME32_1;
+		v2 += vx2 * PRIME32_2; v2 = XXH_rotl32(v2, 13); v2 *= PRIME32_1;
+		v3 += vx3 * PRIME32_2; v3 = XXH_rotl32(v3, 13); v3 *= PRIME32_1;
+		v4 += vx4 * PRIME32_2; v4 = XXH_rotl32(v4, 13); v4 *= PRIME32_1;
+		h32 = XXH_rotl32(v1, 1) + XXH_rotl32(v2, 7) + XXH_rotl32(v3, 12) + XXH_rotl32(v4, 18);
+#endif
+	} else if (len>=16)
 	{
 		const unsigned char* const limit = bEnd - 16;
 		unsigned int v1 = seed + PRIME32_1 + PRIME32_2;
@@ -161,7 +246,6 @@ unsigned int XXH32(const void* input, int len, unsigned int seed)
 			v3 += XXH_LE32(p) * PRIME32_2; v3 = XXH_rotl32(v3, 13); v3 *= PRIME32_1; p+=4;
 			v4 += XXH_LE32(p) * PRIME32_2; v4 = XXH_rotl32(v4, 13); v4 *= PRIME32_1; p+=4;
 		} while (p<=limit) ;
-
 		h32 = XXH_rotl32(v1, 1) + XXH_rotl32(v2, 7) + XXH_rotl32(v3, 12) + XXH_rotl32(v4, 18);
 	}
 	else

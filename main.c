@@ -277,8 +277,8 @@ preproc_decompress(compress_func_ptr dec_func, void *src, uint64_t srclen, void 
 	DEBUG_STAT_EN(double strt, en);
 
 	type = *sorc;
-	sorc++;
-	srclen--;
+	++sorc;
+	--srclen;
 	if (type & PREPROC_COMPRESSED) {
 		*dstlen = ntohll(*((uint64_t *)(sorc)));
 		sorc += 8;
@@ -1093,7 +1093,7 @@ start_decompress(const char *filename, const char *to_filename)
 				}
 			}
 			sem_post(&tdat->start_sem);
-			chunk_num++;
+			++chunk_num;
 		}
 	}
 
@@ -1903,7 +1903,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			}
 			/* Signal the compression thread to start */
 			sem_post(&tdat->start_sem);
-			chunk_num++;
+			++chunk_num;
 
 			if (single_chunk) {
 				rbytes = 0;

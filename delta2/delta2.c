@@ -418,7 +418,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 			pos2 += sizeof (uint64_t);
 			for (cnt = 0; cnt < val; cnt++) {
 				*pos2 = *pos;
-				pos2++; pos++;
+				++pos2; ++pos;
 			}
 			DEBUG_STAT_EN(*hdr_ovr += LIT_HDR);
 		}

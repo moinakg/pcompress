@@ -85,7 +85,7 @@ static void split(bsize_t *I,bsize_t *V,bsize_t start,bsize_t len,bsize_t h)
 				};
 				if(V[I[k+i]+h]==x) {
 					tmp=I[k+j];I[k+j]=I[k+i];I[k+i]=tmp;
-					j++;
+					++j;
 				};
 			};
 			for(i=0;i<j;i++) V[I[k+i]]=k+j-1;
@@ -97,30 +97,30 @@ static void split(bsize_t *I,bsize_t *V,bsize_t start,bsize_t len,bsize_t h)
 	x=V[I[start+len/2]+h];
 	jj=0;kk=0;
 	for(i=start;i<start+len;i++) {
-		if(V[I[i]+h]<x) jj++;
-		if(V[I[i]+h]==x) kk++;
+		if(V[I[i]+h]<x) ++jj;
+		if(V[I[i]+h]==x) ++kk;
 	};
 	jj+=start;kk+=jj;
 
 	i=start;j=0;k=0;
 	while(i<jj) {
 		if(V[I[i]+h]<x) {
-			i++;
+			++i;
 		} else if(V[I[i]+h]==x) {
 			tmp=I[i];I[i]=I[jj+j];I[jj+j]=tmp;
-			j++;
+			++j;
 		} else {
 			tmp=I[i];I[i]=I[kk+k];I[kk+k]=tmp;
-			k++;
+			++k;
 		};
 	};
 
 	while(jj+j<kk) {
 		if(V[I[jj+j]+h]==x) {
-			j++;
+			++j;
 		} else {
 			tmp=I[jj+j];I[jj+j]=I[kk+k];I[kk+k]=tmp;
-			k++;
+			++k;
 		};
 	};
 
@@ -336,7 +336,7 @@ bsdiff(u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t newsize,
 			s=0;Sf=0;lenf=0;
 			for(i=0;(lastscan+i<scan)&&(lastpos+i<oldsize);) {
 				s += (oldbuf[lastpos+i]==newbuf[lastscan+i]);
-				i++;
+				++i;
 				if(s*2-i>Sf*2-lenf) { Sf=s; lenf=i; };
 			};
 

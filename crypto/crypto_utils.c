@@ -138,7 +138,7 @@ PKCS5_PBKDF2_HMAC(const char *pass, int passlen,
 				p[k] ^= digtmp[k];
 		}
 		tkeylen-= cplen;
-		i++;
+		++i;
 		p+= cplen;
 	}
 	HMAC_CTX_cleanup(&hctx);
@@ -263,7 +263,7 @@ serialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes)
 	j = 0;
 	for (i=cksum_bytes; i>0; i--) {
 		buf[j] = checksum[i-1];
-		j++;
+		++j;
 	}
 }
 
@@ -275,7 +275,7 @@ deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes)
 	j = 0;
 	for (i=cksum_bytes; i>0; i--) {
 		checksum[i-1] = buf[j];
-		j++;
+		++j;
 	}
 }
 

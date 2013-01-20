@@ -301,7 +301,7 @@ set_threadcounts(algo_props_t *props, int *nthreads, int nprocs, algo_threads_ty
 				props->nthreads++;
 
 			} else if (props->nthreads * (nthreads1+1) <= nprocs && nthreads1 < *nthreads) {
-				nthreads1++;
+				++nthreads1;
 			} else {
 				break;
 			}

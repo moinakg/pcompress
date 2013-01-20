@@ -359,20 +359,20 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		offset = *size - ctx->rabin_poly_max_block_size;
 		length = 0;
 		for (i=offset; i<*size; i++) {
-			uchar_t cur_byte = buf1[i];
-			uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
+			int cur_byte = buf1[i];
+			int pushed_out = ctx->current_window_data[ctx->window_pos];
 			ctx->current_window_data[ctx->window_pos] = cur_byte;
 
 			cur_roll_checksum = (cur_roll_checksum * RAB_POLYNOMIAL_CONST) & POLY_MASK;
 			cur_roll_checksum += cur_byte;
 			cur_roll_checksum -= out[pushed_out];
-			cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
 
 			ctx->window_pos = (ctx->window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
 			++length;
 			if (length < ctx->rabin_poly_min_block_size) continue;
 
 			// If we hit our special value update block offset
+			cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
 			if ((cur_pos_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt) {
 				last_offset = i;
 				length = 0;
@@ -385,18 +385,15 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		return (0);
 	}
 
-	j = 0;
-
 	for (i=offset; i<*size; i++) {
 		uint64_t pc[4];
-		uchar_t cur_byte = buf1[i];
-		uint64_t pushed_out = ctx->current_window_data[ctx->window_pos];
+		int cur_byte = buf1[i];
+		int pushed_out = ctx->current_window_data[ctx->window_pos];
 		ctx->current_window_data[ctx->window_pos] = cur_byte;
 
 		cur_roll_checksum = (cur_roll_checksum * RAB_POLYNOMIAL_CONST) & POLY_MASK;
 		cur_roll_checksum += cur_byte;
 		cur_roll_checksum -= out[pushed_out];
-		cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
 
 		/*
 		 * Window pos has to rotate from 0 .. RAB_POLYNOMIAL_WIN_SIZE-1
@@ -408,6 +405,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		if (length < ctx->rabin_poly_min_block_size) continue;
 
 		// If we hit our special value or reached the max block size update block offset
+		cur_pos_checksum = cur_roll_checksum ^ ir[pushed_out];
 		if ((cur_pos_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
 		    length >= ctx->rabin_poly_max_block_size) {
 			if (ctx->blocks[blknum] == 0)
@@ -446,7 +444,6 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			++blknum;
 			last_offset = i+1;
 			length = 0;
-			j = 0;
 		}
 	}
 
@@ -475,12 +472,11 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 				ksmallest((int64_t *)ctx_heap, length, &heap);
 				cur_sketch =
 				    XXH32((const uchar_t *)ctx_heap,  pc[ctx->delta_flag]*8, 0);
-				ctx->blocks[blknum]->similarity_hash = cur_sketch;
 			} else {
 				cur_sketch =
 				    XXH32((const uchar_t *)(buf1+last_offset), length, 0);
-				ctx->blocks[blknum]->similarity_hash = cur_sketch;
 			}
+			ctx->blocks[blknum]->similarity_hash = cur_sketch;
 		}
 		++blknum;
 		last_offset = *size;
@@ -556,7 +552,7 @@ process_blocks:
 				length = 0;
 
 				/*
-				 * Look for exact duplicates. Same cksum, length and memcmp()\
+				 * Look for exact duplicates. Same cksum, length and memcmp()
 				 */
 				while (1) {
 					if (be->hash == ctx->blocks[i]->hash &&
