@@ -8,6 +8,10 @@ The simplest process to build and install this utility is:
 make
 make install
 
+The current makefiles and config scripts assume Gcc compiler is
+in the PATH. Please update PATH before running config if that is
+not the case.
+
 In order to remove all binaries:
 make clean
 

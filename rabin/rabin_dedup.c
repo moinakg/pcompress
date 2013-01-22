@@ -71,6 +71,10 @@
 #include <xxhash.h>
 
 #include "rabin_dedup.h"
+#if defined(__USE_SSE_INTRIN__) && defined(__SSE4_1__) && RAB_POLYNOMIAL_WIN_SIZE == 16
+#	include <smmintrin.h>
+#	define	SSE_MODE		1
+#endif
 
 #define	DELTA_EXTRA2_PCT(x) ((x) >> 1)
 #define	DELTA_EXTRA_PCT(x) (((x) >> 1) + ((x) >> 3))
@@ -221,7 +225,11 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		destroy_dedupe_context(ctx);
 		return (NULL);
 	}
+#ifndef SSE_MODE
 	ctx->current_window_data = (uchar_t *)slab_alloc(NULL, RAB_POLYNOMIAL_WIN_SIZE);
+#else
+	ctx->current_window_data = (uchar_t *)1;
+#endif
 	ctx->blocks = NULL;
 	if (real_chunksize > 0) {
 		ctx->blocks = (rabin_blockentry_t **)slab_calloc(NULL,
@@ -258,8 +266,9 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 void
 reset_dedupe_context(dedupe_context_t *ctx)
 {
+#ifndef	SSE_MODE
 	memset(ctx->current_window_data, 0, RAB_POLYNOMIAL_WIN_SIZE);
-	ctx->window_pos = 0;
+#endif
 	ctx->valid = 0;
 }
 
@@ -268,7 +277,9 @@ destroy_dedupe_context(dedupe_context_t *ctx)
 {
 	if (ctx) {
 		uint32_t i;
+#ifndef SSE_MODE
 		if (ctx->current_window_data) slab_free(NULL, ctx->current_window_data);
+#endif
 		if (ctx->blocks) {
 			for (i=0; i<ctx->blknum && ctx->blocks[i] != NULL; i++) {
 				slab_free(NULL, ctx->blocks[i]);
@@ -290,7 +301,7 @@ uint32_t
 dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t offset, uint64_t *rabin_pos)
 {
 	uint64_t i, last_offset, j, ary_sz;
-	uint32_t blknum;
+	uint32_t blknum, window_pos;
 	uchar_t *buf1 = (uchar_t *)buf;
 	uint32_t length;
 	uint64_t cur_roll_checksum, cur_pos_checksum;
@@ -304,6 +315,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	length = offset;
 	last_offset = 0;
 	blknum = 0;
+	window_pos = 0;
 	ctx->valid = 0;
 	cur_roll_checksum = 0;
 	if (*size < ctx->rabin_poly_avg_block_size) return (0);
@@ -346,7 +358,13 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		ary_sz = ctx->rabin_poly_max_block_size;
 		ctx_heap = (uint32_t *)(ctx->cbuf + ctx->real_chunksize - ary_sz);
 	}
+#ifndef SSE_MODE
 	memset(ctx->current_window_data, 0, RAB_POLYNOMIAL_WIN_SIZE);
+#else
+	__m128i cur_sse_byte = _mm_setzero_si128();
+	__m128i window = _mm_setzero_si128();
+#endif
+	j = *size - RAB_POLYNOMIAL_WIN_SIZE;
 
 	/* 
 	 * If rabin_pos is non-zero then we are being asked to scan for the last rabin boundary
@@ -358,16 +376,29 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	if (rabin_pos) {
 		offset = *size - ctx->rabin_poly_max_block_size;
 		length = 0;
-		for (i=offset; i<*size; i++) {
+		for (i=offset; i<j; i++) {
 			int cur_byte = buf1[i];
-			int pushed_out = ctx->current_window_data[ctx->window_pos];
-			ctx->current_window_data[ctx->window_pos] = cur_byte;
+#ifdef	SSE_MODE
+			uint32_t pushed_out = _mm_extract_epi32(window, 3);
+			pushed_out >>= 24;
+			asm ("movd %[cur_byte], %[cur_sse_byte]"
+			     : [cur_sse_byte] "=x" (cur_sse_byte)
+			     : [cur_byte] "r" (cur_byte)
+			);
+			window = _mm_slli_si128(window, 1);
+			window = _mm_or_si128(window, cur_sse_byte);
+#else
+			uint32_t pushed_out = ctx->current_window_data[window_pos];
+			ctx->current_window_data[window_pos] = cur_byte;
+#endif
 
 			cur_roll_checksum = (cur_roll_checksum * RAB_POLYNOMIAL_CONST) & POLY_MASK;
 			cur_roll_checksum += cur_byte;
 			cur_roll_checksum -= out[pushed_out];
 
-			ctx->window_pos = (ctx->window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
+#ifndef	SSE_MODE
+			window_pos = (window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
+#endif
 			++length;
 			if (length < ctx->rabin_poly_min_block_size) continue;
 
@@ -385,22 +416,44 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		return (0);
 	}
 
-	for (i=offset; i<*size; i++) {
+	for (i=offset; i<j; i++) {
 		uint64_t pc[4];
-		int cur_byte = buf1[i];
-		int pushed_out = ctx->current_window_data[ctx->window_pos];
-		ctx->current_window_data[ctx->window_pos] = cur_byte;
+		uint32_t cur_byte = buf1[i];
+
+#ifdef	SSE_MODE
+		/*
+		 * A 16-byte XMM register is used as a sliding window if our window size is 16 bytes
+		 * and at least SSE 4.1 is enabled. Avoids memory access for the sliding window.
+		 */
+		uint32_t pushed_out = _mm_extract_epi32(window, 3);
+		pushed_out >>= 24;
+
+		/*
+		 * No intrinsic available for this.
+		 */
+		asm ("movd %[cur_byte], %[cur_sse_byte]"
+		     : [cur_sse_byte] "=x" (cur_sse_byte)
+		     : [cur_byte] "r" (cur_byte)
+		);
+		window = _mm_slli_si128(window, 1);
+		window = _mm_or_si128(window, cur_sse_byte);
+#else
+		uint32_t pushed_out = ctx->current_window_data[window_pos];
+		ctx->current_window_data[window_pos] = cur_byte;
+#endif
 
 		cur_roll_checksum = (cur_roll_checksum * RAB_POLYNOMIAL_CONST) & POLY_MASK;
 		cur_roll_checksum += cur_byte;
 		cur_roll_checksum -= out[pushed_out];
 
+#ifndef	SSE_MODE
 		/*
 		 * Window pos has to rotate from 0 .. RAB_POLYNOMIAL_WIN_SIZE-1
 		 * We avoid a branch here by masking. This requires RAB_POLYNOMIAL_WIN_SIZE
 		 * to be power of 2
 		 */
-		ctx->window_pos = (ctx->window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
+		window_pos = (window_pos + 1) & (RAB_POLYNOMIAL_WIN_SIZE-1);
+#endif
 		++length;
 		if (length < ctx->rabin_poly_min_block_size) continue;
 
@@ -444,6 +497,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			++blknum;
 			last_offset = i+1;
 			length = 0;
+			if (*size - last_offset <= ctx->rabin_poly_min_block_size) break;
 		}
 	}
 

@@ -150,7 +150,6 @@ typedef struct {
 	rabin_blockentry_t **blocks;
 	uint32_t blknum;
 	unsigned char *cbuf;
-	int window_pos;
 	uint32_t rabin_poly_max_block_size;
 	uint32_t rabin_poly_min_block_size;
 	uint32_t rabin_poly_avg_block_size;
