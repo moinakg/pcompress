@@ -188,11 +188,17 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 	tot8b = 0;
 	tagcnt = 0;
 	for (i = 0; i < srclen; i++) {
-		tot8b += (src1[i] >> 7);
+		/*
+		 * This could have been: tot8b += (src1[i] >> 7);
+		 * However the approach below allows the compiler to auto-vectorize this
+		 * loop.
+		 */
+		tot8b += (src1[i] & 0x80);
 		tag = ((src1[i] == '<') | (src1[i] == '>'));
 		tagcnt += tag;
 	}
 
+	tot8b /= 0x80;
 	/*
 	 * Use PPMd if some percentage of source is 7-bit textual bytes, otherwise
 	 * use Bzip2 or LZMA.

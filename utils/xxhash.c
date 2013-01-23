@@ -151,10 +151,11 @@ unsigned int XXH32(const void* input, int len, unsigned int seed)
 #else
 
 	const unsigned char* p = (const unsigned char*)input;
+	const unsigned char* p1 = p;
 	const unsigned char* const bEnd = p + len;
 	unsigned int h32;
 
-	if (len>=256)
+	if (len>=32)
 	{
 		const unsigned char* const limit = bEnd - 32;
 		unsigned int v1 = seed + PRIME32_1 + PRIME32_2;
@@ -231,22 +232,7 @@ unsigned int XXH32(const void* input, int len, unsigned int seed)
 		v4 += vx4 * PRIME32_2; v4 = XXH_rotl32(v4, 13); v4 *= PRIME32_1;
 		h32 = XXH_rotl32(v1, 1) + XXH_rotl32(v2, 7) + XXH_rotl32(v3, 12) + XXH_rotl32(v4, 18);
 #endif
-	} else if (len>=16)
-	{
-		const unsigned char* const limit = bEnd - 16;
-		unsigned int v1 = seed + PRIME32_1 + PRIME32_2;
-		unsigned int v2 = seed + PRIME32_2;
-		unsigned int v3 = seed + 0;
-		unsigned int v4 = seed - PRIME32_1;
-
-		do
-		{
-			v1 += XXH_LE32(p) * PRIME32_2; v1 = XXH_rotl32(v1, 13); v1 *= PRIME32_1; p+=4;
-			v2 += XXH_LE32(p) * PRIME32_2; v2 = XXH_rotl32(v2, 13); v2 *= PRIME32_1; p+=4;
-			v3 += XXH_LE32(p) * PRIME32_2; v3 = XXH_rotl32(v3, 13); v3 *= PRIME32_1; p+=4;
-			v4 += XXH_LE32(p) * PRIME32_2; v4 = XXH_rotl32(v4, 13); v4 *= PRIME32_1; p+=4;
-		} while (p<=limit) ;
-		h32 = XXH_rotl32(v1, 1) + XXH_rotl32(v2, 7) + XXH_rotl32(v3, 12) + XXH_rotl32(v4, 18);
+		len = p - p1;
 	}
 	else
 	{
@@ -288,12 +274,12 @@ unsigned int XXH32(const void* input, int len, unsigned int seed)
 struct XXH_state32_t
 {
 	unsigned int seed;
-	unsigned int v1;
-	unsigned int v2;
-	unsigned int v3;
-	unsigned int v4;
+	unsigned int v1, vx1;
+	unsigned int v2, vx2;
+	unsigned int v3, vx3;
+	unsigned int v4, vx4;
 	unsigned long long total_len;
-	char memory[16];
+	char memory[32];
 	int memsize;
 };
 
@@ -306,6 +292,10 @@ void* XXH32_init (unsigned int seed)
 	state->v2 = seed + PRIME32_2;
 	state->v3 = seed + 0;
 	state->v4 = seed - PRIME32_1;
+	state->vx1 = seed + PRIME32_1 + PRIME32_2;
+	state->vx2 = seed + PRIME32_2;
+	state->vx3 = seed + 0;
+	state->vx4 = seed - PRIME32_1;
 	state->total_len = 0;
 	state->memsize = 0;
 
@@ -321,7 +311,7 @@ int   XXH32_feed (void* state_in, const void* input, int len)
 
 	state->total_len += len;
 	
-	if (state->memsize + len < 16)   // fill in tmp buffer
+	if (state->memsize + len < 32)   // fill in tmp buffer
 	{
 		memcpy(state->memory + state->memsize, input, len);
 		state->memsize +=  len;
@@ -330,37 +320,111 @@ int   XXH32_feed (void* state_in, const void* input, int len)
 
 	if (state->memsize)   // some data left from previous feed
 	{
-		memcpy(state->memory + state->memsize, input, 16-state->memsize);
+		memcpy(state->memory + state->memsize, input, 32-state->memsize);
 		{
 			const unsigned int* p32 = (const unsigned int*)state->memory;
-			state->v1 += XXH_LE32(p32) * PRIME32_2; state->v1 = XXH_rotl32(state->v1, 13); state->v1 *= PRIME32_1; p32++;
-			state->v2 += XXH_LE32(p32) * PRIME32_2; state->v2 = XXH_rotl32(state->v2, 13); state->v2 *= PRIME32_1; p32++; 
-			state->v3 += XXH_LE32(p32) * PRIME32_2; state->v3 = XXH_rotl32(state->v3, 13); state->v3 *= PRIME32_1; p32++;
-			state->v4 += XXH_LE32(p32) * PRIME32_2; state->v4 = XXH_rotl32(state->v4, 13); state->v4 *= PRIME32_1; p32++;
+			state->v1 += XXH_LE32(p32) * PRIME32_2; state->v1 = XXH_rotl32(state->v1, 13); state->v1 *= PRIME32_1;
+			p32++;
+			state->v2 += XXH_LE32(p32) * PRIME32_2; state->v2 = XXH_rotl32(state->v2, 13); state->v2 *= PRIME32_1;
+			p32++; 
+			state->v3 += XXH_LE32(p32) * PRIME32_2; state->v3 = XXH_rotl32(state->v3, 13); state->v3 *= PRIME32_1;
+			p32++;
+			state->v4 += XXH_LE32(p32) * PRIME32_2; state->v4 = XXH_rotl32(state->v4, 13); state->v4 *= PRIME32_1;
+			p32++;
+			state->vx1 += XXH_LE32(p32) * PRIME32_2; state->vx1 = XXH_rotl32(state->vx1, 13); state->vx1 *= PRIME32_1;
+			p32++;
+			state->vx2 += XXH_LE32(p32) * PRIME32_2; state->vx2 = XXH_rotl32(state->vx2, 13); state->vx2 *= PRIME32_1;
+			p32++; 
+			state->vx3 += XXH_LE32(p32) * PRIME32_2; state->vx3 = XXH_rotl32(state->vx3, 13); state->vx3 *= PRIME32_1;
+			p32++;
+			state->vx4 += XXH_LE32(p32) * PRIME32_2; state->vx4 = XXH_rotl32(state->vx4, 13); state->vx4 *= PRIME32_1;
+			p32++;
 		}
-		p += 16-state->memsize;
+		p += 32-state->memsize;
+		len -= 32-state->memsize;
 		state->memsize = 0;
 	}
 
+	if (len>=32)
 	{
-		const unsigned char* const limit = bEnd - 16;
+		const unsigned char* const limit = bEnd - 32;
+#if defined(__USE_SSE_INTRIN__) && defined(__SSE4_1__)
+		unsigned int vx[4], vx1[4];
+
+		__m128i accum = _mm_set_epi32(state->v4, state->v3, state->v2, state->v1);
+		__m128i accum1 = _mm_set_epi32(state->v4, state->v3, state->v2, state->v1);
+		__m128i prime1 = _mm_set1_epi32(PRIME32_1);
+		__m128i prime2 = _mm_set1_epi32(PRIME32_2);
+
+		/*
+		 * 4-way SIMD calculations with 4 ints in two blocks for 2 accumulators will
+		 * interleave to some extent on a hyperthreaded processor providing 10% - 14%
+		 * speedup over original xxhash depending on processor. We could have used
+		 * aligned loads but we actually want the unaligned penalty. It helps to
+		 * interleave better for a slight benefit over aligned loads here!
+		 */
+		do {
+			__m128i mem = _mm_loadu_si128((__m128i *)p);
+			p += 16;
+			mem = _mm_mullo_epi32(mem, prime2);
+			accum = _mm_add_epi32(accum, mem);
+			accum = _x_mm_rotl_epi32(accum, 13);
+			accum = _mm_mullo_epi32(accum, prime1);
+
+			mem = _mm_loadu_si128((__m128i *)p);
+			p += 16;
+			mem = _mm_mullo_epi32(mem, prime2);
+			accum1 = _mm_add_epi32(accum1, mem);
+			accum1 = _x_mm_rotl_epi32(accum1, 13);
+			accum1 = _mm_mullo_epi32(accum1, prime1);
+		} while (p<=limit);
+
+		_mm_storeu_si128((__m128i *)vx, accum);
+		_mm_storeu_si128((__m128i *)vx1, accum1);
+
+		/*
+		 * Combine the two accumulators into a single hash value.
+		 */
+		state->v1 = vx[0];
+		state->v2 = vx[1];
+		state->v3 = vx[2];
+		state->v4 = vx[3];
+		state->vx1 = vx1[0];
+		state->vx2 = vx1[1];
+		state->vx3 = vx1[2];
+		state->vx4 = vx1[3];
+#else
 		unsigned int v1 = state->v1;
 		unsigned int v2 = state->v2;
 		unsigned int v3 = state->v3;
 		unsigned int v4 = state->v4;
+		unsigned int vx1 = state->vx1;
+		unsigned int vx2 = state->vx2;
+		unsigned int vx3 = state->vx3;
+		unsigned int vx4 = state->vx4;
 
-		while (p<=limit)
+		do
 		{
 			v1 += XXH_LE32(p) * PRIME32_2; v1 = XXH_rotl32(v1, 13); v1 *= PRIME32_1; p+=4;
 			v2 += XXH_LE32(p) * PRIME32_2; v2 = XXH_rotl32(v2, 13); v2 *= PRIME32_1; p+=4;
 			v3 += XXH_LE32(p) * PRIME32_2; v3 = XXH_rotl32(v3, 13); v3 *= PRIME32_1; p+=4;
 			v4 += XXH_LE32(p) * PRIME32_2; v4 = XXH_rotl32(v4, 13); v4 *= PRIME32_1; p+=4;
-		}  
+
+			vx1 += XXH_LE32(p) * PRIME32_2; vx1 = XXH_rotl32(vx1, 13); vx1 *= PRIME32_1; p+=4;
+			vx2 += XXH_LE32(p) * PRIME32_2; vx2 = XXH_rotl32(vx2, 13); vx2 *= PRIME32_1; p+=4;
+			vx3 += XXH_LE32(p) * PRIME32_2; vx3 = XXH_rotl32(vx3, 13); vx3 *= PRIME32_1; p+=4;
+			vx4 += XXH_LE32(p) * PRIME32_2; vx4 = XXH_rotl32(vx4, 13); vx4 *= PRIME32_1; p+=4;
+		} while (p<=limit) ;
 
 		state->v1 = v1;
 		state->v2 = v2;
 		state->v3 = v3;
 		state->v4 = v4;
+		state->vx1 = vx1;
+		state->vx2 = vx2;
+		state->vx3 = vx3;
+		state->vx4 = vx4;
+#endif
 	}
 
 	if (p < bEnd)
@@ -381,9 +445,18 @@ unsigned int XXH32_getIntermediateResult (void* state_in)
 	unsigned int h32;
 
 
-	if (state->total_len >= 16)
+	if (state->total_len >= 32)
 	{
-		h32 = XXH_rotl32(state->v1, 1) + XXH_rotl32(state->v2, 7) + XXH_rotl32(state->v3, 12) + XXH_rotl32(state->v4, 18);
+		unsigned int v1 = state->v1;
+		unsigned int v2 = state->v2;
+		unsigned int v3 = state->v3;
+		unsigned int v4 = state->v4;
+
+		v1 += state->vx1 * PRIME32_2; v1 = XXH_rotl32(v1, 13); v1 *= PRIME32_1;
+		v2 += state->vx2 * PRIME32_2; v2 = XXH_rotl32(v2, 13); v2 *= PRIME32_1;
+		v3 += state->vx3 * PRIME32_2; v3 = XXH_rotl32(v3, 13); v3 *= PRIME32_1;
+		v4 += state->vx4 * PRIME32_2; v4 = XXH_rotl32(v4, 13); v4 *= PRIME32_1;
+		h32 = XXH_rotl32(v1, 1) + XXH_rotl32(v2, 7) + XXH_rotl32(v3, 12) + XXH_rotl32(v4, 18);
 	}
 	else
 	{
