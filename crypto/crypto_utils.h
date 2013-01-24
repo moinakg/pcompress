@@ -33,7 +33,7 @@ extern "C" {
 #endif
 
 #define	MAX_PW_LEN	16
-#define	CKSUM_MASK		0x700
+#define	CKSUM_MASK		0x800
 #define	CKSUM_MAX_BYTES		64
 #define	DEFAULT_CKSUM		"SKEIN256"
 
@@ -54,7 +54,9 @@ typedef enum {
 	CKSUM_SHA256 = 0x400,
 	CKSUM_SHA512 = 0x500,
 	CKSUM_KECCAK256 = 0x600,
-	CKSUM_KECCAK512 = 0x700
+	CKSUM_KECCAK512 = 0x700,
+	CKSUM_BLAKE256 = 0x800,
+	CKSUM_BLAKE512 = 0x900
 } cksum_t;
 
 typedef struct {
@@ -75,6 +77,7 @@ typedef struct {
  * Generic message digest functions.
  */
 int compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes);
+void list_checksums(FILE *strm, char *pad);
 int get_checksum_props(const char *name, int *cksum, int *cksum_bytes, int *mac_bytes);
 void serialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
 void deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);

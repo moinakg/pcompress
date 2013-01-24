@@ -36,8 +36,19 @@
 #include <errno.h>
 #include <link.h>
 #include <rabin_dedup.h>
+#include <cpuid.h>
+#include <xxhash.h>
 
+#define _IN_UTILS_
 #include "utils.h"
+
+processor_info_t proc_info;
+
+void
+init_pcompress() {
+	cpuid_basic_identify(&proc_info);
+	XXH32_module_init();
+}
 
 void
 err_exit(int show_errno, const char *format, ...)

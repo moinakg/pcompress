@@ -39,7 +39,7 @@
 #include <sha256.h>
 #include <crypto_aes.h>
 #include <KeccakNISTInterface.h>
-#include <cpuid.h>
+#include <utils.h>
 
 #include "crypto_utils.h"
 
@@ -54,17 +54,29 @@ static int geturandom_bytes(uchar_t rbytes[32]);
 typedef void (*ckinit_func_ptr)(void);
 static struct {
 	const char	*name;
+	const char	*desc;
 	cksum_t	cksum_id;
 	int	bytes, mac_bytes;
 	ckinit_func_ptr init_func;
 } cksum_props[] = {
-	{"CRC64",	CKSUM_CRC64,		8,	32,	NULL},
-	{"SKEIN256",	CKSUM_SKEIN256,		32,	32,	NULL},
-	{"SKEIN512",	CKSUM_SKEIN512,		64,	64,	NULL},
-	{"SHA256",	CKSUM_SHA256,		32,	32,	init_sha256},
-	{"SHA512",	CKSUM_SHA512,		64,	64,	NULL},
-	{"KECCAK256",	CKSUM_KECCAK256,	32,	32,	NULL},
-	{"KECCAK512",	CKSUM_KECCAK512,	64,	64,	NULL}
+	{"CRC64",	"Fast 64-bit CRC from LZMA SDK.",
+			CKSUM_CRC64,		8,	32,	NULL},
+	{"SKEIN256",	"256-bit SKEIN a NIST SHA3 runners-up (90% faster than Keccak).",
+			CKSUM_SKEIN256,		32,	32,	NULL},
+	{"SKEIN512",	"512-bit SKEIN",
+			CKSUM_SKEIN512,		64,	64,	NULL},
+	{"SHA256",	"Intel's optimized (SSE,AVX) 256-bit SHA2 implementation for x86.",
+			CKSUM_SHA256,		32,	32,	init_sha256},
+	{"SHA512",	"512-bit SHA2 from OpenSSL's crypto library.",
+			CKSUM_SHA512,		64,	64,	NULL},
+	{"KECCAK256",	"Official 256-bit NIST SHA3 optimized implementation.",
+			CKSUM_KECCAK256,		32,	32,	NULL},
+	{"KECCAK512",	"Official 512-bit NIST SHA3 optimized implementation.",
+			CKSUM_KECCAK512,		64,	64,	NULL},
+	{"BLAKE256",	"Very fast 256-bit BLAKE2, derived from the NIST SHA3 runner-up BLAKE.",
+			CKSUM_BLAKE256,		32,	32,	NULL},
+	{"BLAKE512",	"Very fast 256-bit BLAKE2, derived from the NIST SHA3 runner-up BLAKE.",
+			CKSUM_BLAKE512,		64,	64,	NULL}
 };
 
 static int cksum_provider = PROVIDER_OPENSSL;
@@ -213,17 +225,23 @@ init_sha256(void)
 	cksum_provider = PROVIDER_OPENSSL;
 #else
 #ifdef	__x86_64__
-	processor_info_t pc;
-
 	cksum_provider = PROVIDER_OPENSSL;
-	cpuid_basic_identify(&pc);
-	if (pc.proc_type == PROC_X64_INTEL || pc.proc_type == PROC_X64_AMD) {
-		if (opt_Init_SHA(&pc) == 0) {
+	if (proc_info.proc_type == PROC_X64_INTEL || proc_info.proc_type == PROC_X64_AMD) {
+		if (opt_Init_SHA(&proc_info) == 0) {
 			cksum_provider = PROVIDER_X64_OPT;
 		}
 	}
 #endif
 #endif
+}
+
+void
+list_checksums(FILE *strm, char *pad)
+{
+	int i;
+	for (i=0; i<(sizeof (cksum_props)/sizeof (cksum_props[0])); i++) {
+		fprintf(strm, "%s%10s - %s\n", pad, cksum_props[i].name, cksum_props[i].desc);
+	}
 }
 
 /*
@@ -235,7 +253,7 @@ get_checksum_props(const char *name, int *cksum, int *cksum_bytes, int *mac_byte
 {
 	int i;
 
-	for (i=0; i<sizeof (cksum_props); i++) {
+	for (i=0; i<(sizeof (cksum_props)/sizeof (cksum_props[0])); i++) {
 		if ((name != NULL && strcmp(name, cksum_props[i].name) == 0) ||
 		    (*cksum != 0 && *cksum == cksum_props[i].cksum_id)) {
 			*cksum = cksum_props[i].cksum_id;

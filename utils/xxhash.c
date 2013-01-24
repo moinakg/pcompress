@@ -82,8 +82,6 @@
 #  define XXH_BIG_ENDIAN 0
 #endif
 
-
-
 //**************************************
 // Compiler-specific Options & Functions
 //**************************************
@@ -141,7 +139,7 @@ static inline __m128i _x_mm_rotl_epi32(const __m128i a, int bits)
 // Simple Hash Functions
 //****************************
 
-unsigned int XXH32(const void* input, int len, unsigned int seed)
+unsigned int CPUCAP_NM(XXH32)(const void* input, int len, unsigned int seed)
 {
 #if 0
 	// Simple version, good for code maintenance, but unfortunately slow for small inputs
@@ -284,7 +282,7 @@ struct XXH_state32_t
 };
 
 
-void* XXH32_init (unsigned int seed)
+void* CPUCAP_NM(XXH32_init) (unsigned int seed)
 {
 	struct XXH_state32_t * state = (struct XXH_state32_t *) malloc ( sizeof(struct XXH_state32_t));
 	state->seed = seed;
@@ -303,7 +301,7 @@ void* XXH32_init (unsigned int seed)
 }
 
 
-int   XXH32_feed (void* state_in, const void* input, int len)
+int   CPUCAP_NM(XXH32_feed) (void* state_in, const void* input, int len)
 {
 	struct XXH_state32_t * state = state_in;
 	const unsigned char* p = (const unsigned char*)input;
@@ -437,7 +435,7 @@ int   XXH32_feed (void* state_in, const void* input, int len)
 }
 
 
-unsigned int XXH32_getIntermediateResult (void* state_in)
+unsigned int CPUCAP_NM(XXH32_getIntermediateResult) (void* state_in)
 {
 	struct XXH_state32_t * state = state_in;
 	unsigned char * p   = (unsigned char*)state->memory;
@@ -489,9 +487,9 @@ unsigned int XXH32_getIntermediateResult (void* state_in)
 }
 
 
-unsigned int XXH32_result (void* state_in)
+unsigned int CPUCAP_NM(XXH32_result) (void* state_in)
 {
-    unsigned int h32 = XXH32_getIntermediateResult(state_in);
+    unsigned int h32 = CPUCAP_NM(XXH32_getIntermediateResult)(state_in);
 
 	free(state_in);
 

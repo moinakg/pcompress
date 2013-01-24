@@ -116,8 +116,8 @@ do_last:
 	for (; pos < buflen-15; pos += 16) {
 		__m128i cblk, dat, odat;
 
-		__builtin_prefetch(outbuf+pos, 1, 0);
-		__builtin_prefetch(inbuf+pos, 0, 0);
+		PREFETCH_WRITE(outbuf+pos, 0);
+		PREFETCH_READ(inbuf+pos, 0);
 		cblk = _mm_load_si128((__m128i *)(stream->buf));
 		dat = _mm_loadu_si128((__m128i *)(inbuf+pos));
 		odat = _mm_xor_si128(cblk, dat);

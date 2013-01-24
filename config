@@ -21,6 +21,7 @@ ${prog} [<options>]
                         Enable building against an alternate Zlib installation.
 --with-bzlib=<path to Bzip2 library installation tree> (Default: System)
                         Enable building against an alternate Bzip2 and library installation.
+--no-sse-detect		Do NOT attempt to probe the system's SSE/AVX capability for build flags. 
 --use-key256		Use 256-bit encryption keys. Default key length is 128-bit.
 --help			Display this help message.
 
@@ -54,7 +55,7 @@ extra_opt_flags=
 zlib_prefix=
 bzlib_prefix=
 sse_detect=1
-default_sse="-msse2"
+sse_opt_flags="-msse2"
 
 rm -rf ./buildtmp
 mkdir ./buildtmp
@@ -76,7 +77,7 @@ gcc tst.c -o tst
 if [ $? -ne 0 ]
 then
 	echo "ERROR:"
-	echo "Cannot compile a simple program. GCC 4.1 and above is required"
+	echo "Cannot compile a simple program. GCC 4.4 and above is required"
 	echo "to build this program. Please include installation bindir of GCC in the PATH."
 	echo ""
 	rm -f tst.c
@@ -140,7 +141,7 @@ do
 	--use-key256)
 		keylen='-DKEYLEN=32'
 	;;
-	--no-sse-check)
+	--no-sse-detect)
 		sse_detect=0
 	;;
 	--help) usage $0;;
@@ -180,10 +181,10 @@ IFS=.
 set -- ${vers}
 IFS="$OIFS"
 
-if [ $1 -lt 4 -o $2 -lt 1 ]
+if [ $1 -lt 4 -o $2 -lt 4 ]
 then
 	echo "ERROR:"
-	echo "GCC version 4.1 or above is required."
+	echo "GCC version 4.4 or above is required."
 	echo ""
 	exit 1
 fi
@@ -209,9 +210,7 @@ then
 		exit 1
 	fi
 	rm -f sse_level
-	extra_opt_flags="${extra_opt_flags} -msse${sse_ver}"
-else
-	extra_opt_flags="${extra_opt_flags} ${default_sse}"
+	sse_opt_flags="-m${sse_ver}"
 fi
 
 
@@ -498,6 +497,7 @@ sha256objsvar="SHA256_OBJS"
 yasmvar="YASM"
 fptr_flag_var="FPTR_FLAG"
 extra_opt_flags_var="EXTRA_OPT_FLAGS"
+sse_opt_flags_var="SSE_OPT_FLAGS"
 
 openssllibdirvar="OPENSSL_LIBDIR"
 opensslincdirvar="OPENSSL_INCDIR"
@@ -550,5 +550,6 @@ s#@${keccak_hdrs_var}@#${keccak_hdrs}#g
 s#@${keccak_srcs_var}@#${keccak_srcs}#g
 s#@${keccak_srcs_asm_var}@#${keccak_srcs_asm}#g
 s#@${extra_opt_flags_var}@#${extra_opt_flags}#g
+s#@${sse_opt_flags_var}@#${sse_opt_flags}#g
 " > Makefile
 

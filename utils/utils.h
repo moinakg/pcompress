@@ -91,13 +91,17 @@ typedef int32_t bsize_t;
 // These allow helping the compiler in some often-executed branches, whose
 // result is almost always the same.
 #ifdef __GNUC__
-#       define likely(expr) __builtin_expect(expr, 1)
-#       define unlikely(expr) __builtin_expect(expr, 0)
-#	define ATOMIC_ADD(var, val) __sync_fetch_and_add(&var, val)
-#	define ATOMIC_SUB(var, val) __sync_fetch_and_sub(&var, val)
+#	define	likely(expr) __builtin_expect(expr, 1)
+#	define	unlikely(expr) __builtin_expect(expr, 0)
+#	define	ATOMIC_ADD(var, val) __sync_fetch_and_add(&var, val)
+#	define	ATOMIC_SUB(var, val) __sync_fetch_and_sub(&var, val)
+#	define	PREFETCH_WRITE(x, n) __builtin_prefetch((x), 1, (n))
+#	define	PREFETCH_READ(x, n)  __builtin_prefetch((x), 0, (n))
 #else
 #       define likely(expr) (expr)
 #       define unlikely(expr) (expr)
+#	define	PREFETCH_WRITE(x, n)
+#	define	PREFETCH_READ(x, n)
 #	if defined(sun) || defined (__sun)
 #		include <atomic.h>
 #		define ATOMIC_ADD(var, val) atomic_add_int(&var, val)
@@ -148,8 +152,13 @@ typedef struct {
 	int sse_level;
 	int sse_sub_level;
 	int avx_level;
+	int xop_avail;
 	proc_type_t proc_type;
 } processor_info_t;
+
+#ifndef _IN_UTILS_
+extern processor_info_t proc_info;
+#endif
 
 extern void err_exit(int show_errno, const char *format, ...);
 extern const char *get_execname(const char *);
@@ -165,6 +174,7 @@ extern uint64_t get_total_ram();
 extern double get_wtime_millis(void);
 extern double get_mb_s(uint64_t bytes, double strt, double en);
 extern void init_algo_props(algo_props_t *props);
+extern void init_pcompress();
 
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, uint64_t srclen, void *dst,

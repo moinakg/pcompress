@@ -63,12 +63,16 @@ It depends on successfully passing SMHasher test set.
 extern "C" {
 #endif
 
+#ifndef CPUCAP_NM
+#define	CPUCAP_NM(x) x
+#endif
+
 
 //****************************
 // Simple Hash Functions
 //****************************
 
-unsigned int XXH32 (const void* input, int len, unsigned int seed);
+unsigned int CPUCAP_NM(XXH32) (const void* input, int len, unsigned int seed);
 
 /*
 XXH32() :
@@ -86,9 +90,9 @@ XXH32() :
 // Advanced Hash Functions
 //****************************
 
-void*        XXH32_init   (unsigned int seed);
-int          XXH32_feed   (void* state, const void* input, int len);
-unsigned int XXH32_result (void* state);
+void*        CPUCAP_NM(XXH32_init)   (unsigned int seed);
+int          CPUCAP_NM(XXH32_feed)   (void* state, const void* input, int len);
+unsigned int CPUCAP_NM(XXH32_result) (void* state);
 
 /*
 These functions calculate the xxhash of an input provided in several small packets,
@@ -113,7 +117,7 @@ Memory will be freed by XXH32_result().
 */
 
 
-unsigned int XXH32_getIntermediateResult (void* state);
+unsigned int CPUCAP_NM(XXH32_getIntermediateResult) (void* state);
 /*
 This function does the same as XXH32_result(), generating a 32-bit hash,
 but preserve memory context.
@@ -121,7 +125,7 @@ This way, it becomes possible to generate intermediate hashes, and then continue
 To free memory context, use XXH32_result().
 */
 
-
+void XXH32_module_init();
 
 #if defined (__cplusplus)
 }

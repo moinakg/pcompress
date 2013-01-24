@@ -32,6 +32,10 @@
 
 #define SSE4_1_FLAG     0x080000
 #define SSE4_2_FLAG     0x100000
+#define SSE3_FLAG       0x1
+#define SSSE3_FLAG      0x200
+#define AVX_FLAG        0x10000000
+#define XOP_FLAG        0x800
 
 void
 exec_cpuid(uint32_t *regs)
@@ -112,6 +116,7 @@ cpuid_basic_identify(processor_info_t *pc)
 	pc->avx_level = 0;
 	pc->sse_level = 0;
 	pc->sse_sub_level = 0;
+	pc->xop_avail = 0;
 
 	if (strcmp(raw.vendor_str, "GenuineIntel") == 0) {
 		pc->proc_type = PROC_X64_INTEL;
@@ -131,11 +136,22 @@ cpuid_basic_identify(processor_info_t *pc)
 				pc->sse_sub_level = 2;
 			}
 		} else {
-			pc->sse_level = 3;
+			if (raw.basic_cpuid[1][2] & SSE3_FLAG) {
+				pc->sse_level = 3;
+				if (raw.basic_cpuid[1][2] & SSSE3_FLAG) {
+					pc->sse_sub_level = 1;
+				}
+			} else {
+				pc->sse_level = 2;
+			}
 		}
 		pc->avx_level = 0;
-		if (raw.basic_cpuid[1][2] & (1 << 28)) {
+		if (raw.basic_cpuid[1][2] & AVX_FLAG) {
 			pc->avx_level = 1;
+		}
+
+		if (raw.ext_cpuid[1][2] & XOP_FLAG) {
+			pc->xop_avail = 1;
 		}
 	}
 }

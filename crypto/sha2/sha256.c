@@ -89,7 +89,7 @@ APS_NAMESPACE(Init_SHA) (processor_info_t *pc)
 	if (pc->proc_type == PROC_X64_INTEL || pc->proc_type == PROC_X64_AMD) {
 		if (pc->avx_level > 0) {
 			sha_update_func = sha256_avx;
-			
+
 		} else if (pc->sse_level >= 4) {
 			sha_update_func = sha256_sse4;
 			

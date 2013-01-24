@@ -1,5 +1,17 @@
 Copyright (c) 2012 Moinak Ghosh
 
+Prerequisites
+=============
+64-bit System.
+GCC 4.4 (with mpfr, ppl and cloog support packages for loop
+	 vectorization).
+libz (zlib) and developments packages.
+Libbz2 and development packages.
+Libbsc source tree if BSC support is desired.
+	 See below:
+	 "Steps for building with libbsc support".
+OpenSSL version 0.9.8 or greater.
+
 Basic Installation
 ==================
 The simplest process to build and install this utility is:
@@ -95,6 +107,13 @@ is not the usual GNU Autoconf script.
 --with-bzlib=<path to Bzip2 library installation tree> (Default: System)
                         Enable building against an alternate Bzip2 and library
                         installation.
+
+--no-sse-detect         Do not try to detect the CPU's SSE capability. This
+                        mode will simply use SSE2 as the fallback default.
+                        Using SSE4 and later improves performance significantly.
+
+--use-key256            Use 256-bit encryption keys. Default key length is
+                        128-bit.
 
 --help			Display the help message.
 

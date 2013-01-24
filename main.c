@@ -158,15 +158,16 @@ usage(void)
 	    "   NOTE    - Both -L and -P can be used together to give maximum benefit on most.\n"
 	    "             datasets.\n"
 	    "   '-S' <cksum>\n"
-	    "           - Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512, SHA256 and\n"
-	    "             SHA512. Default one is SKEIN256.\n"
+	    "           - Specify chunk checksum to use:\n\n",
+	    UTILITY_VERSION, exec_name, exec_name, exec_name, exec_name, exec_name, exec_name);
+	list_checksums(stderr, "             ");
+	fprintf(stderr, "\n"
 	    "   '-F'    - Perform Fixed-Block Deduplication. Faster than '-D' in some cases\n"
 	    "             but with lower deduplication ratio.\n"
 	    "   '-B' <1..5>\n"
 	    "           - Specify an average Dedupe block size. 1 - 4K, 2 - 8K ... 5 - 64K.\n"
 	    "   '-M'    - Display memory allocator statistics\n"
-	    "   '-C'    - Display compression statistics\n\n",
-	    UTILITY_VERSION, exec_name, exec_name, exec_name, exec_name, exec_name, exec_name);
+	    "   '-C'    - Display compression statistics\n\n");
 }
 
 void
@@ -716,7 +717,7 @@ start_decompress(const char *filename, const char *to_filename)
 		err = 1;
 		goto uncomp_done;
 	}
-	if (version < VERSION-2) {
+	if (version < VERSION-3) {
 		fprintf(stderr, "Unsupported version: %d\n", version);
 		err = 1;
 		goto uncomp_done;
@@ -2340,6 +2341,7 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 	main_cancel = 0;
+	init_pcompress();
 
 	if (cksum == 0)
 		get_checksum_props(DEFAULT_CKSUM, &cksum, &cksum_bytes, &mac_bytes);
