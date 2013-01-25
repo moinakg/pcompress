@@ -36,7 +36,8 @@
 #include <openssl/rand.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
-#include <sha256.h>
+//#include <sha256.h>
+#include <sha512.h>
 #include <crypto_aes.h>
 #include <KeccakNISTInterface.h>
 #include <utils.h>
@@ -46,7 +47,7 @@
 #define	PROVIDER_OPENSSL	0
 #define	PROVIDER_X64_OPT	1
 
-static void init_sha256(void);
+static void init_sha512(void);
 static int geturandom_bytes(uchar_t rbytes[32]);
 /*
  * Checksum properties
@@ -66,9 +67,9 @@ static struct {
 	{"SKEIN512",	"512-bit SKEIN",
 			CKSUM_SKEIN512,		64,	64,	NULL},
 	{"SHA256",	"Intel's optimized (SSE,AVX) 256-bit SHA2 implementation for x86.",
-			CKSUM_SHA256,		32,	32,	init_sha256},
+			CKSUM_SHA256,		32,	32,	init_sha512},
 	{"SHA512",	"512-bit SHA2 from OpenSSL's crypto library.",
-			CKSUM_SHA512,		64,	64,	NULL},
+			CKSUM_SHA512,		64,	64,	init_sha512},
 	{"KECCAK256",	"Official 256-bit NIST SHA3 optimized implementation.",
 			CKSUM_KECCAK256,		32,	32,	NULL},
 	{"KECCAK512",	"Official 512-bit NIST SHA3 optimized implementation.",
@@ -190,18 +191,26 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes)
 			SHA256_Update(&ctx, buf, bytes);
 			SHA256_Final(cksum_buf, &ctx);
 		} else {
-			SHA256_Context ctx;
+			SHA512_Context ctx;
 
-			opt_SHA256_Init(&ctx);
-			opt_SHA256_Update(&ctx, buf, bytes);
-			opt_SHA256_Final(&ctx, cksum_buf);
+			opt_SHA512t256_Init(&ctx);
+			opt_SHA512t256_Update(&ctx, buf, bytes);
+			opt_SHA512t256_Final(&ctx, cksum_buf);
 		}
 	} else if (cksum == CKSUM_SHA512) {
-		SHA512_CTX ctx;
+		if (cksum_provider == PROVIDER_OPENSSL) {
+			SHA512_CTX ctx;
 
-		SHA512_Init(&ctx);
-		SHA512_Update(&ctx, buf, bytes);
-		SHA512_Final(cksum_buf, &ctx);
+			SHA512_Init(&ctx);
+			SHA512_Update(&ctx, buf, bytes);
+			SHA512_Final(cksum_buf, &ctx);
+		} else {
+			SHA512_Context ctx;
+
+			opt_SHA512_Init(&ctx);
+			opt_SHA512_Update(&ctx, buf, bytes);
+			opt_SHA512_Final(&ctx, cksum_buf);
+		}
 
 	} else if (cksum == CKSUM_KECCAK256) {
 		if (Keccak_Hash(256, buf, bytes * 8, cksum_buf) != 0)
@@ -219,7 +228,7 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes)
 }
 
 static void
-init_sha256(void)
+init_sha512(void)
 {
 #ifdef	WORDS_BIGENDIAN
 	cksum_provider = PROVIDER_OPENSSL;
@@ -227,7 +236,7 @@ init_sha256(void)
 #ifdef	__x86_64__
 	cksum_provider = PROVIDER_OPENSSL;
 	if (proc_info.proc_type == PROC_X64_INTEL || proc_info.proc_type == PROC_X64_AMD) {
-		if (opt_Init_SHA(&proc_info) == 0) {
+		if (opt_Init_SHA512(&proc_info) == 0) {
 			cksum_provider = PROVIDER_X64_OPT;
 		}
 	}
@@ -355,7 +364,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 			}
 			mctx->mac_ctx_reinit = ctx;
 		} else {
-			HMAC_SHA256_Context *ctx = (HMAC_SHA256_Context *)malloc(sizeof (HMAC_SHA256_Context));
+/*			HMAC_SHA256_Context *ctx = (HMAC_SHA256_Context *)malloc(sizeof (HMAC_SHA256_Context));
 			if (!ctx) return (-1);
 			opt_HMAC_SHA256_Init(ctx, actx->pkey, KEYLEN);
 			mctx->mac_ctx = ctx;
@@ -366,26 +375,54 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 				return (-1);
 			}
 			memcpy(ctx, mctx->mac_ctx, sizeof (HMAC_SHA256_Context));
+			mctx->mac_ctx_reinit = ctx;*/
+
+			HMAC_SHA512_Context *ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
+			if (!ctx) return (-1);
+			opt_HMAC_SHA512t256_Init(ctx, actx->pkey, KEYLEN);
+			mctx->mac_ctx = ctx;
+
+			ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
+			if (!ctx) {
+				free(mctx->mac_ctx);
+				return (-1);
+			}
+			memcpy(ctx, mctx->mac_ctx, sizeof (HMAC_SHA512_Context));
 			mctx->mac_ctx_reinit = ctx;
 		}
 	} else if (cksum == CKSUM_SHA512) {
-		HMAC_CTX *ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
-		if (!ctx) return (-1);
-		HMAC_CTX_init(ctx);
-		HMAC_Init_ex(ctx, actx->pkey, KEYLEN, EVP_sha512(), NULL);
-		mctx->mac_ctx = ctx;
+		if (cksum_provider == PROVIDER_OPENSSL) {
+			HMAC_CTX *ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
+			if (!ctx) return (-1);
+			HMAC_CTX_init(ctx);
+			HMAC_Init_ex(ctx, actx->pkey, KEYLEN, EVP_sha512(), NULL);
+			mctx->mac_ctx = ctx;
 
-		ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
-		if (!ctx) {
-			free(mctx->mac_ctx);
-			return (-1);
+			ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
+			if (!ctx) {
+				free(mctx->mac_ctx);
+				return (-1);
+			}
+			if (!HMAC_CTX_copy(ctx, (HMAC_CTX *)(mctx->mac_ctx))) {
+				free(ctx);
+				free(mctx->mac_ctx);
+				return (-1);
+			}
+			mctx->mac_ctx_reinit = ctx;
+		} else {
+			HMAC_SHA512_Context *ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
+			if (!ctx) return (-1);
+			opt_HMAC_SHA512_Init(ctx, actx->pkey, KEYLEN);
+			mctx->mac_ctx = ctx;
+
+			ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
+			if (!ctx) {
+				free(mctx->mac_ctx);
+				return (-1);
+			}
+			memcpy(ctx, mctx->mac_ctx, sizeof (HMAC_SHA512_Context));
+			mctx->mac_ctx_reinit = ctx;
 		}
-		if (!HMAC_CTX_copy(ctx, (HMAC_CTX *)(mctx->mac_ctx))) {
-			free(ctx);
-			free(mctx->mac_ctx);
-			return (-1);
-		}
-		mctx->mac_ctx_reinit = ctx;
 
 	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
 		hashState *ctx = (hashState *)malloc(sizeof (hashState));
@@ -423,16 +460,13 @@ hmac_reinit(mac_ctx_t *mctx)
 	if (cksum == CKSUM_SKEIN256 || cksum == CKSUM_SKEIN512) {
 		memcpy(mctx->mac_ctx, mctx->mac_ctx_reinit, sizeof (Skein_512_Ctxt_t));
 
-	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_CRC64) {
+	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_SHA512 || cksum == CKSUM_CRC64) {
 		if (cksum_provider == PROVIDER_OPENSSL) {
 			HMAC_CTX_copy((HMAC_CTX *)(mctx->mac_ctx),
 				      (HMAC_CTX *)(mctx->mac_ctx_reinit));
 		} else {
-			memcpy(mctx->mac_ctx, mctx->mac_ctx_reinit, sizeof (HMAC_SHA256_Context));
+			memcpy(mctx->mac_ctx, mctx->mac_ctx_reinit, sizeof (HMAC_SHA512_Context));
 		}
-	} else if (cksum == CKSUM_SHA512) {
-		HMAC_CTX_copy((HMAC_CTX *)(mctx->mac_ctx), (HMAC_CTX *)(mctx->mac_ctx_reinit));
-
 	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
 		memcpy(mctx->mac_ctx, mctx->mac_ctx_reinit, sizeof (hashState));
 	} else {
@@ -458,15 +492,19 @@ hmac_update(mac_ctx_t *mctx, uchar_t *data, uint64_t len)
 			HMAC_Update((HMAC_CTX *)(mctx->mac_ctx), data, len);
 #endif
 		} else {
-			opt_HMAC_SHA256_Update((HMAC_SHA256_Context *)(mctx->mac_ctx), data, len);
+			opt_HMAC_SHA512t256_Update((HMAC_SHA512_Context *)(mctx->mac_ctx), data, len);
 		}
 	} else if (cksum == CKSUM_SHA512) {
+		if (cksum_provider == PROVIDER_OPENSSL) {
 #ifndef __OSSL_OLD__
-		if (HMAC_Update((HMAC_CTX *)(mctx->mac_ctx), data, len) == 0)
-			return (-1);
+			if (HMAC_Update((HMAC_CTX *)(mctx->mac_ctx), data, len) == 0)
+				return (-1);
 #else
-		HMAC_Update((HMAC_CTX *)(mctx->mac_ctx), data, len);
+			HMAC_Update((HMAC_CTX *)(mctx->mac_ctx), data, len);
 #endif
+		} else {
+			opt_HMAC_SHA512_Update((HMAC_SHA512_Context *)(mctx->mac_ctx), data, len);
+		}
 
 	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
 		// Keccak takes data length in bits so we have to scale
@@ -503,12 +541,16 @@ hmac_final(mac_ctx_t *mctx, uchar_t *hash, unsigned int *len)
 		if (cksum_provider == PROVIDER_OPENSSL) {
 			HMAC_Final((HMAC_CTX *)(mctx->mac_ctx), hash, len);
 		} else {
-			opt_HMAC_SHA256_Final((HMAC_SHA256_Context *)(mctx->mac_ctx), hash);
+			opt_HMAC_SHA512t256_Final((HMAC_SHA512_Context *)(mctx->mac_ctx), hash);
 			*len = 32;
 		}
 	} else if (cksum == CKSUM_SHA512) {
-		HMAC_Final((HMAC_CTX *)(mctx->mac_ctx), hash, len);
-
+		if (cksum_provider == PROVIDER_OPENSSL) {
+			HMAC_Final((HMAC_CTX *)(mctx->mac_ctx), hash, len);
+		} else {
+			opt_HMAC_SHA512_Final((HMAC_SHA512_Context *)(mctx->mac_ctx), hash);
+			*len = 64;
+		}
 	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
 		if (Keccak_Final((hashState *)(mctx->mac_ctx), hash) != 0)
 			return (-1);
@@ -531,18 +573,14 @@ hmac_cleanup(mac_ctx_t *mctx)
 		memset(mctx->mac_ctx, 0, sizeof (Skein_512_Ctxt_t));
 		memset(mctx->mac_ctx_reinit, 0, sizeof (Skein_512_Ctxt_t));
 
-	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_CRC64) {
+	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_SHA512 || cksum == CKSUM_CRC64) {
 		if (cksum_provider == PROVIDER_OPENSSL) {
 			HMAC_CTX_cleanup((HMAC_CTX *)(mctx->mac_ctx));
 			HMAC_CTX_cleanup((HMAC_CTX *)(mctx->mac_ctx_reinit));
 		} else {
-			memset(mctx->mac_ctx, 0, sizeof (HMAC_SHA256_Context));
-			memset(mctx->mac_ctx_reinit, 0, sizeof (HMAC_SHA256_Context));
+			memset(mctx->mac_ctx, 0, sizeof (HMAC_SHA512_Context));
+			memset(mctx->mac_ctx_reinit, 0, sizeof (HMAC_SHA512_Context));
 		}
-	} else if (cksum == CKSUM_SHA512) {
-		HMAC_CTX_cleanup((HMAC_CTX *)(mctx->mac_ctx));
-		HMAC_CTX_cleanup((HMAC_CTX *)(mctx->mac_ctx_reinit));
-
 	} else if (cksum == CKSUM_KECCAK256 || cksum == CKSUM_KECCAK512) {
 		memset(mctx->mac_ctx, 0, sizeof (hashState));
 		memset(mctx->mac_ctx_reinit, 0, sizeof (hashState));

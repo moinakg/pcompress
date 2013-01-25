@@ -2149,6 +2149,7 @@ main(int argc, char *argv[])
 	level = 6;
 	err = 0;
 	slab_init();
+	init_pcompress();
 
 	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEew:rLPS:B:F")) != -1) {
 		int ovr;
@@ -2341,7 +2342,6 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 	main_cancel = 0;
-	init_pcompress();
 
 	if (cksum == 0)
 		get_checksum_props(DEFAULT_CKSUM, &cksum, &cksum_bytes, &mac_bytes);

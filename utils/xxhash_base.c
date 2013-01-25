@@ -20,7 +20,6 @@ void * (*xxh32_init)(unsigned int seed) = NULL;
 int (*xxh32_feed)(void* state, const void* input, int len) = NULL;
 unsigned int (*xxh32_result)(void* state) = NULL;
 unsigned int (*xxh32_getIntermediateResult)(void* state) = NULL;
-#include <stdio.h>
 
 void
 XXH32_module_init() {

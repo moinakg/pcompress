@@ -102,12 +102,11 @@ SKEINHDRS = crypto/skein/brg_endian.h crypto/skein/SHA3api_ref.h \
 	crypto/skein/skein_debug.h crypto/skein/skein_iv.h
 SKEINOBJS = $(SKEINSRCS:.c=.o)
 
-SHA256_SRCS = crypto/sha2/sha256.c
-SHA256_HDRS = crypto/sha2/sha256.h
-SHA256ASM_SRCS = crypto/sha2/intel/sha256_avx1.asm \
-	crypto/sha2/intel/sha256_sse4.asm
-SHA256ASM_OBJS = $(SHA256ASM_SRCS:.asm=.o)
-SHA256_OBJS = $(SHA256_SRCS:.c=.o)
+SHA2_SRCS = crypto/sha2/sha512.c
+SHA2_HDRS = crypto/sha2/sha512.h
+SHA2ASM_SRCS = crypto/sha2/intel/sha512_avx.asm crypto/sha2/intel/sha512_sse4.asm
+SHA2ASM_OBJS = $(SHA2ASM_SRCS:.asm=.o)
+SHA2_OBJS = $(SHA2_SRCS:.c=.o)
 
 YASM = @YASM@ -f x64 -f elf64 -X gnu -g dwarf2 -D LINUX
 LIBBSCWRAP = libbsc_compress.c
@@ -161,7 +160,7 @@ LDLIBS = -ldl -L./buildtmp -Wl,-R@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,-R@LIBZ_DIR
 	-L./buildtmp -Wl,-R@OPENSSL_LIBDIR@ -lcrypto -lrt $(EXTRA_LDFLAGS)
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
-$(SKEIN_BLOCK_OBJ) @SHA256ASM_OBJS@ @SHA256_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
+$(SKEIN_BLOCK_OBJ) @SHA2ASM_OBJS@ @SHA2_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
 $(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS) $(XXHASH_OBJS)
 
 DEBUG_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@
@@ -199,7 +198,7 @@ SSE3_OPT_FLAG = -mssse3
 SSE2_OPT_FLAG = -msse2
 
 SKEIN_FLAGS = $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) @FPTR_FLAG@
-SHA256_FLAGS = $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) @FPTR_FLAG@
+SHA2_FLAGS = $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) @FPTR_FLAG@
 KECCAK_FLAGS = $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) @FPTR_FLAG@
 
 all: $(PROG)
@@ -237,10 +236,10 @@ $(SKEIN_BLOCK_OBJ): $(SKEIN_BLOCK_SRC)
 $(SKEINOBJS): $(SKEINSRCS) $(SKEINHDRS)
 	$(COMPILE) $(SKEIN_FLAGS) $(@:.o=.c) -o $@
 
-$(SHA256_OBJS): $(SHA256_SRCS) $(SHA256_HDRS)
-	$(COMPILE) $(SHA256_FLAGS) $(@:.o=.c) -o $@
+$(SHA2_OBJS): $(SHA2_SRCS) $(SHA2_HDRS)
+	$(COMPILE) $(SHA2_FLAGS) $(@:.o=.c) -o $@
 
-$(SHA256ASM_OBJS): $(SHA256ASM_SRCS)
+$(SHA2ASM_OBJS): $(SHA2ASM_SRCS)
 	$(YASM)	-o $@ $(@:.o=.asm)
 
 $(KECCAK_OBJS): $(KECCAK_SRCS) $(KECCAK_HDRS)

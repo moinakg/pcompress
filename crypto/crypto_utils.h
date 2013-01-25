@@ -33,7 +33,7 @@ extern "C" {
 #endif
 
 #define	MAX_PW_LEN	16
-#define	CKSUM_MASK		0x800
+#define	CKSUM_MASK		0x700
 #define	CKSUM_MAX_BYTES		64
 #define	DEFAULT_CKSUM		"SKEIN256"
 

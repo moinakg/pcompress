@@ -236,8 +236,8 @@ then
 			# Minimum yasm version 1.1
 			[ $major -lt 1 -o $minor -lt 1 ] && continue
 			yasm=${bindir}/yasm
-			sha256asmobjs='\$\(SHA256ASM_OBJS\)'
-			sha256objs='\$\(SHA256_OBJS\)'
+			sha256asmobjs='\$\(SHA2ASM_OBJS\)'
+			sha256objs='\$\(SHA2_OBJS\)'
 		fi
 	done
 	if [ "x${yasm}" = "x" ]
@@ -492,8 +492,8 @@ libbsclflagsvar="LIBBSCLFLAGS"
 libbscwrapobjvar="LIBBSCWRAPOBJ"
 libbscgenoptvar="LIBBSCGEN_OPT"
 libbsccppflagsvar="LIBBSCCPPFLAGS"
-sha256asmobjsvar="SHA256ASM_OBJS"
-sha256objsvar="SHA256_OBJS"
+sha256asmobjsvar="SHA2ASM_OBJS"
+sha256objsvar="SHA2_OBJS"
 yasmvar="YASM"
 fptr_flag_var="FPTR_FLAG"
 extra_opt_flags_var="EXTRA_OPT_FLAGS"
