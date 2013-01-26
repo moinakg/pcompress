@@ -164,7 +164,7 @@ PKCS5_PBKDF2_HMAC(const char *pass, int passlen,
 #endif
 
 int
-compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes)
+compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, int mt)
 {
 	DEBUG_STAT_EN(double strt, en);
 
@@ -174,12 +174,22 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes)
 		*ck = lzma_crc64(buf, bytes, 0);
 
 	} else if (cksum == CKSUM_BLAKE256) {
-		if (bdsp.blake2b(cksum_buf, buf, NULL, 32, bytes, 0) != 0)
-			return (-1);
+		if (!mt) {
+			if (bdsp.blake2b(cksum_buf, buf, NULL, 32, bytes, 0) != 0)
+				return (-1);
+		} else {
+			if (bdsp.blake2bp(cksum_buf, buf, NULL, 32, bytes, 0) != 0)
+				return (-1);
+		}
 
 	} else if (cksum == CKSUM_BLAKE512) {
-		if (bdsp.blake2b(cksum_buf, buf, NULL, 64, bytes, 0) != 0)
-			return (-1);
+		if (!mt) {
+			if (bdsp.blake2b(cksum_buf, buf, NULL, 64, bytes, 0) != 0)
+				return (-1);
+		} else {
+			if (bdsp.blake2bp(cksum_buf, buf, NULL, 64, bytes, 0) != 0)
+				return (-1);
+		}
 
 	} else if (cksum == CKSUM_SKEIN256) {
 		Skein_512_Ctxt_t ctx;
@@ -683,10 +693,10 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 					b += 4;
 					*((uint32_t *)&sb[b]) = getpid();
 					b += 4;
-					compute_checksum(&sb[b], CKSUM_SHA256, sb, b);
+					compute_checksum(&sb[b], CKSUM_SHA256, sb, b, 0);
 					b = 8 + 4;
 					*((uint32_t *)&sb[b]) = rand();
-					compute_checksum(salt, CKSUM_SHA256, &sb[b], 32 + 4);
+					compute_checksum(salt, CKSUM_SHA256, &sb[b], 32 + 4, 0);
 				}
 			}
 

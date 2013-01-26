@@ -572,7 +572,7 @@ redo:
 		 * If it does not match we set length of chunk to 0 to indicate
 		 * exit to the writer thread.
 		 */
-		compute_checksum(checksum, cksum, tdat->uncompressed_chunk, _chunksize);
+		compute_checksum(checksum, cksum, tdat->uncompressed_chunk, _chunksize, tdat->cksum_mt);
 		if (memcmp(checksum, tdat->checksum, cksum_bytes) != 0) {
 			tdat->len_cmp = 0;
 			fprintf(stderr, "ERROR: Chunk %d, checksums do not match.\n", tdat->id);
@@ -937,6 +937,8 @@ start_decompress(const char *filename, const char *to_filename)
 		nthreads = nprocs;
 
 	set_threadcounts(&props, &nthreads, nprocs, DECOMPRESS_THREADS);
+	if (props.is_single_chunk)
+		nthreads = 1;
 	fprintf(stderr, "Scaling to %d thread", nthreads * props.nthreads);
 	if (nthreads * props.nthreads > 1) fprintf(stderr, "s");
 	fprintf(stderr, "\n");
@@ -959,6 +961,10 @@ start_decompress(const char *filename, const char *to_filename)
 		tdat->compress = _compress_func;
 		tdat->decompress = _decompress_func;
 		tdat->cancel = 0;
+		if (props.is_single_chunk)
+			tdat->cksum_mt = 1;
+		else
+			tdat->cksum_mt = 0;
 		tdat->level = level;
 		tdat->data = NULL;
 		tdat->props = &props;
@@ -1196,7 +1202,8 @@ redo:
 		 * back into cmp_seg. Avoids an extra memcpy().
 		 */
 		if (!encrypt_type)
-			compute_checksum(tdat->checksum, cksum, tdat->cmp_seg, tdat->rbytes);
+			compute_checksum(tdat->checksum, cksum, tdat->cmp_seg, tdat->rbytes,
+					 tdat->cksum_mt);
 
 		rctx = tdat->rctx;
 		reset_dedupe_context(tdat->rctx);
@@ -1211,7 +1218,8 @@ redo:
 		 * Compute checksum of original uncompressed chunk.
 		 */
 		if (!encrypt_type)
-			compute_checksum(tdat->checksum, cksum, tdat->uncompressed_chunk, tdat->rbytes);
+			compute_checksum(tdat->checksum, cksum, tdat->uncompressed_chunk,
+					 tdat->rbytes, tdat->cksum_mt);
 	}
 
 	/*
@@ -1692,6 +1700,10 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		tdat->decompress = _decompress_func;
 		tdat->uncompressed_chunk = (uchar_t *)1;
 		tdat->cancel = 0;
+		if (single_chunk)
+			tdat->cksum_mt = 1;
+		else
+			tdat->cksum_mt = 0;
 		tdat->level = level;
 		tdat->data = NULL;
 		tdat->props = &props;

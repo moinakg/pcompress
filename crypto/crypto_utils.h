@@ -81,7 +81,7 @@ typedef struct {
 /*
  * Generic message digest functions.
  */
-int compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes);
+int compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, int mt);
 void list_checksums(FILE *strm, char *pad);
 int get_checksum_props(const char *name, int *cksum, int *cksum_bytes,
 		      int *mac_bytes, int accept_compatible);

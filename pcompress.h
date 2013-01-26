@@ -184,7 +184,7 @@ struct cmp_data {
 	uint64_t chunksize;
 	uint64_t len_cmp, len_cmp_be;
 	uchar_t checksum[CKSUM_MAX_BYTES];
-	int level;
+	int level, cksum_mt;
 	unsigned int id;
 	compress_func_ptr compress;
 	compress_func_ptr decompress;

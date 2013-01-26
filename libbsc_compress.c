@@ -67,7 +67,7 @@ libbsc_stats(int show)
 }
 
 /*
- * BSC uses OpenMP where it is tricky to control thread count
+ * BSC uses OpenMP where it does not control thread count
  * deterministically. We only use multithread capability in BSC
  * when compressing entire file in a single chunk.
  */
