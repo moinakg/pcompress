@@ -43,6 +43,22 @@ XXHASH_SSE2_SRCS = utils/xxhash_sse2.c
 XXHASH_OBJS = utils/xxhash_sse4.o utils/xxhash_sse2.o
 XXHASH_HDRS = utils/xxhash.h
 
+BLAKE2b_SSE2 = crypto/blake2/blake2b_sse2.c
+BLAKE2b_SSE3 = crypto/blake2/blake2b_ssse3.c
+BLAKE2b_SSE4 = crypto/blake2/blake2b_sse41.c
+BLAKE2b_AVX = crypto/blake2/blake2b_avx.c
+BLAKE2bp_SSE2 = crypto/blake2/blake2bp_sse2.c
+BLAKE2bp_SSE3 = crypto/blake2/blake2bp_ssse3.c
+BLAKE2bp_SSE4 = crypto/blake2/blake2bp_sse41.c
+BLAKE2bp_AVX = crypto/blake2/blake2bp_avx.c
+BLAKE2_BASE_SRCS = crypto/blake2/blake2b.c crypto/blake2/blake2bp.c
+BLAKE2_HDRS = crypto/blake2/blake2.h crypto/blake2/blake2-impl.h crypto/blake2/blake2-config.h \
+	crypto/blake2/blake2-kat.h crypto/blake2/blake2b-round.h crypto/blake2/blake2b-load-sse2.h \
+	crypto/blake2/blake2b-load-sse41.h
+BLAKE2_SRCS = $(BLAKE2b_SSE2) $(BLAKE2b_SSE3) $(BLAKE2b_SSE4) $(BLAKE2b_AVX) \
+	$(BLAKE2bp_SSE2) $(BLAKE2bp_SSE3) $(BLAKE2bp_SSE4) $(BLAKE2bp_AVX)
+BLAKE2_OBJS = $(BLAKE2_SRCS:.c=.o)
+
 ZLIB_SRCS = zlib_compress.c
 ZLIB_HDRS = $(MAINHDRS)
 ZLIB_OBJS = $(ZLIB_SRCS:.c=.o)
@@ -152,7 +168,7 @@ COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
 	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I./crypto/sha2 \
 	-I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ \
-	-I./crypto/keccak -I./transpose $(EXTRA_CPPFLAGS) -pedantic -Wall -std=gnu99 \
+	-I./crypto/keccak -I./transpose -I./crypto/blake2 $(EXTRA_CPPFLAGS) -pedantic -Wall -std=gnu99 \
 	-fno-strict-aliasing -Wno-unused-but-set-variable -Wno-enum-compare
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
@@ -161,24 +177,24 @@ LDLIBS = -ldl -L./buildtmp -Wl,-R@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,-R@LIBZ_DIR
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
 $(SKEIN_BLOCK_OBJ) @SHA2ASM_OBJS@ @SHA2_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
-$(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS) $(XXHASH_OBJS)
+$(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS) $(XXHASH_OBJS) $(BLAKE2_OBJS)
 
-DEBUG_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@
+DEBUG_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp
 DEBUG_COMPILE = gcc -g -c @EXTRA_OPT_FLAGS@
 DEBUG_COMPILE_cpp = g++ -g -c @EXTRA_OPT_FLAGS@
 DEBUG_VEC_FLAGS = 
 DEBUG_LOOP_OPTFLAGS = 
-DEBUG_GEN_OPT = -O -fno-omit-frame-pointer @LIBBSCGEN_OPT@
+DEBUG_GEN_OPT = -O -fno-omit-frame-pointer @LIBBSCGEN_OPT@ -fopenmp
 DEBUG_CPPFLAGS = $(COMMON_CPPFLAGS)
 DEBUG_FPTR_FLAG = 
 
-RELEASE_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@
+RELEASE_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp
 RELEASE_COMPILE = gcc -c @EXTRA_OPT_FLAGS@
 RELEASE_COMPILE_cpp = g++ -c @EXTRA_OPT_FLAGS@
 RELEASE_VEC_FLAGS = $(COMMON_VEC_FLAGS)
 RELEASE_LOOP_OPTFLAGS = $(COMMON_LOOP_OPTFLAGS)
 RELEASE_CPPFLAGS = $(COMMON_CPPFLAGS) -DNDEBUG
-RELEASE_GEN_OPT = -O3 @LIBBSCGEN_OPT@
+RELEASE_GEN_OPT = -O3 @LIBBSCGEN_OPT@ -fopenmp
 RELEASE_FPTR_FLAG = -fomit-frame-pointer
 
 NO_SLAB_CPPFLAGS = -DDEBUG_NO_SLAB
@@ -193,6 +209,7 @@ CPPFLAGS = @CPPFLAGS@ @NO_SLAB_CPPFLAGS@ @DEBUG_STATS_CPPFLAGS@
 GEN_OPT = @GEN_OPT@ @SSE_OPT_FLAGS@
 BASE_OPT = @GEN_OPT@
 PREFIX=@PREFIX@
+AVX_OPT_FLAG = -mavx
 SSE4_OPT_FLAG = -msse4.2
 SSE3_OPT_FLAG = -mssse3
 SSE2_OPT_FLAG = -msse2
@@ -269,6 +286,16 @@ $(BZLIB_OBJS): $(BZLIB_SRCS) $(BZLIB_HDRS)
 $(XXHASH_OBJS): $(XXHASH_SSE4_SRCS) $(XXHASH_SSE2_SRCS) $(XXHASH_HDRS) $(XXHASH_SRCS)
 	$(COMPILE) $(BASE_OPT) $(SSE4_OPT_FLAG) $(CPPFLAGS) $(XXHASH_SSE4_SRCS) -o $(XXHASH_SSE4_SRCS:.c=.o)
 	$(COMPILE) $(BASE_OPT) $(SSE2_OPT_FLAG) $(CPPFLAGS) $(XXHASH_SSE2_SRCS) -o $(XXHASH_SSE2_SRCS:.c=.o)
+
+$(BLAKE2_OBJS): $(BLAKE2_SRCS) $(BLAKE2_BASE_SRCS) $(BLAKE2_HDRS)
+	$(COMPILE) $(BASE_OPT) $(SSE2_OPT_FLAG) $(CPPFLAGS) $(BLAKE2b_SSE2) -o $(BLAKE2b_SSE2:.c=.o)
+	$(COMPILE) $(BASE_OPT) $(SSE3_OPT_FLAG) $(CPPFLAGS) $(BLAKE2b_SSE3) -o $(BLAKE2b_SSE3:.c=.o)
+	$(COMPILE) $(BASE_OPT) $(SSE4_OPT_FLAG) $(CPPFLAGS) $(BLAKE2b_SSE4) -o $(BLAKE2b_SSE4:.c=.o)
+	$(COMPILE) $(BASE_OPT) $(AVX_OPT_FLAG) $(CPPFLAGS) $(BLAKE2b_AVX) -o $(BLAKE2b_AVX:.c=.o)
+	$(COMPILE) $(BASE_OPT) $(SSE2_OPT_FLAG) $(CPPFLAGS) $(BLAKE2bp_SSE2) -o $(BLAKE2bp_SSE2:.c=.o)
+	$(COMPILE) $(BASE_OPT) $(SSE3_OPT_FLAG) $(CPPFLAGS) $(BLAKE2bp_SSE3) -o $(BLAKE2bp_SSE3:.c=.o)
+	$(COMPILE) $(BASE_OPT) $(SSE4_OPT_FLAG) $(CPPFLAGS) $(BLAKE2bp_SSE4) -o $(BLAKE2bp_SSE4:.c=.o)
+	$(COMPILE) $(BASE_OPT) $(AVX_OPT_FLAG) $(CPPFLAGS) $(BLAKE2bp_AVX) -o $(BLAKE2bp_AVX:.c=.o)
 
 $(MAINOBJS): $(MAINSRCS) $(MAINHDRS)
 	$(COMPILE) $(GEN_OPT) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@

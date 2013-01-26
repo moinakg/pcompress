@@ -35,6 +35,7 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <assert.h>
+#include <cpuid.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -140,21 +141,6 @@ typedef enum {
 	COMPRESS_THREADS = 1,
 	DECOMPRESS_THREADS
 } algo_threads_type_t;
-
-typedef enum {
-	PROC_BIGENDIAN_GENERIC = 1,
-	PROC_LITENDIAN_GENERIC,
-	PROC_X64_INTEL,
-	PROC_X64_AMD
-} proc_type_t;
-
-typedef struct {
-	int sse_level;
-	int sse_sub_level;
-	int avx_level;
-	int xop_avail;
-	proc_type_t proc_type;
-} processor_info_t;
 
 #ifndef _IN_UTILS_
 extern processor_info_t proc_info;

@@ -26,8 +26,6 @@
 #ifndef __CPUID_H__
 #define __CPUID_H__
 
-#include "utils.h"
-
 #ifdef	__x86_64__
 #define VENDOR_STR_MAX          16
 #define BRAND_STR_MAX           64
@@ -35,6 +33,21 @@
 #define MAX_CPUID_LEVEL         32
 #define MAX_EXT_CPUID_LEVEL     32
 #define MAX_INTELFN4_LEVEL      4
+
+typedef enum {
+	PROC_BIGENDIAN_GENERIC = 1,
+	PROC_LITENDIAN_GENERIC,
+	PROC_X64_INTEL,
+	PROC_X64_AMD
+} proc_type_t;
+
+typedef struct {
+	int sse_level;
+	int sse_sub_level;
+	int avx_level;
+	int xop_avail;
+	proc_type_t proc_type;
+} processor_info_t;
 
 /**
  * This contains only the most basic CPU data, required to do identification

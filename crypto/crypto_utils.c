@@ -36,8 +36,8 @@
 #include <openssl/rand.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
-//#include <sha256.h>
 #include <sha512.h>
+#include <blake2_digest.h>
 #include <crypto_aes.h>
 #include <KeccakNISTInterface.h>
 #include <utils.h>
@@ -48,7 +48,10 @@
 #define	PROVIDER_X64_OPT	1
 
 static void init_sha512(void);
+static void init_blake2(void);
 static int geturandom_bytes(uchar_t rbytes[32]);
+static struct blake2_dispatch	bdsp;
+
 /*
  * Checksum properties
  */
@@ -59,25 +62,26 @@ static struct {
 	cksum_t	cksum_id;
 	int	bytes, mac_bytes;
 	ckinit_func_ptr init_func;
+	int		compatible;
 } cksum_props[] = {
-	{"CRC64",	"Fast 64-bit CRC from LZMA SDK.",
-			CKSUM_CRC64,		8,	32,	NULL},
+	{"CRC64",	"Extremely Fast 64-bit CRC from LZMA SDK.",
+			CKSUM_CRC64,		8,	32,	NULL, 0},
 	{"SKEIN256",	"256-bit SKEIN a NIST SHA3 runners-up (90% faster than Keccak).",
-			CKSUM_SKEIN256,		32,	32,	NULL},
+			CKSUM_SKEIN256,		32,	32,	NULL, 1},
 	{"SKEIN512",	"512-bit SKEIN",
-			CKSUM_SKEIN512,		64,	64,	NULL},
-	{"SHA256",	"Intel's optimized (SSE,AVX) 256-bit SHA2 implementation for x86.",
-			CKSUM_SHA256,		32,	32,	init_sha512},
-	{"SHA512",	"512-bit SHA2 from OpenSSL's crypto library.",
-			CKSUM_SHA512,		64,	64,	init_sha512},
+			CKSUM_SKEIN512,		64,	64,	NULL, 1},
+	{"SHA256",	"SHA512/256 version of Intel's optimized (SSE,AVX) SHA2 for x86.",
+			CKSUM_SHA256,		32,	32,	init_sha512, 0},
+	{"SHA512",	"SHA512 version of Intel's optimized (SSE,AVX) SHA2 for x86.",
+			CKSUM_SHA512,		64,	64,	init_sha512, 0},
 	{"KECCAK256",	"Official 256-bit NIST SHA3 optimized implementation.",
-			CKSUM_KECCAK256,		32,	32,	NULL},
+			CKSUM_KECCAK256,		32,	32,	NULL, 0},
 	{"KECCAK512",	"Official 512-bit NIST SHA3 optimized implementation.",
-			CKSUM_KECCAK512,		64,	64,	NULL},
+			CKSUM_KECCAK512,		64,	64,	NULL, 0},
 	{"BLAKE256",	"Very fast 256-bit BLAKE2, derived from the NIST SHA3 runner-up BLAKE.",
-			CKSUM_BLAKE256,		32,	32,	NULL},
+			CKSUM_BLAKE256,		32,	32,	init_blake2, 0},
 	{"BLAKE512",	"Very fast 256-bit BLAKE2, derived from the NIST SHA3 runner-up BLAKE.",
-			CKSUM_BLAKE512,		64,	64,	NULL}
+			CKSUM_BLAKE512,		64,	64,	init_blake2, 0}
 };
 
 static int cksum_provider = PROVIDER_OPENSSL;
@@ -169,6 +173,14 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes)
 		uint64_t *ck = (uint64_t *)cksum_buf;
 		*ck = lzma_crc64(buf, bytes, 0);
 
+	} else if (cksum == CKSUM_BLAKE256) {
+		if (bdsp.blake2b(cksum_buf, buf, NULL, 32, bytes, 0) != 0)
+			return (-1);
+
+	} else if (cksum == CKSUM_BLAKE512) {
+		if (bdsp.blake2b(cksum_buf, buf, NULL, 64, bytes, 0) != 0)
+			return (-1);
+
 	} else if (cksum == CKSUM_SKEIN256) {
 		Skein_512_Ctxt_t ctx;
 
@@ -244,12 +256,19 @@ init_sha512(void)
 #endif
 }
 
+static void
+init_blake2(void)
+{
+	blake2_module_init(&bdsp, &proc_info);
+}
+
 void
 list_checksums(FILE *strm, char *pad)
 {
 	int i;
 	for (i=0; i<(sizeof (cksum_props)/sizeof (cksum_props[0])); i++) {
-		fprintf(strm, "%s%10s - %s\n", pad, cksum_props[i].name, cksum_props[i].desc);
+		if (!cksum_props[i].compatible)
+			fprintf(strm, "%s%10s - %s\n", pad, cksum_props[i].name, cksum_props[i].desc);
 	}
 }
 
@@ -258,13 +277,16 @@ list_checksums(FILE *strm, char *pad)
  * return it's properties.
  */
 int
-get_checksum_props(const char *name, int *cksum, int *cksum_bytes, int *mac_bytes)
+get_checksum_props(const char *name, int *cksum, int *cksum_bytes,
+		  int *mac_bytes, int accept_comptible)
 {
 	int i;
 
 	for (i=0; i<(sizeof (cksum_props)/sizeof (cksum_props[0])); i++) {
 		if ((name != NULL && strcmp(name, cksum_props[i].name) == 0) ||
 		    (*cksum != 0 && *cksum == cksum_props[i].cksum_id)) {
+			if (!accept_comptible && cksum_props[i].compatible)
+				break;
 			*cksum = cksum_props[i].cksum_id;
 			*cksum_bytes = cksum_props[i].bytes;
 			*mac_bytes = cksum_props[i].mac_bytes;
@@ -316,7 +338,35 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 	aes_ctx_t *actx = (aes_ctx_t *)(cctx->crypto_ctx);
 	mctx->mac_cksum = cksum;
 
-	if (cksum == CKSUM_SKEIN256) {
+	if (cksum == CKSUM_BLAKE256) {
+		blake2b_state *ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
+		if (!ctx) return (-1);
+		if (bdsp.blake2b_init_key(ctx, 32, actx->pkey, KEYLEN) != 0)
+			return (-1);
+		mctx->mac_ctx = ctx;
+		ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
+		if (!ctx) {
+			free(mctx->mac_ctx);
+			return (-1);
+		}
+		memcpy(ctx, mctx->mac_ctx, sizeof (blake2b_state));
+		mctx->mac_ctx_reinit = ctx;
+
+	} else if (cksum == CKSUM_BLAKE512) {
+		blake2b_state *ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
+		if (!ctx) return (-1);
+		if (bdsp.blake2b_init_key(ctx, 64, actx->pkey, KEYLEN) != 0)
+			return (-1);
+		mctx->mac_ctx = ctx;
+		ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
+		if (!ctx) {
+			free(mctx->mac_ctx);
+			return (-1);
+		}
+		memcpy(ctx, mctx->mac_ctx, sizeof (blake2b_state));
+		mctx->mac_ctx_reinit = ctx;
+
+	} else if (cksum == CKSUM_SKEIN256) {
 		Skein_512_Ctxt_t *ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) return (-1);
 		Skein_512_InitExt(ctx, 256, SKEIN_CFG_TREE_INFO_SEQUENTIAL,
@@ -364,19 +414,6 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 			}
 			mctx->mac_ctx_reinit = ctx;
 		} else {
-/*			HMAC_SHA256_Context *ctx = (HMAC_SHA256_Context *)malloc(sizeof (HMAC_SHA256_Context));
-			if (!ctx) return (-1);
-			opt_HMAC_SHA256_Init(ctx, actx->pkey, KEYLEN);
-			mctx->mac_ctx = ctx;
-
-			ctx = (HMAC_SHA256_Context *)malloc(sizeof (HMAC_SHA256_Context));
-			if (!ctx) {
-				free(mctx->mac_ctx);
-				return (-1);
-			}
-			memcpy(ctx, mctx->mac_ctx, sizeof (HMAC_SHA256_Context));
-			mctx->mac_ctx_reinit = ctx;*/
-
 			HMAC_SHA512_Context *ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
 			if (!ctx) return (-1);
 			opt_HMAC_SHA512t256_Init(ctx, actx->pkey, KEYLEN);
@@ -457,7 +494,10 @@ hmac_reinit(mac_ctx_t *mctx)
 {
 	int cksum = mctx->mac_cksum;
 
-	if (cksum == CKSUM_SKEIN256 || cksum == CKSUM_SKEIN512) {
+	if (cksum == CKSUM_BLAKE256 || cksum == CKSUM_BLAKE512) {
+		memcpy(mctx->mac_ctx, mctx->mac_ctx_reinit, sizeof (blake2b_state));
+
+	} else if (cksum == CKSUM_SKEIN256 || cksum == CKSUM_SKEIN512) {
 		memcpy(mctx->mac_ctx, mctx->mac_ctx_reinit, sizeof (Skein_512_Ctxt_t));
 
 	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_SHA512 || cksum == CKSUM_CRC64) {
@@ -480,7 +520,10 @@ hmac_update(mac_ctx_t *mctx, uchar_t *data, uint64_t len)
 {
 	int cksum = mctx->mac_cksum;
 
-	if (cksum == CKSUM_SKEIN256 || cksum == CKSUM_SKEIN512) {
+	if (cksum == CKSUM_BLAKE256 || cksum == CKSUM_BLAKE512) {
+		bdsp.blake2b_update((blake2b_state *)(mctx->mac_ctx), (uint8_t *)data, len);
+
+	} else if (cksum == CKSUM_SKEIN256 || cksum == CKSUM_SKEIN512) {
 		Skein_512_Update((Skein_512_Ctxt_t *)(mctx->mac_ctx), data, len);
 
 	} else if (cksum == CKSUM_SHA256 || cksum == CKSUM_CRC64) {
@@ -529,7 +572,15 @@ hmac_final(mac_ctx_t *mctx, uchar_t *hash, unsigned int *len)
 {
 	int cksum = mctx->mac_cksum;
 
-	if (cksum == CKSUM_SKEIN256) {
+	if (cksum == CKSUM_BLAKE256) {
+		bdsp.blake2b_final((blake2b_state *)(mctx->mac_ctx), hash, 32);
+		*len = 32;
+
+	} else if (cksum == CKSUM_BLAKE512) {
+		bdsp.blake2b_final((blake2b_state *)(mctx->mac_ctx), hash, 64);
+		*len = 64;
+
+	} else if (cksum == CKSUM_SKEIN256) {
 		Skein_512_Final((Skein_512_Ctxt_t *)(mctx->mac_ctx), hash);
 		*len = 32;
 
@@ -569,7 +620,11 @@ hmac_cleanup(mac_ctx_t *mctx)
 {
 	int cksum = mctx->mac_cksum;
 
-	if (cksum == CKSUM_SKEIN256 || cksum == CKSUM_SKEIN512) {
+	if (cksum == CKSUM_BLAKE256 || cksum == CKSUM_BLAKE512) {
+		memset(mctx->mac_ctx, 0, sizeof (blake2b_state));
+		memset(mctx->mac_ctx_reinit, 0, sizeof (blake2b_state));
+
+	} else if (cksum == CKSUM_SKEIN256 || cksum == CKSUM_SKEIN512) {
 		memset(mctx->mac_ctx, 0, sizeof (Skein_512_Ctxt_t));
 		memset(mctx->mac_ctx_reinit, 0, sizeof (Skein_512_Ctxt_t));
 

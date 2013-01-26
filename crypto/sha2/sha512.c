@@ -125,25 +125,25 @@ APS_NAMESPACE(Init_SHA512) (processor_info_t *pc)
 static void
 _init (SHA512_Context *sc, const uint64_t iv[SHA512_HASH_WORDS])
 {
-  int i;
+	int i;
 
-  sc->totalLength[0] = 0LL;
-  sc->totalLength[1] = 0LL;
-  for (i = 0; i < SHA512_HASH_WORDS; i++)
-    sc->hash[i] = iv[i];
-  sc->bufferLength = 0L;
+	sc->totalLength[0] = 0LL;
+	sc->totalLength[1] = 0LL;
+	for (i = 0; i < SHA512_HASH_WORDS; i++)
+		sc->hash[i] = iv[i];
+	sc->bufferLength = 0L;
 }
 
 void
 APS_NAMESPACE(SHA512_Init) (SHA512_Context *sc)
 {
-  _init (sc, iv512);
+	_init (sc, iv512);
 }
 
 void
 APS_NAMESPACE(SHA512t256_Init) (SHA512_Context *sc)
 {
-  _init (sc, iv256);
+	_init (sc, iv256);
 }
 
 void
@@ -207,50 +207,50 @@ APS_NAMESPACE(SHA512_Update) (SHA512_Context *sc, const void *vdata, size_t len)
 void
 APS_NAMESPACE(SHA512t256_Update) (SHA512_Context *sc, const void *data, size_t len)
 {
-  APS_NAMESPACE(SHA512_Update) (sc, data, len);
+	APS_NAMESPACE(SHA512_Update) (sc, data, len);
 }
 
 static void
 _final (SHA512_Context *sc, uint8_t *hash, int hashWords, int halfWord)
 {
-  uint32_t bytesToPad;
-  uint64_t lengthPad[2];
-  int i;
-
-  bytesToPad = 240L - sc->bufferLength;
-  if (bytesToPad > 128L)
-    bytesToPad -= 128L;
-
-  lengthPad[0] = BYTESWAP64(sc->totalLength[0]);
-  lengthPad[1] = BYTESWAP64(sc->totalLength[1]);
-
-  APS_NAMESPACE(SHA512_Update) (sc, padding, bytesToPad);
-  APS_NAMESPACE(SHA512_Update) (sc, lengthPad, 16L);
-
-  if (hash) {
-    for (i = 0; i < hashWords; i++) {
-      *((uint64_t *) hash) = BYTESWAP64(sc->hash[i]);
-      hash += 8;
-    }
-    if (halfWord) {
-      hash[0] = (uint8_t) (sc->hash[i] >> 56);
-      hash[1] = (uint8_t) (sc->hash[i] >> 48);
-      hash[2] = (uint8_t) (sc->hash[i] >> 40);
-      hash[3] = (uint8_t) (sc->hash[i] >> 32);
-    }
-  }
+	uint32_t bytesToPad;
+	uint64_t lengthPad[2];
+	int i;
+	
+	bytesToPad = 240L - sc->bufferLength;
+	if (bytesToPad > 128L)
+		bytesToPad -= 128L;
+	
+	lengthPad[0] = BYTESWAP64(sc->totalLength[0]);
+	lengthPad[1] = BYTESWAP64(sc->totalLength[1]);
+	
+	APS_NAMESPACE(SHA512_Update) (sc, padding, bytesToPad);
+	APS_NAMESPACE(SHA512_Update) (sc, lengthPad, 16L);
+	
+	if (hash) {
+		for (i = 0; i < hashWords; i++) {
+			*((uint64_t *) hash) = BYTESWAP64(sc->hash[i]);
+			hash += 8;
+		}
+		if (halfWord) {
+			hash[0] = (uint8_t) (sc->hash[i] >> 56);
+			hash[1] = (uint8_t) (sc->hash[i] >> 48);
+			hash[2] = (uint8_t) (sc->hash[i] >> 40);
+			hash[3] = (uint8_t) (sc->hash[i] >> 32);
+		}
+	}
 }
 
 void
 APS_NAMESPACE(SHA512_Final) (SHA512_Context *sc, uint8_t hash[SHA512_HASH_SIZE])
 {
-  _final (sc, hash, SHA512_HASH_WORDS, 0);
+	_final (sc, hash, SHA512_HASH_WORDS, 0);
 }
 
 void
 APS_NAMESPACE(SHA512t256_Final) (SHA512_Context *sc, uint8_t hash[SHA512t256_HASH_SIZE])
 {
-  _final (sc, hash, SHA512t256_HASH_WORDS, 0);
+	_final (sc, hash, SHA512t256_HASH_WORDS, 0);
 }
 
 #define HASH_CONTEXT SHA512_Context

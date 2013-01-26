@@ -745,11 +745,23 @@ start_decompress(const char *filename, const char *to_filename)
 	}
 
 	cksum = flags & CKSUM_MASK;
-	if (get_checksum_props(NULL, &cksum, &cksum_bytes, &mac_bytes) == -1) {
+
+	/*
+	 * Backward compatibility check for SKEIN in archives version 5 or below.
+	 * In newer versions BLAKE uses same IDs as SKEIN.
+	 */
+	if (version <= 5) {
+		if (cksum == CKSUM_BLAKE256) cksum = CKSUM_SKEIN256;
+		if (cksum == CKSUM_BLAKE512) cksum = CKSUM_SKEIN512;
+	}
+	if (get_checksum_props(NULL, &cksum, &cksum_bytes, &mac_bytes, 1) == -1) {
 		fprintf(stderr, "Invalid checksum algorithm code: %d. File corrupt ?\n", cksum);
 		UNCOMP_BAIL;
 	}
 
+	/*
+	 * Archives older than 5 did not support MACs.
+	 */
 	if (version < 5)
 		mac_bytes = 0;
 
@@ -2250,7 +2262,7 @@ main(int argc, char *argv[])
 			break;
 
 		    case 'S':
-			if (get_checksum_props(optarg, &cksum, &cksum_bytes, &mac_bytes) == -1) {
+			if (get_checksum_props(optarg, &cksum, &cksum_bytes, &mac_bytes, 0) == -1) {
 				err_exit(0, "Invalid checksum type %s", optarg);
 			}
 			break;
@@ -2344,7 +2356,7 @@ main(int argc, char *argv[])
 	main_cancel = 0;
 
 	if (cksum == 0)
-		get_checksum_props(DEFAULT_CKSUM, &cksum, &cksum_bytes, &mac_bytes);
+		get_checksum_props(DEFAULT_CKSUM, &cksum, &cksum_bytes, &mac_bytes, 0);
 
 	if (!encrypt_type) {
 		/*

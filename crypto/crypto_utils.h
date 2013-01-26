@@ -49,14 +49,19 @@ extern "C" {
  */
 typedef enum {
 	CKSUM_CRC64 = 0x100,
-	CKSUM_SKEIN256 = 0x200,
-	CKSUM_SKEIN512 = 0x300,
+	CKSUM_BLAKE256 = 0x200,
+	CKSUM_BLAKE512 = 0x300,
 	CKSUM_SHA256 = 0x400,
 	CKSUM_SHA512 = 0x500,
 	CKSUM_KECCAK256 = 0x600,
 	CKSUM_KECCAK512 = 0x700,
-	CKSUM_BLAKE256 = 0x800,
-	CKSUM_BLAKE512 = 0x900
+/*
+ * Backwards compatibility options. SKEIN in release 1.2 was replaced with
+ * Blake2 from 1.3 onwards (for sheer speed of Blake2). We want to be able
+ * to decode archives created with 1.2. New archives do not use SKEIN.
+ */
+	CKSUM_SKEIN256 = 0x800,
+	CKSUM_SKEIN512 = 0x900
 } cksum_t;
 
 typedef struct {
@@ -78,7 +83,8 @@ typedef struct {
  */
 int compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes);
 void list_checksums(FILE *strm, char *pad);
-int get_checksum_props(const char *name, int *cksum, int *cksum_bytes, int *mac_bytes);
+int get_checksum_props(const char *name, int *cksum, int *cksum_bytes,
+		      int *mac_bytes, int accept_compatible);
 void serialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
 void deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
 
