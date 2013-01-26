@@ -2263,7 +2263,7 @@ main(int argc, char *argv[])
 
 		    case 'S':
 			if (get_checksum_props(optarg, &cksum, &cksum_bytes, &mac_bytes, 0) == -1) {
-				err_exit(0, "Invalid checksum type %s", optarg);
+				err_exit(0, "Invalid checksum type %s\n", optarg);
 			}
 			break;
 

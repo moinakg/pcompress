@@ -9,7 +9,7 @@ for algo in zlib ppmd
 do
 	for tf in `cat files.lst`
 	do
-		for cksum in CRC64 SHA256 SHA512 SKEIN256 SKEIN512 KECCAK256 KECCAK512
+		for cksum in CRC64 SHA256 SHA512 BLAKE256 BLAKE512 KECCAK256 KECCAK512
 		do
 			cmd="../../pcompress -c ${algo} -l 6 -s 1m -S ${cksum} ${tf}"
 			echo "Running $cmd"

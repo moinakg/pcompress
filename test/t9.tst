@@ -52,7 +52,7 @@ do
 	done
 done
 
-for feat in "-S CRC64" "-S SKEIN256" "-S SKEIN512" "-S SHA256" "-S SHA512" "-S KECCAK256" "-S KECCAK512"
+for feat in "-S CRC64" "-S BLAKE256" "-S BLAKE512" "-S SHA256" "-S SHA512" "-S KECCAK256" "-S KECCAK512"
 do
 	rm -f ${tstf}.*
 
