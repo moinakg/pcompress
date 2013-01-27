@@ -38,8 +38,9 @@
 
 #include <utils.h>
 
-#define SHA512_HASH_SIZE 64
-#define SHA512t256_HASH_SIZE 32
+#define	SHA512_HASH_SIZE		64
+#define	SHA512t256_HASH_SIZE	32
+#define	SHA512_BLOCK_SIZE	128L
 
 /* Hash size in 64-bit words */
 #define SHA512_HASH_WORDS 8
@@ -50,8 +51,8 @@ typedef struct _SHA512_Context {
   uint64_t hash[SHA512_HASH_WORDS];
   uint32_t bufferLength;
   union {
-    uint64_t words[16];
-    uint8_t bytes[128];
+    uint64_t words[SHA512_BLOCK_SIZE/8];
+    uint8_t bytes[SHA512_BLOCK_SIZE];
   } buffer;
 } SHA512_Context;
 

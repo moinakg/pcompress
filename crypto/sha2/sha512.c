@@ -61,7 +61,7 @@
 
 typedef void (*update_func_ptr)(const void *input_data, void *digest, uint64_t num_blks);
 
-static const uint8_t padding[128] = {
+static const uint8_t padding[SHA512_BLOCK_SIZE] = {
   0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -157,7 +157,7 @@ APS_NAMESPACE(SHA512_Update) (SHA512_Context *sc, const void *vdata, size_t len)
 
 	if (sc->bufferLength) {
 		do {
-			bufferBytesLeft = 128L - sc->bufferLength;
+			bufferBytesLeft = SHA512_BLOCK_SIZE - sc->bufferLength;
 			bytesToCopy = bufferBytesLeft;
 			if (bytesToCopy > len)
 				bytesToCopy = len;
@@ -172,14 +172,14 @@ APS_NAMESPACE(SHA512_Update) (SHA512_Context *sc, const void *vdata, size_t len)
 			data += bytesToCopy;
 			len -= bytesToCopy;
 
-			if (sc->bufferLength == 128L) {
+			if (sc->bufferLength == SHA512_BLOCK_SIZE) {
 				sc->blocks = 1;
 				sha512_update_func(sc->buffer.words, sc->hash, sc->blocks);
 				sc->bufferLength = 0L;
 			} else {
 				return;
 			}
-		} while (len > 0 && len <= 128L);
+		} while (len > 0 && len <= SHA512_BLOCK_SIZE);
 		if (!len) return;
 	}
 
@@ -218,8 +218,8 @@ _final (SHA512_Context *sc, uint8_t *hash, int hashWords, int halfWord)
 	int i;
 	
 	bytesToPad = 240L - sc->bufferLength;
-	if (bytesToPad > 128L)
-		bytesToPad -= 128L;
+	if (bytesToPad > SHA512_BLOCK_SIZE)
+		bytesToPad -= SHA512_BLOCK_SIZE;
 	
 	lengthPad[0] = BYTESWAP64(sc->totalLength[0]);
 	lengthPad[1] = BYTESWAP64(sc->totalLength[1]);
@@ -258,7 +258,7 @@ APS_NAMESPACE(SHA512t256_Final) (SHA512_Context *sc, uint8_t hash[SHA512t256_HAS
 #define HASH_UPDATE APS_NAMESPACE(SHA512_Update)
 #define HASH_FINAL APS_NAMESPACE(SHA512_Final)
 #define HASH_SIZE SHA512_HASH_SIZE
-#define HASH_BLOCK_SIZE 128
+#define HASH_BLOCK_SIZE SHA512_BLOCK_SIZE
 
 #define HMAC_CONTEXT HMAC_SHA512_Context
 #define HMAC_INIT APS_NAMESPACE(HMAC_SHA512_Init)
@@ -283,7 +283,7 @@ APS_NAMESPACE(SHA512t256_Final) (SHA512_Context *sc, uint8_t hash[SHA512t256_HAS
 #define HASH_UPDATE APS_NAMESPACE(SHA512t256_Update)
 #define HASH_FINAL APS_NAMESPACE(SHA512t256_Final)
 #define HASH_SIZE SHA512t256_HASH_SIZE
-#define HASH_BLOCK_SIZE 128
+#define HASH_BLOCK_SIZE SHA512_BLOCK_SIZE
 
 #define HMAC_CONTEXT HMAC_SHA512_Context
 #define HMAC_INIT APS_NAMESPACE(HMAC_SHA512t256_Init)

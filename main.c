@@ -528,8 +528,14 @@ redo:
 				    tdat->uncompressed_chunk, &_chunksize, tdat->level, HDR, tdat->data,
 				    tdat->props);
 			} else {
+				DEBUG_STAT_EN(double strt, en);
+
+				DEBUG_STAT_EN(strt = get_wtime_millis());
 				rv = tdat->decompress(cseg, tdat->len_cmp, tdat->uncompressed_chunk,
 				    &_chunksize, tdat->level, HDR, tdat->data);
+				DEBUG_STAT_EN(en = get_wtime_millis());
+				DEBUG_STAT_EN(fprintf(stderr, "Chunk decompression speed %.3f MB/s\n",
+						get_mb_s(_chunksize, strt, en)));
 			}
 		} else {
 			memcpy(tdat->uncompressed_chunk, cseg, _chunksize);

@@ -43,6 +43,8 @@
 #include <utils.h>
 
 #include "crypto_utils.h"
+#include "sha2_utils.h"
+#include "sha3_utils.h"
 
 #define	PROVIDER_OPENSSL	0
 #define	PROVIDER_X64_OPT	1
@@ -91,6 +93,9 @@ extern uint64_t lzma_crc64_8bchk(const uint8_t *buf, uint64_t size,
 	uint64_t crc, uint64_t *cnt);
 
 #ifdef __OSSL_OLD__
+/*
+ * The two functions below fill missing functionality in older versions of OpenSSL.
+ */
 int
 HMAC_CTX_copy(HMAC_CTX *dctx, HMAC_CTX *sctx)
 {
@@ -163,6 +168,14 @@ PKCS5_PBKDF2_HMAC(const char *pass, int passlen,
 }
 #endif
 
+/*
+ * Compute a digest of the given data segment. The parameter mt indicates whether
+ * to use the parallel(OpenMP) versions. Parallel versions are only used when
+ * a single segment is used to hold the entire file - essentially a single-threaded
+ * compression.
+ * In other cases segments are handled in separate threads any way and we do not
+ * need or want another level of parallelism to cause contention.
+ */
 int
 compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, int mt)
 {
@@ -181,7 +194,6 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, in
 			if (bdsp.blake2bp(cksum_buf, buf, NULL, 32, bytes, 0) != 0)
 				return (-1);
 		}
-
 	} else if (cksum == CKSUM_BLAKE512) {
 		if (!mt) {
 			if (bdsp.blake2b(cksum_buf, buf, NULL, 64, bytes, 0) != 0)
@@ -190,7 +202,10 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, in
 			if (bdsp.blake2bp(cksum_buf, buf, NULL, 64, bytes, 0) != 0)
 				return (-1);
 		}
-
+	/*
+	 * No parallelism for SKEIN. It is deprecated and retained here only for
+	 * backwards compatiblity.
+	 */
 	} else if (cksum == CKSUM_SKEIN256) {
 		Skein_512_Ctxt_t ctx;
 
@@ -207,40 +222,44 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, in
 
 	} else if (cksum == CKSUM_SHA256) {
 		if (cksum_provider == PROVIDER_OPENSSL) {
-			SHA256_CTX ctx;
-
-			SHA256_Init(&ctx);
-			SHA256_Update(&ctx, buf, bytes);
-			SHA256_Final(cksum_buf, &ctx);
+			if (!mt)
+				ossl_SHA256(cksum_buf, buf, bytes);
+			else
+				ossl_SHA256_par(cksum_buf, buf, bytes);
 		} else {
-			SHA512_Context ctx;
-
-			opt_SHA512t256_Init(&ctx);
-			opt_SHA512t256_Update(&ctx, buf, bytes);
-			opt_SHA512t256_Final(&ctx, cksum_buf);
+			if (!mt)
+				opt_SHA512t256(cksum_buf, buf, bytes);
+			else
+				opt_SHA512t256_par(cksum_buf, buf, bytes);
 		}
 	} else if (cksum == CKSUM_SHA512) {
 		if (cksum_provider == PROVIDER_OPENSSL) {
-			SHA512_CTX ctx;
-
-			SHA512_Init(&ctx);
-			SHA512_Update(&ctx, buf, bytes);
-			SHA512_Final(cksum_buf, &ctx);
+			if (!mt)
+				ossl_SHA512(cksum_buf, buf, bytes);
+			else
+				ossl_SHA512_par(cksum_buf, buf, bytes);
 		} else {
-			SHA512_Context ctx;
-
-			opt_SHA512_Init(&ctx);
-			opt_SHA512_Update(&ctx, buf, bytes);
-			opt_SHA512_Final(&ctx, cksum_buf);
+			if (!mt)
+				opt_SHA512(cksum_buf, buf, bytes);
+			else
+				opt_SHA512_par(cksum_buf, buf, bytes);
 		}
-
 	} else if (cksum == CKSUM_KECCAK256) {
-		if (Keccak_Hash(256, buf, bytes * 8, cksum_buf) != 0)
-			return (-1);
-
+		if (!mt) {
+			if (Keccak256(cksum_buf, buf, bytes) != 0)
+				return (-1);
+		} else {
+			if (Keccak256_par(cksum_buf, buf, bytes) != 0)
+				return (-1);
+		}
 	} else if (cksum == CKSUM_KECCAK512) {
-		if (Keccak_Hash(512, buf, bytes * 8, cksum_buf) != 0)
-			return (-1);
+		if (!mt) {
+			if (Keccak512(cksum_buf, buf, bytes) != 0)
+				return (-1);
+		} else {
+			if (Keccak512_par(cksum_buf, buf, bytes) != 0)
+				return (-1);
+		}
 	} else {
 		return (-1);
 	}
@@ -339,8 +358,8 @@ deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes)
 }
 
 /*
- * Perform keyed hashing. With Skein, HMAC is not used, rather Skein's
- * native MAC is used which is more optimal than HMAC.
+ * Perform keyed hashing. With Skein/Blake/Keccak, HMAC is not used, rather
+ * their native MAC features are used which are more optimal than HMAC.
  */
 int
 hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
@@ -658,6 +677,9 @@ hmac_cleanup(mac_ctx_t *mctx)
 	return (0);
 }
 
+/*
+ * Encryption related functions.
+ */
 int
 init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 	    uchar_t *salt, int saltlen, uint64_t nonce, int enc_dec)
@@ -814,6 +836,9 @@ err0:
 	return (4);
 }
 
+/*
+ * Input password string from terminal without echoing.
+ */
 int
 get_pw_string(uchar_t pw[MAX_PW_LEN], const char *prompt, int twice)
 {

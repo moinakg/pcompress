@@ -30,10 +30,11 @@ MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heapq.h 
 MAINOBJS = $(MAINSRCS:.c=.o)
 
 CRYPTO_SRCS = crypto/aes/crypto_aes.c crypto/scrypt/crypto_scrypt-nosse.c \
-	crypto/scrypt/sha256.c crypto/scrypt/crypto_aesctr.c crypto/crypto_utils.c
+	crypto/scrypt/sha256.c crypto/scrypt/crypto_aesctr.c crypto/crypto_utils.c \
+	crypto/sha2_utils.c crypto/sha3_utils.c
 CRYPTO_HDRS = crypto/crypto_utils.h crypto/scrypt/crypto_scrypt.h \
 	crypto/scrypt/sha256.h crypto/scrypt/crypto_aesctr.h crypto/aes/crypto_aes.h \
-	$(MAINHDRS)
+	crypto/sha2_utils.h crypto/sha3_utils.h $(MAINHDRS)
 CRYPTO_OBJS = $(CRYPTO_SRCS:.c=.o)
 CRYPTO_CPPFLAGS=-I@OPENSSL_INCDIR@
 
