@@ -55,8 +55,7 @@ Keccak256_par(uchar_t *cksum_buf, uchar_t *buf, uint64_t bytes)
 	 * If not then just do a simple serial hashing.
 	 */
 	if (bytes / 2 <= KECCAK_BLOCK_SIZE * 2) {
-		Keccak_Hash(256, buf, bytes * 8, cksum_buf);
-		return;
+		return (Keccak_Hash(256, buf, bytes * 8, cksum_buf));
 	}
 	pos[0] = buf;
 	len[0] = bytes/2;
@@ -93,8 +92,7 @@ Keccak512_par(uchar_t *cksum_buf, uchar_t *buf, uint64_t bytes)
 	 * If not then just do a simple serial hashing.
 	 */
 	if (bytes / 2 <= KECCAK_BLOCK_SIZE * 2) {
-		Keccak_Hash(512, buf, bytes * 8, cksum_buf);
-		return;
+		return (Keccak_Hash(512, buf, bytes * 8, cksum_buf));
 	}
 	pos[0] = buf;
 	len[0] = bytes/2;
