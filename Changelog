@@ -1,3 +1,48 @@
+== 1.3.0 Major Performance Release ==
+Fix return from parallel versions of Keccak_Hash() function.
+Add parallel versions of various checksums for single-segment, single-thread compression.
+Use BLAKE2 parallel version for single-chunk archives (whole file in one chunk).
+Set decompression threads correctly for single-chunk archives.
+Update default checksum to BLAKE256.
+Add optimized BLAKE2 implementations with runtime detection of CPU capability (SSE/AVX).                                                                            
+Major changes to use Intel's optimized SHA512 code for SHA512 and SHA512/256.
+Remove earlier SHA256 code which is slower than SHA512/256 (on 64-bit CPU).
+Use HMAC from Alan Saddi's implementation for cleaner, faster code.
+Changes for generalized runtime SSE/AVX/XOP detection.
+Multi instruction set XXhash build with runtime selection.
+Extend CPUID code to detect more instruction sets.
+Add options for BLAKE2 hash.
+Move GCC builtins into utils header.
+Bump file format version number due to extended digest flags.
+Add descriptions to digest list.
+Rationalize XXHash implementation to deal with 32-byte blocks instead of 16-byte.
+Fix XXHash performance degradation for small keys.
+Modify a data analysis loop in adaptive compress to make it auto-vectorizable.
+Improve Deduplication throughtput by 90%.
+Use SSE4 register as sliding window for default 16-byte window size.
+Use local variable for sliding window position to avoid spurios memory access in non-SIMD case.
+Avoid computing breakpoint check value if processed length < minimum block length.
+Improve SSE version detection.
+Add SSE4 detection.
+Fix setting of some opt flags in Makefile.in.
+Many optimization tweaks
+Optimize Rabin Deduplication and Bsdiff
+Vectorize XXHash using SSE4
+Add SSE2 improvements to CTR mode AES.
+Add debug print of encryption and HMAC throughput.
+Fix error message for invalid option.
+Implement algo-specific minimum distance match for Delta Compression.
+Fixes and performance improvements for Dedupe Delta Compression
+Avoid using fingerprints in minhash computation and fix write amplification
+Modify min-heap to use 64bit values
+Improve bsdiff performance
+Fix pointer comparison in bsdiff
+Use 32bit offsets in bsdiff to reduce memory usage
+Improve Zero RLE Encoder performance
+Add more buffer overflow checks in Zero RLE Decoder
+Use SSE3 lddqu in the matchfinder if SSE3 is enabled.
+Remove outdated LZP note.
+
 == 1.2.0 Major Stable Release ==
 Fix issue #1 and issue #2.
 Enable building with older openssl (at least 0.9.8e).

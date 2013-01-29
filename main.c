@@ -35,6 +35,7 @@
 #include <strings.h>
 #include <limits.h>
 #include <unistd.h>
+#include <signal.h>
 #if defined(sun) || defined(__sun)
 #include <sys/byteorder.h>
 #else
@@ -99,7 +100,7 @@ static int cksum_bytes, mac_bytes;
 static int cksum = 0, t_errored = 0;
 static int rab_blk_size = 0;
 static crypto_ctx_t crypto_ctx;
-static char *pwd_file = NULL;
+static char *pwd_file = NULL, *f_name = NULL;
 
 static void
 usage(void)
@@ -183,6 +184,15 @@ show_compression_stats(uint64_t chunksize)
 	avg_chunk /= chunk_num;
 	fprintf(stderr, "Avg compressed chunk   : %s(%.2f%%)\n\n",
 	    bytes_to_size(avg_chunk), (double)avg_chunk/(double)chunksize*100);
+}
+
+void
+Int_Handler(int signo)
+{
+	if (f_name != NULL) {
+		unlink(f_name);
+	}
+	exit(1);
 }
 
 /*
@@ -1658,6 +1668,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			perror("mkstemp ");
 			COMP_BAIL;
 		}
+		f_name = tmpfile1;
+		signal(SIGINT, Int_Handler);
+		signal(SIGTERM, Int_Handler);
 	} else {
 		/*
 		 * Use stdin/stdout for pipe mode.
