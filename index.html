@@ -61,7 +61,7 @@
 <li>
 <strong>Multiple Algorithms</strong>: Support for multiple compression algorithms like LZMA, LZMA-Multithreaded, Bzip2, PPMD, LZ4 etc. Adaptive modes allow selecting an algorithm per chunk based on heuristics.</li>
 <li>
-<strong>Strong Data Integrity</strong>: Strong Data Integrity verification with option of using SKEIN, SHA2 or KECCAK. Headers are also checksummed using CRC32.</li>
+<strong>Strong Data Integrity</strong>: Strong Data Integrity verification with option of using BLAKE2, SHA2 or KECCAK. Headers are also checksummed using CRC32.</li>
 <li>
 <strong>Filters</strong>: Pre-compression filters: LZP, Delta2. These improve compression ratio across the board at a little extra computational cost.</li>
 <li>
@@ -186,14 +186,14 @@ Other flags:
               datasets.
 
    '-S' &lt;cksum&gt;
-        -     Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512, SHA256 and
-              SHA512. Default one is SKEIN256. The implementation actually uses SKEIN
+        -     Specify chunk checksum to use: CRC64, BLAKE2-256, BLAKE2-512, SHA256 and
+              SHA512. Default one is BLAKE2-256. The implementation actually uses SKEIN
               512-256. This is 25% slower than simple CRC64 but is many times more
-              robust than CRC64 in detecting data integrity errors. SKEIN is a
+              robust than CRC64 in detecting data integrity errors. BLAKE is a
               finalist in the NIST SHA-3 standard selection process and is one of
-              the fastest in the group, especially on x86 platforms. BLAKE is faster
-              than SKEIN on a few platforms.
-              SKEIN 512-256 is about 60% faster than SHA 512-256 on x64 platforms.
+              the fastest in the group, especially on x86 platforms. BLAKE2 is faster
+              than BLAKE and even faster than MD5.
+              BLAKE2 512-256 is about 60% faster than SHA 512-256 on x64 platforms.
 
    '-F' -     Perform Fixed Block Deduplication. This is faster than fingerprinting
               based content-aware deduplication in some cases. However this is mostly
