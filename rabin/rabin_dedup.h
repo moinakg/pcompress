@@ -76,6 +76,10 @@
 #define	RAB_BLK_MASK (((1 << RAB_BLK_MIN_BITS) - 1) >> 1)
 #define	RAB_BLK_AVG_SZ(x) (1 << ((x) + RAB_BLK_MIN_BITS))
 
+// The sliding window starts at min window size - this offset. It is needless
+// to slide the window over every byte in the chunk.
+#define	RAB_WINDOW_SLIDE_OFFSET	(256)
+
 // Minimum practical chunk size when doing dedup
 #define	RAB_MIN_CHUNK_SIZE (1048576L)
 

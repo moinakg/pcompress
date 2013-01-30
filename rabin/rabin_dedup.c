@@ -416,6 +416,12 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		return (0);
 	}
 
+	/*
+	 * Start our sliding window at a fixed number of bytes before the min window size.
+	 * It is pointless to slide the window over the whole length of the chunk.
+	 */
+	offset = ctx->rabin_poly_min_block_size - RAB_WINDOW_SLIDE_OFFSET;
+	length = offset;
 	for (i=offset; i<j; i++) {
 		uint64_t pc[4];
 		uint32_t cur_byte = buf1[i];
@@ -498,6 +504,8 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			last_offset = i+1;
 			length = 0;
 			if (*size - last_offset <= ctx->rabin_poly_min_block_size) break;
+			length = ctx->rabin_poly_min_block_size - RAB_WINDOW_SLIDE_OFFSET;
+			i = i + length;
 		}
 	}
 
