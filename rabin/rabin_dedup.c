@@ -560,7 +560,7 @@ process_blocks:
 		DEBUG_STAT_EN(delta_fails = 0);
 		DEBUG_STAT_EN(hash_collisions = 0);
 
-		ary_sz = blknum * sizeof (rabin_blockentry_t *);
+		ary_sz = (blknum << 1) * sizeof (rabin_blockentry_t *);
 		htab = (rabin_blockentry_t **)(ctx->cbuf + ctx->real_chunksize - ary_sz);
 		memset(htab, 0, ary_sz);
 
@@ -598,8 +598,8 @@ process_blocks:
 			 * not enabled then value of similarity_hash == hash.
 			 */
 			ck = ctx->blocks[i]->similarity_hash;
-			ck += (ck / ctx->blocks[i]->length);
-			j = ck % blknum;
+			ck ^= (ck / ctx->blocks[i]->length);
+			j = ck % (blknum << 1);
 
 			if (htab[j] == 0) {
 				/*
