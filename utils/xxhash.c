@@ -30,7 +30,12 @@
 	- xxHash source repository : http://code.google.com/p/xxhash/
 */
 
-
+/*
+ * Modified by Moinak Ghosh for pcompress. The new hashing approach
+ * with interleaved blocks is derived from the following paper:
+ * 
+ * http://eprint.iacr.org/2012/476.pdf
+ */
 
 //**************************************
 // Tuning parameters
@@ -356,10 +361,10 @@ int   CPUCAP_NM(XXH32_feed) (void* state_in, const void* input, int len)
 
 		/*
 		 * 4-way SIMD calculations with 4 ints in two blocks for 2 accumulators will
-		 * interleave to some extent on a hyperthreaded processor providing 10% - 14%
-		 * speedup over original xxhash depending on processor. We could have used
-		 * aligned loads but we actually want the unaligned penalty. It helps to
-		 * interleave better for a slight benefit over aligned loads here!
+		 * interleave to some extent on the superscalar x86 processor providing
+		 * 10% - 14% speedup over original xxhash depending on processor model. We
+		 * could have used aligned loads but we actually want the unaligned penalty.
+		 * It helps to interleave better for a slight benefit over aligned loads here!
 		 */
 		do {
 			__m128i mem = _mm_loadu_si128((__m128i *)p);

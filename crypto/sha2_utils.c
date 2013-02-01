@@ -30,9 +30,21 @@
 #endif
 #include <utils.h>
 
+#define	BLKSZ		(2048)
+
 /*
  * Helper functions for single-call SHA2 hashing. Both serial and
- * parallel versions are provided.
+ * parallel versions are provided. Parallel versions use 2-stage
+ * Merkle Tree hashing.
+ * 
+ * At the leaf level data is split into BLKSZ blocks and 4 threads
+ * compute 4 hashes of interleaved block streams. At 2nd level two
+ * new hashes are generated from hashing the 2 pairs of hash values.
+ * In the final stage the 2 hash values are hashed to the final digest.
+ * 
+ * References:
+ * http://eprint.iacr.org/2012/476.pdf
+ * http://gva.noekeon.org/papers/bdpv09tree.html
  */
 void
 ossl_SHA256(uchar_t *cksum_buf, uchar_t *buf, uint64_t bytes)
@@ -47,44 +59,64 @@ ossl_SHA256(uchar_t *cksum_buf, uchar_t *buf, uint64_t bytes)
 void
 ossl_SHA256_par(uchar_t *cksum_buf, uchar_t *buf, uint64_t bytes)
 {
-	uchar_t *pos[2];
-	uint64_t len[2];
-	uchar_t cksum[2][32];
-	int i;
-	SHA256_CTX *mctx;
+	uchar_t cksum[6][32];
+	SHA256_CTX ctx[4];
+	int i, rem;
+	uint64_t _bytes;
 
 	/*
 	 * Is it worth doing the overhead of parallelism ? Buffer large enough ?
 	 * If not then just do a simple serial hashing.
 	 */
-	if (bytes / 2 <= SHA512_BLOCK_SIZE * 4) {
-		mctx = (SHA256_CTX *)malloc(sizeof (SHA256_CTX));
-		SHA256_Init(mctx);
-		SHA256_Update(mctx, buf, bytes);
-		SHA256_Final(cksum_buf, mctx);
-		free(mctx);
+	if (bytes <= BLKSZ * 2) {
+		SHA256_Init(&ctx[0]);
+		SHA256_Update(&ctx[0], buf, bytes);
+		SHA256_Final(cksum_buf, &ctx[0]);
 		return;
 	}
-	pos[0] = buf;
-	len[0] = bytes/2;
-	buf += bytes/2;
-	pos[1] = buf;
-	len[1] = bytes - bytes/2;
+
+	/*
+	 * Do first level hashes in parallel.
+	 */
+	_bytes = (bytes / BLKSZ) * BLKSZ;
+	rem = bytes - _bytes;
 #if defined(_OPENMP)
 #	pragma omp parallel for
 #endif
-	for(i = 0; i < 2; ++i)
+	for(i = 0; i < 4; ++i)
 	{
-		SHA256_CTX ctx;
-		SHA256_Init(&ctx);
-		SHA256_Update(&ctx, pos[i], len[i]);
-		SHA256_Final(cksum[i], &ctx);
+		uint64_t byt;
+
+		byt = i * BLKSZ;
+		SHA256_Init(&ctx[i]);
+		while (byt < _bytes) {
+			SHA256_Update(&ctx[i], buf + byt, BLKSZ);
+			byt += 4 * BLKSZ;
+		}
+		if (i>0)
+			SHA256_Final(cksum[i], &ctx[i]);
 	}
-	mctx = (SHA256_CTX *)malloc(sizeof (SHA256_CTX));
-	SHA256_Init(mctx);
-	SHA256_Update(mctx, cksum, 2 * 32);
-	SHA256_Final(cksum_buf, mctx);
-	free(mctx);
+	if (rem > 0) {
+		SHA256_Update(&ctx[0], buf + bytes - rem, rem);
+	}
+	SHA256_Final(cksum[0], &ctx[0]);
+
+	/*
+	 * Second level hashes.
+	 */
+	SHA256_Init(&ctx[0]);
+	SHA256_Init(&ctx[1]);
+	SHA256_Update(&ctx[0], &cksum[0], 2 * 32);
+	SHA256_Update(&ctx[1], &cksum[1], 2 * 32);
+	SHA256_Final(cksum[4], &ctx[0]);
+	SHA256_Final(cksum[5], &ctx[1]);
+
+	/*
+	 * Final hash.
+	 */
+	SHA256_Init(&ctx[0]);
+	SHA256_Update(&ctx[0], &cksum[4], 2 * 32);
+	SHA256_Final(cksum_buf, &ctx[0]);
 }
 
 void
@@ -100,43 +132,64 @@ ossl_SHA512(uchar_t *cksum_buf, uchar_t *buf, uint64_t bytes)
 void
 ossl_SHA512_par(uchar_t *cksum_buf, uchar_t *buf, uint64_t bytes)
 {
-	uchar_t *pos[2];
-	uint64_t len[2];
-	uchar_t cksum[2][64];
-	int i;
-	SHA512_CTX *mctx;
+	uchar_t cksum[6][32];
+	SHA512_CTX ctx[4];
+	int i, rem;
+	uint64_t _bytes;
 
 	/*
 	 * Is it worth doing the overhead of parallelism ? Buffer large enough ?
-	 * If not then just do a simple hashing.
+	 * If not then just do a simple serial hashing.
 	 */
-	if (bytes / 2 <= SHA512_BLOCK_SIZE * 4) {
-		mctx = (SHA512_CTX *)malloc(sizeof (SHA512_CTX));
-		SHA512_Init(mctx);
-		SHA512_Update(mctx, buf, bytes);
-		SHA512_Final(cksum_buf, mctx);
-		free(mctx);
+	if (bytes <= BLKSZ * 2) {
+		SHA512_Init(&ctx[0]);
+		SHA512_Update(&ctx[0], buf, bytes);
+		SHA512_Final(cksum_buf, &ctx[0]);
 		return;
 	}
-	pos[0] = buf;
-	len[0] = bytes/2;
-	pos[1] = buf + bytes/2;
-	len[1] = bytes - bytes/2;
+
+	/*
+	 * Do first level hashes in parallel.
+	 */
+	_bytes = (bytes / BLKSZ) * BLKSZ;
+	rem = bytes - _bytes;
 #if defined(_OPENMP)
 #	pragma omp parallel for
 #endif
-	for(i = 0; i < 2; ++i)
+	for(i = 0; i < 4; ++i)
 	{
-		SHA512_CTX ctx;
-		SHA512_Init(&ctx);
-		SHA512_Update(&ctx, pos[i], len[i]);
-		SHA512_Final(cksum[i], &ctx);
+		uint64_t byt;
+
+		byt = i * BLKSZ;
+		SHA512_Init(&ctx[i]);
+		while (byt < _bytes) {
+			SHA512_Update(&ctx[i], buf + byt, BLKSZ);
+			byt += 4 * BLKSZ;
+		}
+		if (i>0)
+			SHA512_Final(cksum[i], &ctx[i]);
 	}
-	mctx = (SHA512_CTX *)malloc(sizeof (SHA512_CTX));
-	SHA512_Init(mctx);
-	SHA512_Update(mctx, cksum, 2 * 64);
-	SHA512_Final(cksum_buf, mctx);
-	free(mctx);
+	if (rem > 0) {
+		SHA512_Update(&ctx[0], buf + bytes - rem, rem);
+	}
+	SHA512_Final(cksum[0], &ctx[0]);
+
+	/*
+	 * Second level hashes.
+	 */
+	SHA512_Init(&ctx[0]);
+	SHA512_Init(&ctx[1]);
+	SHA512_Update(&ctx[0], &cksum[0], 2 * 32);
+	SHA512_Update(&ctx[1], &cksum[1], 2 * 32);
+	SHA512_Final(cksum[4], &ctx[0]);
+	SHA512_Final(cksum[5], &ctx[1]);
+
+	/*
+	 * Final hash.
+	 */
+	SHA512_Init(&ctx[0]);
+	SHA512_Update(&ctx[0], &cksum[4], 2 * 32);
+	SHA512_Final(cksum_buf, &ctx[0]);
 }
 
 void
@@ -152,43 +205,64 @@ opt_SHA512t256(uchar_t *cksum_buf, uchar_t *buf, uint64_t bytes)
 void
 opt_SHA512t256_par(uchar_t *cksum_buf, uchar_t *buf, uint64_t bytes)
 {
-	uchar_t *pos[2];
-	uint64_t len[2];
-	uchar_t cksum[2][32];
-	int i;
-	SHA512_Context *mctx;
+	uchar_t cksum[6][32];
+	SHA512_Context ctx[4];
+	int i, rem;
+	uint64_t _bytes;
 
 	/*
 	 * Is it worth doing the overhead of parallelism ? Buffer large enough ?
 	 * If not then just do a simple serial hashing.
 	 */
-	if (bytes / 2 <= SHA512_BLOCK_SIZE * 4) {
-		mctx = (SHA512_Context *)malloc(sizeof (SHA512_Context));
-		opt_SHA512t256_Init(mctx);
-		opt_SHA512t256_Update(mctx, buf, bytes);
-		opt_SHA512t256_Final(mctx, cksum_buf);
-		free(mctx);
+	if (bytes <= BLKSZ * 2) {
+		opt_SHA512t256_Init(&ctx[0]);
+		opt_SHA512t256_Update(&ctx[0], buf, bytes);
+		opt_SHA512t256_Final(&ctx[0], cksum_buf);
 		return;
 	}
-	pos[0] = buf;
-	len[0] = bytes/2;
-	pos[1] = buf + bytes/2;
-	len[1] = bytes - bytes/2;
+
+	/*
+	 * Do first level hashes in parallel.
+	 */
+	_bytes = (bytes / BLKSZ) * BLKSZ;
+	rem = bytes - _bytes;
 #if defined(_OPENMP)
 #	pragma omp parallel for
 #endif
-	for(i = 0; i < 2; ++i)
+	for(i = 0; i < 4; ++i)
 	{
-		SHA512_Context ctx;
-		opt_SHA512t256_Init(&ctx);
-		opt_SHA512t256_Update(&ctx, pos[i], len[i]);
-		opt_SHA512t256_Final(&ctx, cksum[i]);
+		uint64_t byt;
+
+		byt = i * BLKSZ;
+		opt_SHA512t256_Init(&ctx[i]);
+		while (byt < _bytes) {
+			opt_SHA512t256_Update(&ctx[i], buf + byt, BLKSZ);
+			byt += 4 * BLKSZ;
+		}
+		if (i>0)
+			opt_SHA512t256_Final(&ctx[i], cksum[i]);
 	}
-	mctx = (SHA512_Context *)malloc(sizeof (SHA512_Context));
-	opt_SHA512t256_Init(mctx);
-	opt_SHA512t256_Update(mctx, cksum, 2 * 32);
-	opt_SHA512t256_Final(mctx, cksum_buf);
-	free(mctx);
+	if (rem > 0) {
+		opt_SHA512t256_Update(&ctx[0], buf + bytes - rem, rem);
+	}
+	opt_SHA512t256_Final(&ctx[0], cksum[0]);
+
+	/*
+	 * Second level hashes.
+	 */
+	opt_SHA512t256_Init(&ctx[0]);
+	opt_SHA512t256_Init(&ctx[1]);
+	opt_SHA512t256_Update(&ctx[0], &cksum[0], 2 * 32);
+	opt_SHA512t256_Update(&ctx[1], &cksum[1], 2 * 32);
+	opt_SHA512t256_Final(&ctx[0], cksum[4]);
+	opt_SHA512t256_Final(&ctx[1], cksum[5]);
+
+	/*
+	 * Final hash.
+	 */
+	opt_SHA512t256_Init(&ctx[0]);
+	opt_SHA512t256_Update(&ctx[0], &cksum[4], 2 * 32);
+	opt_SHA512t256_Final(&ctx[0], cksum_buf);
 }
 
 void
@@ -204,42 +278,62 @@ opt_SHA512(uchar_t *cksum_buf, uchar_t *buf, uint64_t bytes)
 void
 opt_SHA512_par(uchar_t *cksum_buf, uchar_t *buf, uint64_t bytes)
 {
-	uchar_t *pos[2];
-	uint64_t len[2];
-	uchar_t cksum[2][64];
-	int i;
-	SHA512_Context *mctx;
+	uchar_t cksum[6][64];
+	SHA512_Context ctx[4];
+	int i, rem;
+	uint64_t _bytes;
 
 	/*
 	 * Is it worth doing the overhead of parallelism ? Buffer large enough ?
 	 * If not then just do a simple serial hashing.
 	 */
-	if (bytes / 2 <= SHA512_BLOCK_SIZE * 4) {
-		mctx = (SHA512_Context *)malloc(sizeof (SHA512_Context));
-		opt_SHA512_Init(mctx);
-		opt_SHA512_Update(mctx, buf, bytes);
-		opt_SHA512_Final(mctx, cksum_buf);
-		free(mctx);
+	if (bytes <= BLKSZ * 2) {
+		opt_SHA512_Init(&ctx[0]);
+		opt_SHA512_Update(&ctx[0], buf, bytes);
+		opt_SHA512_Final(&ctx[0], cksum_buf);
 		return;
 	}
-	pos[0] = buf;
-	len[0] = bytes/2;
-	pos[1] = buf + bytes/2;
-	len[1] = bytes - bytes/2;
+
+	/*
+	 * Do first level hashes in parallel.
+	 */
+	_bytes = (bytes / BLKSZ) * BLKSZ;
+	rem = bytes - _bytes;
 #if defined(_OPENMP)
 #	pragma omp parallel for
 #endif
-	for(i = 0; i < 2; ++i)
+	for(i = 0; i < 4; ++i)
 	{
-		SHA512_Context ctx;
-		opt_SHA512_Init(&ctx);
-		opt_SHA512_Update(&ctx, pos[i], len[i]);
-		opt_SHA512_Final(&ctx, cksum[i]);
-	}
-	mctx = (SHA512_Context *)malloc(sizeof (SHA512_Context));
-	opt_SHA512_Init(mctx);
-	opt_SHA512_Update(mctx, cksum, 2 * 64);
-	opt_SHA512_Final(mctx, cksum_buf);
-	free(mctx);
-}
+		uint64_t byt;
 
+		byt = i * BLKSZ;
+		opt_SHA512_Init(&ctx[i]);
+		while (byt < _bytes) {
+			opt_SHA512_Update(&ctx[i], buf + byt, BLKSZ);
+			byt += 4 * BLKSZ;
+		}
+		if (i>0)
+			opt_SHA512_Final(&ctx[i], cksum[i]);
+	}
+	if (rem > 0) {
+		opt_SHA512_Update(&ctx[0], buf + bytes - rem, rem);
+	}
+	opt_SHA512_Final(&ctx[0], cksum[0]);
+
+	/*
+	 * Second level hashes.
+	 */
+	opt_SHA512_Init(&ctx[0]);
+	opt_SHA512_Init(&ctx[1]);
+	opt_SHA512_Update(&ctx[0], &cksum[0], 2 * 64);
+	opt_SHA512_Update(&ctx[1], &cksum[1], 2 * 64);
+	opt_SHA512_Final(&ctx[0], cksum[4]);
+	opt_SHA512_Final(&ctx[1], cksum[5]);
+
+	/*
+	 * Final hash.
+	 */
+	opt_SHA512_Init(&ctx[0]);
+	opt_SHA512_Update(&ctx[0], &cksum[4], 2 * 64);
+	opt_SHA512_Final(&ctx[0], cksum_buf);
+}
