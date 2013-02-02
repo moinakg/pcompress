@@ -239,7 +239,7 @@ Read_Adjusted(int fd, uchar_t *buf, uint64_t count, int64_t *rabin_count, void *
 			 * This call does not actually dedupe but finds the last rabin boundary
 			 * in the buf.
 			 */
-			dedupe_compress(rctx, buf, &rc, 0, &rbc);
+			dedupe_compress(rctx, buf, &rc, 0, &rbc, 0);
 			rcount = rc;
 			*rabin_count = rbc;
 		} else {

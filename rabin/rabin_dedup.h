@@ -170,7 +170,7 @@ extern dedupe_context_t *create_dedupe_context(uint64_t chunksize, uint64_t real
 	int file_version, compress_op_t op);
 extern void destroy_dedupe_context(dedupe_context_t *ctx);
 extern unsigned int dedupe_compress(dedupe_context_t *ctx, unsigned char *buf, 
-	uint64_t *size, uint64_t offset, uint64_t *rabin_pos);
+	uint64_t *size, uint64_t offset, uint64_t *rabin_pos, int mt);
 extern void dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size);
 extern void parse_dedupe_hdr(uchar_t *buf, unsigned int *blknum, uint64_t *dedupe_index_sz,
 		uint64_t *dedupe_data_sz, uint64_t *rabin_index_sz_cmp,

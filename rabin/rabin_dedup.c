@@ -76,6 +76,10 @@
 #	define	SSE_MODE		1
 #endif
 
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
+
 #define	DELTA_EXTRA2_PCT(x) ((x) >> 1)
 #define	DELTA_EXTRA_PCT(x) (((x) >> 1) + ((x) >> 3))
 #define	DELTA_NORMAL_PCT(x) (((x) >> 1) + ((x) >> 2) + ((x) >> 3))
@@ -298,7 +302,8 @@ destroy_dedupe_context(dedupe_context_t *ctx)
  * from 4K-128K.
  */
 uint32_t
-dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t offset, uint64_t *rabin_pos)
+dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t offset,
+		uint64_t *rabin_pos, int mt)
 {
 	uint64_t i, last_offset, j, ary_sz;
 	uint32_t blknum, window_pos;
@@ -569,14 +574,20 @@ process_blocks:
 		 * have a fast linear scan through the buffer.
 		 */
 		if (ctx->delta_flag) {
+#if defined(_OPENMP)
+#	pragma omp parallel for if (mt)
+#endif
 			for (i=0; i<blknum; i++) {
 				ctx->blocks[i]->hash = XXH32(buf1+ctx->blocks[i]->offset,
-								    ctx->blocks[i]->length, 0);
+								ctx->blocks[i]->length, 0);
 			}
 		} else {
+#if defined(_OPENMP)
+#	pragma omp parallel for if (mt)
+#endif
 			for (i=0; i<blknum; i++) {
 				ctx->blocks[i]->hash = XXH32(buf1+ctx->blocks[i]->offset,
-								    ctx->blocks[i]->length, 0);
+								ctx->blocks[i]->length, 0);
 				ctx->blocks[i]->similarity_hash = ctx->blocks[i]->hash;
 			}
 		}

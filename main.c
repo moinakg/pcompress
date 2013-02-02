@@ -1224,7 +1224,8 @@ redo:
 		rctx = tdat->rctx;
 		reset_dedupe_context(tdat->rctx);
 		rctx->cbuf = tdat->uncompressed_chunk;
-		dedupe_index_sz = dedupe_compress(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0, NULL);
+		dedupe_index_sz = dedupe_compress(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0,
+						  NULL, tdat->cksum_mt);
 		if (!rctx->valid) {
 			memcpy(tdat->uncompressed_chunk, tdat->cmp_seg, rbytes);
 			tdat->rbytes = rbytes;
