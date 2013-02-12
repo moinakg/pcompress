@@ -31,6 +31,13 @@
 #include <config.h>
 
 #include "initdb.h"
+#include "config.h"
+
+#define	ONE_PB (1125899906842624ULL)
+#define	ONE_TB (1099511627776ULL)
+#define	FOUR_MB (4194304ULL)
+#define	EIGHT_MB (8388608ULL)
+
 
 archive_config_t *
 init_global_db(char *configfile)
@@ -47,4 +54,17 @@ init_global_db(char *configfile)
 	rv = read_config(configfile, cfg);
 	if (rv != 0)
 		return (NULL);
+
+	return (cfg);
+}
+
+archive_config_t *
+init_global_db_simple(char *path, uint32_t chunksize, uint32_t chunks_per_seg,
+		      compress_algo_t algo, cksum_t ck, size_t file_sz, size_t memlimit)
+{
+	archive_config_t *cfg;
+	int rv;
+
+	cfg = calloc(1, sizeof (archive_config_t));
+	rv = set_simple_config(cfg, algo, ck, chunksize, file_sz, chunks_per_seg);
 }

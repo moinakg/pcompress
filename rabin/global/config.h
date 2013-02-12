@@ -22,34 +22,17 @@
 #define	_C_ONFIG_H
 
 #include <limits.h>
+#include <utils.h>
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
-#define	DEFAULT_SIMILARITY_INTERVAL	10
-#define	DEFAULT_CKSUM	CKSUM_SHA256
-#define	CONTAINER_ITEMS 2048
+#define	DEFAULT_SIMILARITY_INTERVAL	5
+#define	DEFAULT_CKSUM		CKSUM_BLAKE256
+#define	DEFAULT_COMPRESS		COMPRESS_LZ4
 #define	MIN_CK 1
 #define	MAX_CK 5
-
-enum {
-	COMPRESS_NONE=0,
-	COMPRESS_LZFX,
-	COMPRESS_LZ4,
-	COMPRESS_ZLIB,
-	COMPRESS_BZIP2,
-	COMPRESS_LZMA,
-	COMPRESS_INVALID
-} compress_algo_t;
-
-enum {
-	CKSUM_SHA256,
-	CKSUM_SHA512,
-	CKSUM_SKEIN256,
-	CKSUM_SKEIN512,
-	CKSUM_INVALID
-} chunk_cksum_t;
 
 // 8GB
 #define	MIN_ARCHIVE_SZ (8589934592ULL)
@@ -59,9 +42,9 @@ typedef struct {
 	uint32_t chunk_sz; // Numeric ID: 1 - 4k ... 5 - 64k
 	int64_t archive_sz; // Total size of archive in bytes.
 	int verify_chunks; // Whether to use memcmp() to compare chunks byte for byte.
-	compress_algo_t algo; // Which compression algo for segments.
-	int compress_level; // Default preset compression level per algo.
-	int chunk_cksum_type; // Which digest to use for hash based chunk lookup.
+	int algo; // Which compression algo for segments.
+	compress_algo_t compress_level; // Default preset compression level per algo.
+	cksum_t chunk_cksum_type; // Which digest to use for hash based chunk lookup.
 	int chunk_cksum_sz; // Size of cksum in bytes.
 	int similarity_interval; // Similarity based match intervals in %age.
 			// The items below are computed given the above
@@ -77,6 +60,8 @@ typedef struct {
 
 int read_config(char *configfile, archive_config_t *cfg);
 int write_config(char *configfile, archive_config_t *cfg);
+int set_simple_config(archive_config_t *cfg, compress_algo_t algo, cksum_t ck,
+		      uint32_t chunksize, size_t file_sz, uint32_t chunks_per_seg);
 
 #ifdef	__cplusplus
 }

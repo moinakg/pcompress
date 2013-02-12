@@ -39,7 +39,7 @@
 #define	FOUR_MB (4194304ULL)
 #define	EIGHT_MB (8388608ULL)
 
-static int
+static compress_algo_t
 get_compress_level(compress_algo_t algo)
 {
 	switch (algo) {
@@ -57,7 +57,7 @@ get_compress_level(compress_algo_t algo)
 	return (0);
 }
 
-static compress_algo_t
+static int
 get_compress_algo(char *algo_name)
 {
 	if (strcmp(algo_name, "none") == 0) {
@@ -105,7 +105,7 @@ get_compress_str(compress_algo_t algo)
 	return ("invalid");
 }
 
-static chunk_cksum_t
+static cksum_t
 get_cksum_type(char *cksum_name)
 {
 	if (strcmp(cksum_name, "SHA256") == 0) {
@@ -114,11 +114,17 @@ get_cksum_type(char *cksum_name)
 	} else if (cksum_name, "SHA512") == 0) {
 		return (CKSUM_SHA512);
 
-	} else if (cksum_name, "SKEIN256") == 0) {
-		return (CKSUM_SKEIN256);
+	} else if (cksum_name, "BLAKE256") == 0) {
+		return (CKSUM_BLAKE256);
 
-	} else if (cksum_name, "SKEIN512") == 0) {
-		return (CKSUM_SKEIN512);
+	} else if (cksum_name, "BLAKE512") == 0) {
+		return (CKSUM_BLAKE512);
+
+	} else if (cksum_name, "KECCAK256") == 0) {
+		return (CKSUM_KECCAK256);
+
+	} else if (cksum_name, "KECCAK512") == 0) {
+		return (CKSUM_KECCAK512);
 	}
 	return (CKSUM_INVALID);
 }
@@ -132,11 +138,17 @@ get_cksum_str(chunk_cksum_t ck)
 	} else if (ck == CKSUM_SHA512) {
 		return ("SHA512");
 
-	} else if (ck == CKSUM_SKEIN256) {
-		return ("SKEIN256");
+	} else if (ck == CKSUM_BLAKE256) {
+		return ("BLAKE256");
 
-	} else if (ck == CKSUM_SKEIN512) {
-		return ("SKEIN512");
+	} else if (ck == CKSUM_BLAKE512) {
+		return ("BLAKE512");
+
+	} else if (ck == CKSUM_KECCAK256) {
+		return ("KECCAK256");
+
+	} else if (ck == CKSUM_KECCAK512) {
+		return ("KECCAK512");
 	}
 	return ("INVALID");
 }
@@ -144,10 +156,10 @@ get_cksum_str(chunk_cksum_t ck)
 static int
 get_cksum_sz(chunk_cksum_t ck)
 {
-	if (ck == CKSUM_SHA256 || ck == CKSUM_SKEIN256) {
+	if (ck == CKSUM_SHA256 || ck == CKSUM_BLAKE256 || ck == CKSUM_KECCAK256) {
 		return (32);
 
-	} else if (ck == CKSUM_SHA512 || ck == CKSUM_SKEIN512) {
+	} else if (ck == CKSUM_SHA512 || ck == CKSUM_BLAKE512 || ck == CKSUM_KECCAK512) {
 		return (64);
 	}
 	return (0);
@@ -315,3 +327,24 @@ write_config(char *configfile, archive_config_t *cfg)
 	fprintf(fh, "\n");
 	fclose(fh);
 }
+
+int
+set_simple_config(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, uint32_t chunksize,
+		  size_t file_sz, uint32_t chunks_per_seg)
+{
+	cfg->algo = algo;
+	cfg->chunk_cksum_type = ck;
+	cfg->compress_level = get_compress_level(cfg->algo);
+	cfg->chunk_cksum_sz = get_cksum_sz(cfg->chunk_cksum_type);
+	cfg->chunk_sz = chunksize;
+	cfg->chunk_sz_bytes = RAB_BLK_AVG_SZ(cfg->chunk_sz);
+
+	cfg->archive_sz = file_sz;
+	if (cfg->archive_sz < ONE_TB) {
+		segment_sz_bytes = FOUR_MB;
+
+	} else {
+		segment_sz_bytes = EIGHT_MB;
+	}
+}
+

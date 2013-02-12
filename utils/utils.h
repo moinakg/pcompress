@@ -73,8 +73,10 @@ typedef int32_t bsize_t;
 #	endif
 #	if !defined(sun) && !defined (__sun)
 #		define LE64(x) __bswap_64(x)
+#		define LE32(x) __bswap_32(x)
 #	else
 #		define LE64(x) BSWAP_64(x)
+#		define LE32(x) BSWAP_32(x)
 #	endif
 #else
 #	if !defined(sun) && !defined (__sun)
@@ -86,6 +88,7 @@ typedef int32_t bsize_t;
 #		endif
 #	endif
 #	define LE64(x) (x)
+#	define LE32(x) (x)
 #endif
 
 
@@ -123,6 +126,15 @@ typedef int32_t bsize_t;
 #endif
 
 #define	BYTES_TO_MB(x) ((x) / (1024 * 1024))
+
+typedef enum {
+	COMPRESS_NONE = 0,
+	COMPRESS_LZFX,
+	COMPRESS_LZ4,
+	COMPRESS_ZLIB,
+	COMPRESS_BZIP2,
+	COMPRESS_LZMA
+} compress_algo_t;
 
 typedef struct {
 	uint32_t buf_extra;
