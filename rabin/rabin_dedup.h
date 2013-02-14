@@ -149,6 +149,11 @@ typedef struct rab_blockentry {
 	struct rab_blockentry *next;
 } rabin_blockentry_t;
 
+typedef struct global_blockentry {
+	uint64_t offset;
+	uint32_t length;
+} global_blockentry_t;
+
 typedef struct {
 	unsigned char *current_window_data;
 	rabin_blockentry_t **blocks;

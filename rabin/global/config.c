@@ -176,7 +176,7 @@ read_config(char *configfile, archive_config_t *cfg)
 	cfg->verify_chunks = 0;
 	cfg->algo = COMPRESS_LZ4;
 	cfg->chunk_cksum_type = DEFAULT_CKSUM;
-	cfg->similarity_interval = DEFAULT_SIMILARITY_INTERVAL;
+	cfg->pct_interval = DEFAULT_SIMILARITY_INTERVAL;
 
 	fh = fopen(configfile, "r");
 	if (fh == NULL) {
@@ -286,6 +286,7 @@ read_config(char *configfile, archive_config_t *cfg)
 		cfg->directory_levels = 3;
 	}
 
+	cfg->segment_sz_bytes = segment_sz_bytes;
 	cfg->segment_sz = segment_sz_bytes / cfg->chunk_sz_bytes;
 
 	total_dirs = 1;
@@ -329,8 +330,8 @@ write_config(char *configfile, archive_config_t *cfg)
 }
 
 int
-set_simple_config(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, uint32_t chunksize,
-		  size_t file_sz, uint32_t chunks_per_seg)
+set_config_s(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, uint32_t chunksize,
+		  size_t file_sz, int pct_interval)
 {
 	cfg->algo = algo;
 	cfg->chunk_cksum_type = ck;
@@ -338,6 +339,7 @@ set_simple_config(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, uint3
 	cfg->chunk_cksum_sz = get_cksum_sz(cfg->chunk_cksum_type);
 	cfg->chunk_sz = chunksize;
 	cfg->chunk_sz_bytes = RAB_BLK_AVG_SZ(cfg->chunk_sz);
+	cfg->pct_interval = pct_interval;
 
 	cfg->archive_sz = file_sz;
 	if (cfg->archive_sz < ONE_TB) {
@@ -346,5 +348,10 @@ set_simple_config(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, uint3
 	} else {
 		segment_sz_bytes = EIGHT_MB;
 	}
+
+	cfg->segment_sz_bytes = segment_sz_bytes;
+	cfg->segment_sz = segment_sz_bytes / cfg->chunk_sz_bytes;
+
+	return (0);
 }
 

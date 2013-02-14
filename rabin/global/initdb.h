@@ -26,8 +26,8 @@ extern "C" {
 #endif
 
 archive_config_t *init_global_db(char *configfile);
-archive_config_t *init_global_db_simple(char *path, uint32_t chunksize, uint32_t chunks_per_seg,
-		      compress_algo_t algo, cksum_t ck, size_t file_sz, size_t memlimit)
+archive_config_t *init_global_db_s(char *path, uint32_t chunksize, int pct_interval,
+			compress_algo_t algo, cksum_t ck, size_t file_sz, size_t memlimit);
 
 #ifdef	__cplusplus
 }

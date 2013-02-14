@@ -46,22 +46,24 @@ typedef struct {
 	compress_algo_t compress_level; // Default preset compression level per algo.
 	cksum_t chunk_cksum_type; // Which digest to use for hash based chunk lookup.
 	int chunk_cksum_sz; // Size of cksum in bytes.
-	int similarity_interval; // Similarity based match intervals in %age.
+	int pct_interval; // Similarity based match intervals in %age.
 			// The items below are computed given the above
 			// components.
 
 	uint32_t chunk_sz_bytes; // Average chunk size
-	uint32_t segment_sz; // Number of chunks
+	uint32_t segment_sz_bytes; // Segment size in bytes
+	uint32_t segment_sz; // Number of chunks in one segment
 	uint32_t container_sz; // Number of segments
 	int directory_fanout; // Number of subdirectories in a directory
 	int directory_levels; // Levels of nested directories
 	int num_containers; // Number of containers in a directory
+	void *dbdata;
 } archive_config_t;
 
 int read_config(char *configfile, archive_config_t *cfg);
 int write_config(char *configfile, archive_config_t *cfg);
-int set_simple_config(archive_config_t *cfg, compress_algo_t algo, cksum_t ck,
-		      uint32_t chunksize, size_t file_sz, uint32_t chunks_per_seg);
+int set_config_s(archive_config_t *cfg, compress_algo_t algo, cksum_t ck,
+		      uint32_t chunksize, size_t file_sz, int pct_interval);
 
 #ifdef	__cplusplus
 }
