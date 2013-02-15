@@ -105,6 +105,7 @@ genShortMsg(int hashbitlen)
     sprintf(fn, "ShortMsgKAT_%d.txt", hashbitlen);
     if ( (fp_out = fopen(fn, "w")) == NULL ) {
         printf("Couldn't open <%s> for write\n", fn);
+        fclose(fp_in);
         return KAT_FILE_OPEN_ERROR;
     }
     fprintf(fp_out, "# %s\n", fn);
@@ -114,6 +115,8 @@ genShortMsg(int hashbitlen)
     }
     else {
         printf("genShortMsg: Couldn't read Algorithm Name\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
@@ -175,6 +178,7 @@ genShortMsgSponge(unsigned int rate, unsigned int capacity, int outputLength, co
     
     if ( (fp_out = fopen(fileName, "w")) == NULL ) {
         printf("Couldn't open <%s> for write\n", fileName);
+        fclose(fp_in);
         return KAT_FILE_OPEN_ERROR;
     }
     fprintf(fp_out, "# %s\n", fileName);
@@ -184,6 +188,8 @@ genShortMsgSponge(unsigned int rate, unsigned int capacity, int outputLength, co
     }
     else {
         printf("genShortMsg: Couldn't read Algorithm Name\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
@@ -248,6 +254,7 @@ genLongMsg(int hashbitlen)
     sprintf(fn, "LongMsgKAT_%d.txt", hashbitlen);
     if ( (fp_out = fopen(fn, "w")) == NULL ) {
         printf("Couldn't open <%s> for write\n", fn);
+        fclose(fp_in);
         return KAT_FILE_OPEN_ERROR;
     }
     fprintf(fp_out, "# %s\n", fn);
@@ -257,6 +264,8 @@ genLongMsg(int hashbitlen)
     }
     else {
         printf("genLongMsg: Couldn't read Algorithm Name\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
@@ -332,6 +341,7 @@ genExtremelyLongMsg(int hashbitlen)
     sprintf(fn, "ExtremelyLongMsgKAT_%d.txt", hashbitlen);
     if ( (fp_out = fopen(fn, "w")) == NULL ) {
         printf("Couldn't open <%s> for write\n", fn);
+        fclose(fp_in);
         return KAT_FILE_OPEN_ERROR;
     }
     fprintf(fp_out, "# %s\n", fn);
@@ -341,6 +351,8 @@ genExtremelyLongMsg(int hashbitlen)
     }
     else {
         printf("genExtremelyLongMsg: Couldn't read Algorithm Name\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
@@ -419,6 +431,7 @@ genMonteCarlo(int hashbitlen)
     sprintf(fn, "MonteCarlo_%d.txt", hashbitlen);
     if ( (fp_out = fopen(fn, "w")) == NULL ) {
         printf("Couldn't open <%s> for write\n", fn);
+        fclose(fp_in);
         return KAT_FILE_OPEN_ERROR;
     }
     fprintf(fp_out, "# %s\n", fn);
@@ -428,6 +441,8 @@ genMonteCarlo(int hashbitlen)
     }
     else {
         printf("genMonteCarlo: Couldn't read Algorithm Name\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
@@ -484,6 +499,7 @@ genMonteCarloSqueezing(int hashbitlen)
     sprintf(fn, "MonteCarlo_%d.txt", hashbitlen);
     if ( (fp_out = fopen(fn, "w")) == NULL ) {
         printf("Couldn't open <%s> for write\n", fn);
+        fclose(fp_in);
         return KAT_FILE_OPEN_ERROR;
     }
     fprintf(fp_out, "# %s\n", fn);
@@ -493,6 +509,8 @@ genMonteCarloSqueezing(int hashbitlen)
     }
     else {
         printf("genMonteCarlo: Couldn't read Algorithm Name\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HEADER_ERROR;
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
@@ -558,6 +576,7 @@ genDuplexKAT(unsigned int rate, unsigned int capacity, const char *fileName)
     
     if ( (fp_out = fopen(fileName, "w")) == NULL ) {
         printf("Couldn't open <%s> for write\n", fileName);
+        fclose(fp_in);
         return KAT_FILE_OPEN_ERROR;
     }
     fprintf(fp_out, "# %s\n", fileName);

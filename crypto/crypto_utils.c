@@ -737,6 +737,7 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 			if (saltlen > MAX_SALTLEN) {
 				fprintf(stderr, "Salt too long. Max allowed length is %d\n",
 				    MAX_SALTLEN);
+				free(actx);
 				return (-1);
 			}
 			cctx->salt = (uchar_t *)malloc(saltlen);

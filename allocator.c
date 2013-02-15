@@ -489,8 +489,8 @@ slab_free(void *p, void *address)
 	}
 	if (!found) {
 		pthread_mutex_unlock(&hbucket_locks[hindx]);
-		free(address);
 		fprintf(stderr, "Freed buf(%p) not in slab allocations!\n", address);
+		free(address);
 		abort();
 		fflush(stderr);
 	}

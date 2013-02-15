@@ -111,19 +111,19 @@ get_cksum_type(char *cksum_name)
 	if (strcmp(cksum_name, "SHA256") == 0) {
 		return (CKSUM_SHA256);
 
-	} else if (cksum_name, "SHA512") == 0) {
+	} else if (strcmp(cksum_name, "SHA512") == 0) {
 		return (CKSUM_SHA512);
 
-	} else if (cksum_name, "BLAKE256") == 0) {
+	} else if (strcmp(cksum_name, "BLAKE256") == 0) {
 		return (CKSUM_BLAKE256);
 
-	} else if (cksum_name, "BLAKE512") == 0) {
+	} else if (strcmp(cksum_name, "BLAKE512") == 0) {
 		return (CKSUM_BLAKE512);
 
-	} else if (cksum_name, "KECCAK256") == 0) {
+	} else if (strcmp(cksum_name, "KECCAK256") == 0) {
 		return (CKSUM_KECCAK256);
 
-	} else if (cksum_name, "KECCAK512") == 0) {
+	} else if (strcmp(cksum_name, "KECCAK512") == 0) {
 		return (CKSUM_KECCAK512);
 	}
 	return (CKSUM_INVALID);

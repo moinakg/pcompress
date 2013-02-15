@@ -526,7 +526,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 
 		if (ctx->delta_flag) {
 			uint64_t cur_sketch;
-			uint64_t pc[3];
+			uint64_t pc[4];
 
 			if (length > ctx->rabin_poly_min_block_size) {
 				memcpy(ctx_heap, buf1+last_offset, length);
