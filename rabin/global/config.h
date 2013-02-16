@@ -29,7 +29,8 @@ extern "C" {
 #endif
 
 #define	DEFAULT_SIMILARITY_INTERVAL	5
-#define	DEFAULT_CKSUM		CKSUM_BLAKE256
+#define	DEFAULT_CHUNK_CKSUM	CKSUM_SHA256
+#define	DEFAULT_SIMILARITY_CKSUM	CKSUM_BLAKE256
 #define	DEFAULT_COMPRESS		COMPRESS_LZ4
 #define	MIN_CK 1
 #define	MAX_CK 5
@@ -44,8 +45,10 @@ typedef struct {
 	int verify_chunks; // Whether to use memcmp() to compare chunks byte for byte.
 	int algo; // Which compression algo for segments.
 	compress_algo_t compress_level; // Default preset compression level per algo.
-	cksum_t chunk_cksum_type; // Which digest to use for hash based chunk lookup.
+	cksum_t chunk_cksum_type; // Which digest to use for hash based chunk comparison.
+	cksum_t similarity_cksum; // Which digest to use similarity based segment lookup.
 	int chunk_cksum_sz; // Size of cksum in bytes.
+	int similarity_cksum_sz; // Size of cksum in bytes.
 	int pct_interval; // Similarity based match intervals in %age.
 			// The items below are computed given the above
 			// components.
@@ -60,9 +63,15 @@ typedef struct {
 	void *dbdata;
 } archive_config_t;
 
+typedef struct _segment_entry {
+	uint64_t offset;
+	uint32_t length;
+	uchar_t *cksum;
+} segment_entry_t;
+
 int read_config(char *configfile, archive_config_t *cfg);
 int write_config(char *configfile, archive_config_t *cfg);
-int set_config_s(archive_config_t *cfg, compress_algo_t algo, cksum_t ck,
+int set_config_s(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, cksum_t ck_sim,
 		      uint32_t chunksize, size_t file_sz, int pct_interval);
 
 #ifdef	__cplusplus

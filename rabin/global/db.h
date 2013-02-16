@@ -18,8 +18,8 @@
  * moinakg@belenix.org, http://moinakg.wordpress.com/
  */
 
-#ifndef	_INITDB_H
-#define	_INITDB_H
+#ifndef	_DB_H
+#define	_DB_H
 
 #ifdef	__cplusplus
 extern "C" {
@@ -27,7 +27,8 @@ extern "C" {
 
 archive_config_t *init_global_db(char *configfile);
 archive_config_t *init_global_db_s(char *path, uint32_t chunksize, int pct_interval,
-			compress_algo_t algo, cksum_t ck, size_t file_sz, size_t memlimit);
+			compress_algo_t algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
+			size_t memlimit);
 
 #ifdef	__cplusplus
 }

@@ -175,7 +175,8 @@ read_config(char *configfile, archive_config_t *cfg)
 	// Default
 	cfg->verify_chunks = 0;
 	cfg->algo = COMPRESS_LZ4;
-	cfg->chunk_cksum_type = DEFAULT_CKSUM;
+	cfg->chunk_cksum_type = DEFAULT_CHUNK_CKSUM;
+	cfg->similarity_cksum = DEFAULT_SIMILARITY_CKSUM;
 	cfg->pct_interval = DEFAULT_SIMILARITY_INTERVAL;
 
 	fh = fopen(configfile, "r");
@@ -262,11 +263,19 @@ read_config(char *configfile, archive_config_t *cfg)
 				fclose(fh);
 				return (1);
 			}
+		} else if (strncmp(line, "SIMILARITY_CKSUM") == 0) {
+			cfg->chunk_cksum_type = get_cksum_type(pos);
+			if (cfg->chunk_cksum_type == CKSUM_INVALID) {
+				fprintf(stderr, "Invalid CHUNK_CKSUM setting.\n");
+				fclose(fh);
+				return (1);
+			}
 		}
 	}
 	fclose(fh);
 	cfg->compress_level = get_compress_level(cfg->algo);
 	cfg->chunk_cksum_sz = get_cksum_sz(cfg->chunk_cksum_type);
+	cfg->similarity_cksum_sz = get_cksum_sz(cfg->similarity_cksum);
 
 	/*
 	 * Now compute the remaining parameters.
@@ -330,13 +339,15 @@ write_config(char *configfile, archive_config_t *cfg)
 }
 
 int
-set_config_s(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, uint32_t chunksize,
-		  size_t file_sz, int pct_interval)
+set_config_s(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, cksum_t ck_sim,
+	     uint32_t chunksize, size_t file_sz, int pct_interval)
 {
 	cfg->algo = algo;
 	cfg->chunk_cksum_type = ck;
+	cfg->similarity_cksum = ck_sim;
 	cfg->compress_level = get_compress_level(cfg->algo);
 	cfg->chunk_cksum_sz = get_cksum_sz(cfg->chunk_cksum_type);
+	cfg->similarity_cksum_sz = get_cksum_sz(cfg->similarity_cksum);
 	cfg->chunk_sz = chunksize;
 	cfg->chunk_sz_bytes = RAB_BLK_AVG_SZ(cfg->chunk_sz);
 	cfg->pct_interval = pct_interval;
