@@ -179,26 +179,35 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t *src1 = (uchar_t *)src;
-	uint64_t i, tot8b, tagcnt;
-	int rv = 0, tag;
+	uint64_t i, tot8b, tag1, tag2, tag3;
+	int rv = 0;
+	double tagcnt, pct_tag;
+	uchar_t cur_byte, prev_byte;
 
 	/*
 	 * Count number of 8-bit binary bytes and XML tags in source.
 	 */
 	tot8b = 0;
-	tagcnt = 0;
+	tag1 = 0;
+	tag2 = 0;
+	tag3 = 0;
+	prev_byte = cur_byte = 0;
 	for (i = 0; i < srclen; i++) {
-		/*
-		 * This could have been: tot8b += (src1[i] >> 7);
-		 * However the approach below allows the compiler to auto-vectorize this
-		 * loop.
-		 */
-		tot8b += (src1[i] & 0x80);
-		tag = ((src1[i] == '<') | (src1[i] == '>'));
-		tagcnt += tag;
+
+		cur_byte = src1[i];
+		tot8b += (cur_byte & 0x80); // This way for possible auto-vectorization
+		tag1 += (cur_byte == '<');
+		tag2 += (cur_byte == '>');
+		tag3 += ((prev_byte == '<') & (cur_byte == '/'));
+		tag3 += ((prev_byte == '/') & (cur_byte == '>'));
+		if (cur_byte != ' ')
+			prev_byte = cur_byte;
 	}
 
 	tot8b /= 0x80;
+	tagcnt = tag1 + tag2 + tag3;
+	pct_tag = tagcnt / (double)srclen;
+
 	/*
 	 * Use PPMd if some percentage of source is 7-bit textual bytes, otherwise
 	 * use Bzip2 or LZMA.
@@ -218,7 +227,8 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 		bzip2_count++;
 
 	} else {
-		if (adat->bsc_data && tagcnt > ONE_PCT(srclen)) {
+		if (adat->bsc_data && tag1 > tag2 - 4 && tag1 < tag2 + 4 && tag3 > (double)tag1 * 0.40 &&
+		    tagcnt > (double)srclen * 0.001) {
 #ifdef ENABLE_PC_LIBBSC
 			rv = libbsc_compress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data);
 			if (rv < 0)
