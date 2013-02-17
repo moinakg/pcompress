@@ -61,7 +61,8 @@ typedef enum {
  * to decode archives created with 1.2. New archives do not use SKEIN.
  */
 	CKSUM_SKEIN256 = 0x800,
-	CKSUM_SKEIN512 = 0x900
+	CKSUM_SKEIN512 = 0x900,
+	CKSUM_INVALID = 0
 } cksum_t;
 
 typedef struct {

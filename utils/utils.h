@@ -133,7 +133,8 @@ typedef enum {
 	COMPRESS_LZ4,
 	COMPRESS_ZLIB,
 	COMPRESS_BZIP2,
-	COMPRESS_LZMA
+	COMPRESS_LZMA,
+	COMPRESS_INVALID
 } compress_algo_t;
 
 typedef struct {

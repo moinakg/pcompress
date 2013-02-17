@@ -21,14 +21,19 @@
 #ifndef	_DB_H
 #define	_DB_H
 
+#include <dedupe_config.h>
+
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
 archive_config_t *init_global_db(char *configfile);
-archive_config_t *init_global_db_s(char *path, uint32_t chunksize, int pct_interval,
-			compress_algo_t algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
-			size_t memlimit);
+archive_config_t *init_global_db_s(char *path, char *tmppath, uint32_t chunksize,
+			int pct_interval, compress_algo_t algo, cksum_t ck,
+			cksum_t ck_sim, size_t file_sz, size_t memlimit, int nthreads);
+int db_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
+		segment_entry_t *seg, int thr_id);
+segment_entry_t *db_query_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval, int thr_id);
 
 #ifdef	__cplusplus
 }

@@ -207,14 +207,14 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 		rv = lzma_compress(src, srclen, dst, dstlen, level, chdr, adat->lzma_data);
 		if (rv < 0)
 			return (rv);
-		rv = COMPRESS_LZMA;
+		rv = ADAPT_COMPRESS_LZMA;
 		lzma_count++;
 
 	} else if (adat->adapt_mode == 1 && tot8b > FIFTY_PCT(srclen)) {
 		rv = bzip2_compress(src, srclen, dst, dstlen, level, chdr, NULL);
 		if (rv < 0)
 			return (rv);
-		rv = COMPRESS_BZIP2;
+		rv = ADAPT_COMPRESS_BZIP2;
 		bzip2_count++;
 
 	} else {
@@ -223,14 +223,14 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 			rv = libbsc_compress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data);
 			if (rv < 0)
 				return (rv);
-			rv = COMPRESS_BSC;
+			rv = ADAPT_COMPRESS_BSC;
 			bsc_count++;
 #endif
 		} else {
 			rv = ppmd_compress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data);
 			if (rv < 0)
 				return (rv);
-			rv = COMPRESS_PPMD;
+			rv = ADAPT_COMPRESS_PPMD;
 			ppmd_count++;
 		}
 	}
@@ -247,16 +247,16 @@ adapt_decompress(void *src, uint64_t srclen, void *dst,
 
 	cmp_flags = (chdr>>4) & CHDR_ALGO_MASK;
 
-	if (cmp_flags == COMPRESS_LZMA) {
+	if (cmp_flags == ADAPT_COMPRESS_LZMA) {
 		return (lzma_decompress(src, srclen, dst, dstlen, level, chdr, adat->lzma_data));
 
-	} else if (cmp_flags == COMPRESS_BZIP2) {
+	} else if (cmp_flags == ADAPT_COMPRESS_BZIP2) {
 		return (bzip2_decompress(src, srclen, dst, dstlen, level, chdr, NULL));
 
-	} else if (cmp_flags == COMPRESS_PPMD) {
+	} else if (cmp_flags == ADAPT_COMPRESS_PPMD) {
 		return (ppmd_decompress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data));
 
-	} else if (cmp_flags == COMPRESS_BSC) {
+	} else if (cmp_flags == ADAPT_COMPRESS_BSC) {
 #ifdef ENABLE_PC_LIBBSC
 		return (libbsc_decompress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data));
 #else

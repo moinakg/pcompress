@@ -70,11 +70,11 @@ extern "C" {
  * lower 3 bits in higher nibble indicate chunk compression algorithm
  * in adaptive modes.
  */
-#define	COMPRESS_NONE	0
-#define	COMPRESS_LZMA	1
-#define	COMPRESS_BZIP2	2
-#define	COMPRESS_PPMD	3
-#define	COMPRESS_BSC	4
+#define	ADAPT_COMPRESS_NONE	0
+#define	ADAPT_COMPRESS_LZMA	1
+#define	ADAPT_COMPRESS_BZIP2	2
+#define	ADAPT_COMPRESS_PPMD	3
+#define	ADAPT_COMPRESS_BSC	4
 #define	CHDR_ALGO_MASK	7
 
 extern uint32_t zlib_buf_extra(uint64_t buflen);

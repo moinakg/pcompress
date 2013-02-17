@@ -23,6 +23,7 @@
 
 #include <limits.h>
 #include <utils.h>
+#include <crypto_utils.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -32,6 +33,7 @@ extern "C" {
 #define	DEFAULT_CHUNK_CKSUM	CKSUM_SHA256
 #define	DEFAULT_SIMILARITY_CKSUM	CKSUM_BLAKE256
 #define	DEFAULT_COMPRESS		COMPRESS_LZ4
+#define	CONTAINER_ITEMS		2048
 #define	MIN_CK 1
 #define	MAX_CK 5
 
@@ -64,9 +66,9 @@ typedef struct {
 } archive_config_t;
 
 typedef struct _segment_entry {
-	uint64_t offset;
-	uint32_t length;
-	uchar_t *cksum;
+	uint64_t chunk_offset;
+	uint32_t chunk_length;
+	uchar_t *chunk_cksum;
 } segment_entry_t;
 
 int read_config(char *configfile, archive_config_t *cfg);
