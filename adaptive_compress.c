@@ -227,22 +227,24 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 		bzip2_count++;
 
 	} else {
+#ifdef ENABLE_PC_LIBBSC
 		if (adat->bsc_data && tag1 > tag2 - 4 && tag1 < tag2 + 4 && tag3 > (double)tag1 * 0.40 &&
 		    tagcnt > (double)srclen * 0.001) {
-#ifdef ENABLE_PC_LIBBSC
 			rv = libbsc_compress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data);
 			if (rv < 0)
 				return (rv);
 			rv = ADAPT_COMPRESS_BSC;
 			bsc_count++;
-#endif
 		} else {
+#endif
 			rv = ppmd_compress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data);
 			if (rv < 0)
 				return (rv);
 			rv = ADAPT_COMPRESS_PPMD;
 			ppmd_count++;
+#ifdef ENABLE_PC_LIBBSC
 		}
+#endif
 	}
 
 	return (rv);
