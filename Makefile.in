@@ -70,8 +70,8 @@ BZLIB_HDRS = $(MAINHDRS)
 BZLIB_OBJS = $(BZLIB_SRCS:.c=.o)
 BZLIB_CPPFLAGS = @LIBBZ2_INC@
 
-RABINSRCS = rabin/rabin_dedup.c
-RABINHDRS = rabin/rabin_dedup.h utils/utils.h
+RABINSRCS = rabin/rabin_dedup.c rabin/global/db.c rabin/global/dedupe_config.c
+RABINHDRS = rabin/rabin_dedup.h utils/utils.h rabin/global/db.h rabin/global/dedupe_config.h
 RABINOBJS = $(RABINSRCS:.c=.o)
 
 BSDIFFSRCS = bsdiff/bsdiff.c bsdiff/bspatch.c bsdiff/rle_encoder.c
@@ -168,7 +168,7 @@ RM_RF = rm -rf
 COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
 	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I./crypto/sha2 \
-	-I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ \
+	-I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ -I./rabin/global \
 	-I./crypto/keccak -I./transpose -I./crypto/blake2 $(EXTRA_CPPFLAGS) -pedantic -Wall -std=gnu99 \
 	-fno-strict-aliasing -Wno-unused-but-set-variable -Wno-enum-compare
 COMMON_VEC_FLAGS = -ftree-vectorize

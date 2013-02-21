@@ -62,6 +62,8 @@ typedef struct {
 	int directory_fanout; // Number of subdirectories in a directory
 	int directory_levels; // Levels of nested directories
 	int num_containers; // Number of containers in a directory
+	int seg_fd_w;
+	int *seg_fd_r;
 	void *dbdata;
 } archive_config_t;
 

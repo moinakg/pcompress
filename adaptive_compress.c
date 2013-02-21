@@ -193,7 +193,6 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 	tag3 = 0;
 	prev_byte = cur_byte = 0;
 	for (i = 0; i < srclen; i++) {
-
 		cur_byte = src1[i];
 		tot8b += (cur_byte & 0x80); // This way for possible auto-vectorization
 		tag1 += (cur_byte == '<');
