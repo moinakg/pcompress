@@ -33,6 +33,9 @@
 
 #include <openssl/aes.h>
 
+typedef int (*setkey_func_ptr)(const unsigned char *userKey, const int bits, AES_KEY *key);
+typedef void (*encrypt_func_ptr)(const unsigned char *in, unsigned char *out, const AES_KEY *key);
+
 /**
  * crypto_aesctr_init(key, nonce):
  * Prepare to encrypt/decrypt data with AES in CTR mode, using the provided

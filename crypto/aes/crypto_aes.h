@@ -53,6 +53,7 @@ int aes_decrypt(aes_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, uint64_
 uint64_t aes_nonce(aes_ctx_t *ctx);
 void aes_clean_pkey(aes_ctx_t *ctx);
 void aes_cleanup(aes_ctx_t *ctx);
+void aes_module_init(processor_info_t *pc);
 
 #ifdef	__cplusplus
 }

@@ -37,6 +37,9 @@
 
 #include "crypto_aesctr.h"
 
+extern setkey_func_ptr enc_setkey;
+extern encrypt_func_ptr enc_encrypt;
+
 struct crypto_aesctr {
 	AES_KEY * key;
 	uint64_t nonce;
@@ -98,7 +101,7 @@ do_last:
 		/* Generate a block of cipherstream if needed. */
 		if (bytemod == 0) {
 			*((uint64_t *)(pblk + 8)) = htonll(stream->bytectr / 16);
-			AES_encrypt(pblk, stream->buf, stream->key);
+			enc_encrypt(pblk, stream->buf, stream->key);
 #ifdef __USE_SSE_INTRIN__
 			if (!last)
 				break;
@@ -124,7 +127,7 @@ do_last:
 		_mm_storeu_si128((__m128i *)(outbuf+pos), odat);
 		stream->bytectr += 16;
 		*((uint64_t *)(pblk + 8)) = htonll(stream->bytectr / 16);
-		AES_encrypt(pblk, stream->buf, stream->key);
+		enc_encrypt(pblk, stream->buf, stream->key);
 	}
 	last = 1;
 	goto do_last;

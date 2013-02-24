@@ -723,6 +723,7 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 {
 	if (crypto_alg == CRYPTO_ALG_AES) {
 		aes_ctx_t *actx = (aes_ctx_t *)malloc(sizeof (aes_ctx_t));
+		aes_module_init(&proc_info);
 
 		if (enc_dec) {
 			/*

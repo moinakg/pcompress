@@ -61,9 +61,29 @@
 #include <openssl/evp.h>
 #include <crypto_scrypt.h>
 #include <crypto_aesctr.h>
+#include <utils.h>
 #include "crypto_aes.h"
 
 extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
+extern int vpaes_set_encrypt_key(const unsigned char *userKey, int bits, AES_KEY *key);
+extern void vpaes_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key);
+
+setkey_func_ptr enc_setkey;
+encrypt_func_ptr enc_encrypt;
+
+void
+aes_module_init(processor_info_t *pc)
+{
+	enc_setkey = AES_set_encrypt_key;
+	enc_encrypt = AES_encrypt;
+
+	if (pc->proc_type == PROC_X64_INTEL || pc->proc_type == PROC_X64_AMD) {
+		if (pc->sse_level >= 3 && pc->sse_sub_level >= 1) {
+			enc_setkey = vpaes_set_encrypt_key;
+			enc_encrypt = vpaes_encrypt;
+		}
+	}
+}
 
 /*
  * Fixup parameters for scrypt. Memory is hardcoded here for
@@ -137,7 +157,7 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 #endif
 
 	if (enc) {
-		AES_set_encrypt_key(key, (KEYLEN << 3), &(ctx->key));
+		enc_setkey(key, (KEYLEN << 3), &(ctx->key));
 		// Derive nonce from salt
 		if (clock_gettime(CLOCK_MONOTONIC, &tp) == -1) {
 			time((time_t *)&tv);
@@ -155,7 +175,7 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 		tv = 0;
 	} else {
 		ctx->nonce = nonce;
-		AES_set_encrypt_key(key, (KEYLEN << 3), &(ctx->key));
+		enc_setkey(key, (KEYLEN << 3), &(ctx->key));
 	}
 	return (0);
 }

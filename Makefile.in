@@ -35,6 +35,9 @@ CRYPTO_SRCS = crypto/aes/crypto_aes.c crypto/scrypt/crypto_scrypt-nosse.c \
 CRYPTO_HDRS = crypto/crypto_utils.h crypto/scrypt/crypto_scrypt.h \
 	crypto/scrypt/sha256.h crypto/scrypt/crypto_aesctr.h crypto/aes/crypto_aes.h \
 	crypto/sha2_utils.h crypto/sha3_utils.h $(MAINHDRS)
+CRYPTO_ASM_SRCS = crypto/aes/vpaes-x86_64.s
+CRYPTO_ASM_OBJS = crypto/aes/vpaes-x86_64.o
+CRYPTO_ASM_HDRS = crypto/aes/crypto_aes.h
 CRYPTO_COMPAT_SRCS = crypto/old/sha2_utils_old.c crypto/old/sha3_utils_old.c
 CRYPTO_COMPAT_HDRS = crypto/old/sha2_utils_old.h crypto/old/sha3_utils_old.h
 CRYPTO_OBJS = $(CRYPTO_SRCS:.c=.o)
@@ -183,7 +186,7 @@ OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
 $(SKEIN_BLOCK_OBJ) @SHA2ASM_OBJS@ @SHA2_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
 $(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS) $(XXHASH_OBJS) $(BLAKE2_OBJS) \
-@CRYPTO_COMPAT_OBJS@
+@CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS)
 
 DEBUG_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp
 DEBUG_COMPILE = gcc -g -c @EXTRA_OPT_FLAGS@
@@ -280,8 +283,11 @@ $(LIBBSCWRAPOBJ): $(LIBBSCWRAP) $(LIBBSCLIB)
 $(TRANSP_OBJS): $(TRANSP_SRCS) $(TRANSP_HDRS)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
-$(CRYPTO_OBJS): $(CRYPTO_SRCS) $(CRYPTO_HDRS)
+$(CRYPTO_OBJS): $(CRYPTO_SRCS) $(CRYPTO_HDRS) $(CRYPTO_ASM_OBJS)
 	$(COMPILE) $(GEN_OPT) $(CRYPTO_CPPFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
+$(CRYPTO_ASM_OBJS): $(CRYPTO_ASM_SRCS) $(CRYPTO_ASM_HDRS)
+	$(YASM)	-o $@ $(@:.o=.s)
 
 $(CRYPTO_COMPAT_OBJS): $(CRYPTO_COMPAT_SRCS) $(CRYPTO_COMPAT_HDRS)
 	$(COMPILE) $(GEN_OPT) $(CRYPTO_CPPFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
