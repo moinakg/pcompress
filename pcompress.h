@@ -38,7 +38,7 @@ extern "C" {
 #define	CHUNK_FLAG_SZ	1
 #define	ALGO_SZ		8
 #define	MIN_CHUNK	2048
-#define	VERSION		6
+#define	VERSION		7
 #define	FLAG_DEDUP	1
 #define	FLAG_DEDUP_FIXED	2
 #define	FLAG_SINGLE_CHUNK	4

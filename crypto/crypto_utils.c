@@ -46,6 +46,11 @@
 #include "sha2_utils.h"
 #include "sha3_utils.h"
 
+#ifdef __HASH_COMPATIBILITY_
+#include "old/sha2_utils_old.h"
+#include "old/sha3_utils_old.h"
+#endif
+
 #define	PROVIDER_OPENSSL	0
 #define	PROVIDER_X64_OPT	1
 
@@ -181,6 +186,12 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, in
 {
 	DEBUG_STAT_EN(double strt, en);
 
+#ifdef __HASH_COMPATIBILITY_
+	assert(mt == 0 || mt == 1 || mt == 2);
+#else
+	assert(mt == 0 || mt == 1);
+#endif
+
 	DEBUG_STAT_EN(strt = get_wtime_millis());
 	if (cksum == CKSUM_CRC64) {
 		uint64_t *ck = (uint64_t *)cksum_buf;
@@ -224,41 +235,67 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, in
 		if (cksum_provider == PROVIDER_OPENSSL) {
 			if (!mt)
 				ossl_SHA256(cksum_buf, buf, bytes);
-			else
+			else if (mt == 1)
 				ossl_SHA256_par(cksum_buf, buf, bytes);
+#ifdef __HASH_COMPATIBILITY_
+			else
+				ossl_SHA256_par_old(cksum_buf, buf, bytes);
+#endif
 		} else {
 			if (!mt)
 				opt_SHA512t256(cksum_buf, buf, bytes);
-			else
+			else if (mt == 1)
 				opt_SHA512t256_par(cksum_buf, buf, bytes);
+#ifdef __HASH_COMPATIBILITY_
+			else
+				opt_SHA512t256_par_old(cksum_buf, buf, bytes);
+#endif
 		}
 	} else if (cksum == CKSUM_SHA512) {
 		if (cksum_provider == PROVIDER_OPENSSL) {
 			if (!mt)
 				ossl_SHA512(cksum_buf, buf, bytes);
-			else
+			else if (mt == 1)
 				ossl_SHA512_par(cksum_buf, buf, bytes);
+#ifdef __HASH_COMPATIBILITY_
+			else
+				ossl_SHA512_par_old(cksum_buf, buf, bytes);
+#endif
 		} else {
 			if (!mt)
 				opt_SHA512(cksum_buf, buf, bytes);
-			else
+			else if (mt == 1)
 				opt_SHA512_par(cksum_buf, buf, bytes);
+#ifdef __HASH_COMPATIBILITY_
+			else
+				opt_SHA512_par_old(cksum_buf, buf, bytes);
+#endif
 		}
 	} else if (cksum == CKSUM_KECCAK256) {
 		if (!mt) {
 			if (Keccak256(cksum_buf, buf, bytes) != 0)
 				return (-1);
-		} else {
+		} else if (mt == 1) {
 			if (Keccak256_par(cksum_buf, buf, bytes) != 0)
 				return (-1);
+#ifdef __HASH_COMPATIBILITY_
+		} else {
+			if (Keccak256_par_old(cksum_buf, buf, bytes) != 0)
+				return (-1);
+#endif
 		}
 	} else if (cksum == CKSUM_KECCAK512) {
 		if (!mt) {
 			if (Keccak512(cksum_buf, buf, bytes) != 0)
 				return (-1);
-		} else {
+		} else if (mt == 1) {
 			if (Keccak512_par(cksum_buf, buf, bytes) != 0)
 				return (-1);
+#ifdef __HASH_COMPATIBILITY_
+		} else {
+			if (Keccak512_par_old(cksum_buf, buf, bytes) != 0)
+				return (-1);
+#endif
 		}
 	} else {
 		return (-1);

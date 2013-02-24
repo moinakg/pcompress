@@ -977,10 +977,14 @@ start_decompress(const char *filename, const char *to_filename)
 		tdat->compress = _compress_func;
 		tdat->decompress = _decompress_func;
 		tdat->cancel = 0;
-		if (props.is_single_chunk)
+		if (props.is_single_chunk) {
 			tdat->cksum_mt = 1;
-		else
+			if (version == 6) {
+				tdat->cksum_mt = 2; // Indicate old format parallel hash
+			}
+		} else {
 			tdat->cksum_mt = 0;
+		}
 		tdat->level = level;
 		tdat->data = NULL;
 		tdat->props = &props;
