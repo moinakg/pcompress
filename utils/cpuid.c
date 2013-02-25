@@ -1,4 +1,24 @@
 /*
+ * This file is a part of Pcompress, a chunked parallel multi-
+ * algorithm lossless compression and decompression program.
+ *
+ * Copyright (C) 2012 Moinak Ghosh. All rights reserved.
+ * Use is subject to license terms.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * moinakg@belenix.org, http://moinakg.wordpress.com/
+ */
+
+/*
  * Copyright 2008  Veselin Georgiev,
  * anrieffNOSPAM @ mgail_DOT.com (convert to gmail)
  *
@@ -30,12 +50,13 @@
 
 #ifdef	__x86_64__
 
-#define SSE4_1_FLAG     0x080000
-#define SSE4_2_FLAG     0x100000
-#define SSE3_FLAG       0x1
-#define SSSE3_FLAG      0x200
-#define AVX_FLAG        0x10000000
-#define XOP_FLAG        0x800
+#define	SSE4_1_FLAG	0x080000
+#define	SSE4_2_FLAG	0x100000
+#define	SSE3_FLAG	0x1
+#define	SSSE3_FLAG	0x200
+#define	AVX_FLAG		0x10000000
+#define	XOP_FLAG		0x800
+#define	AES_FLAG		0x2000000
 
 void
 exec_cpuid(uint32_t *regs)
@@ -148,6 +169,10 @@ cpuid_basic_identify(processor_info_t *pc)
 		pc->avx_level = 0;
 		if (raw.basic_cpuid[1][2] & AVX_FLAG) {
 			pc->avx_level = 1;
+		}
+
+		if (raw.basic_cpuid[1][2] & AES_FLAG) {
+			pc->aes_avail = 1;
 		}
 
 		if (raw.ext_cpuid[1][2] & XOP_FLAG) {

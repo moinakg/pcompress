@@ -67,6 +67,8 @@
 extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
 extern int vpaes_set_encrypt_key(const unsigned char *userKey, int bits, AES_KEY *key);
 extern void vpaes_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key);
+extern int aesni_set_encrypt_key(const unsigned char *userKey, int bits, AES_KEY *key);
+extern void aesni_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key);
 
 setkey_func_ptr enc_setkey;
 encrypt_func_ptr enc_encrypt;
@@ -78,7 +80,11 @@ aes_module_init(processor_info_t *pc)
 	enc_encrypt = AES_encrypt;
 
 	if (pc->proc_type == PROC_X64_INTEL || pc->proc_type == PROC_X64_AMD) {
-		if (pc->sse_level >= 3 && pc->sse_sub_level >= 1) {
+		if (pc->aes_avail) {
+			enc_setkey = aesni_set_encrypt_key;
+			enc_encrypt = aesni_encrypt;
+
+		} else if (pc->sse_level >= 3 && pc->sse_sub_level >= 1) {
 			enc_setkey = vpaes_set_encrypt_key;
 			enc_encrypt = vpaes_encrypt;
 		}

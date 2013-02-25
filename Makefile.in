@@ -35,8 +35,8 @@ CRYPTO_SRCS = crypto/aes/crypto_aes.c crypto/scrypt/crypto_scrypt-nosse.c \
 CRYPTO_HDRS = crypto/crypto_utils.h crypto/scrypt/crypto_scrypt.h \
 	crypto/scrypt/sha256.h crypto/scrypt/crypto_aesctr.h crypto/aes/crypto_aes.h \
 	crypto/sha2_utils.h crypto/sha3_utils.h $(MAINHDRS)
-CRYPTO_ASM_SRCS = crypto/aes/vpaes-x86_64.s
-CRYPTO_ASM_OBJS = crypto/aes/vpaes-x86_64.o
+CRYPTO_ASM_SRCS = crypto/aes/vpaes-x86_64.s crypto/aes/aesni-x86_64.s
+CRYPTO_ASM_OBJS = crypto/aes/vpaes-x86_64.o crypto/aes/aesni-x86_64.o
 CRYPTO_ASM_HDRS = crypto/aes/crypto_aes.h
 CRYPTO_COMPAT_SRCS = crypto/old/sha2_utils_old.c crypto/old/sha3_utils_old.c
 CRYPTO_COMPAT_HDRS = crypto/old/sha2_utils_old.h crypto/old/sha3_utils_old.h
