@@ -407,7 +407,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 	if (cksum == CKSUM_BLAKE256) {
 		blake2b_state *ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
 		if (!ctx) return (-1);
-		if (bdsp.blake2b_init_key(ctx, 32, actx->pkey, KEYLEN) != 0)
+		if (bdsp.blake2b_init_key(ctx, 32, actx->pkey, cctx->keylen) != 0)
 			return (-1);
 		mctx->mac_ctx = ctx;
 		ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
@@ -421,7 +421,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 	} else if (cksum == CKSUM_BLAKE512) {
 		blake2b_state *ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
 		if (!ctx) return (-1);
-		if (bdsp.blake2b_init_key(ctx, 64, actx->pkey, KEYLEN) != 0)
+		if (bdsp.blake2b_init_key(ctx, 64, actx->pkey, cctx->keylen) != 0)
 			return (-1);
 		mctx->mac_ctx = ctx;
 		ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
@@ -436,7 +436,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 		Skein_512_Ctxt_t *ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) return (-1);
 		Skein_512_InitExt(ctx, 256, SKEIN_CFG_TREE_INFO_SEQUENTIAL,
-				 actx->pkey, KEYLEN);
+				 actx->pkey, cctx->keylen);
 		mctx->mac_ctx = ctx;
 		ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) {
@@ -450,7 +450,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 		Skein_512_Ctxt_t *ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) return (-1);
 		Skein_512_InitExt(ctx, 512, SKEIN_CFG_TREE_INFO_SEQUENTIAL,
-				  actx->pkey, KEYLEN);
+				  actx->pkey, cctx->keylen);
 		mctx->mac_ctx = ctx;
 		ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) {
@@ -465,7 +465,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 			HMAC_CTX *ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
 			if (!ctx) return (-1);
 			HMAC_CTX_init(ctx);
-			HMAC_Init_ex(ctx, actx->pkey, KEYLEN, EVP_sha256(), NULL);
+			HMAC_Init_ex(ctx, actx->pkey, cctx->keylen, EVP_sha256(), NULL);
 			mctx->mac_ctx = ctx;
 
 			ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
@@ -482,7 +482,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 		} else {
 			HMAC_SHA512_Context *ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
 			if (!ctx) return (-1);
-			opt_HMAC_SHA512t256_Init(ctx, actx->pkey, KEYLEN);
+			opt_HMAC_SHA512t256_Init(ctx, actx->pkey, cctx->keylen);
 			mctx->mac_ctx = ctx;
 
 			ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
@@ -498,7 +498,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 			HMAC_CTX *ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
 			if (!ctx) return (-1);
 			HMAC_CTX_init(ctx);
-			HMAC_Init_ex(ctx, actx->pkey, KEYLEN, EVP_sha512(), NULL);
+			HMAC_Init_ex(ctx, actx->pkey, cctx->keylen, EVP_sha512(), NULL);
 			mctx->mac_ctx = ctx;
 
 			ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
@@ -515,7 +515,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 		} else {
 			HMAC_SHA512_Context *ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
 			if (!ctx) return (-1);
-			opt_HMAC_SHA512_Init(ctx, actx->pkey, KEYLEN);
+			opt_HMAC_SHA512_Init(ctx, actx->pkey, cctx->keylen);
 			mctx->mac_ctx = ctx;
 
 			ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
@@ -538,7 +538,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 			if (Keccak_Init(ctx, 512) != 0)
 				return (-1);
 		}
-		if (Keccak_Update(ctx, actx->pkey, KEYLEN << 3) != 0)
+		if (Keccak_Update(ctx, actx->pkey, cctx->keylen << 3) != 0)
 			return (-1);
 		mctx->mac_ctx = ctx;
 
@@ -719,11 +719,13 @@ hmac_cleanup(mac_ctx_t *mctx)
  */
 int
 init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
-	    uchar_t *salt, int saltlen, uint64_t nonce, int enc_dec)
+	    uchar_t *salt, int saltlen, int keylen, uint64_t nonce, int enc_dec)
 {
 	if (crypto_alg == CRYPTO_ALG_AES) {
 		aes_ctx_t *actx = (aes_ctx_t *)malloc(sizeof (aes_ctx_t));
 		aes_module_init(&proc_info);
+		cctx->keylen = keylen;
+		actx->keylen = keylen;
 
 		if (enc_dec) {
 			/*

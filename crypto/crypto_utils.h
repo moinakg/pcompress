@@ -37,6 +37,16 @@ extern "C" {
 #define	CKSUM_MAX_BYTES		64
 #define	DEFAULT_CKSUM		"BLAKE256"
 
+/*
+ * Default key length for Encryption and Decryption
+ */
+#ifndef	DEFAULT_KEYLEN
+#define	DEFAULT_KEYLEN	32
+#define	MAX_KEYLEN 32
+#else
+#define	MAX_KEYLEN DEFAULT_KEYLEN
+#endif
+
 #define ENCRYPT_FLAG	1
 #define DECRYPT_FLAG	0
 #define	CRYPTO_ALG_AES	0x10
@@ -71,6 +81,7 @@ typedef struct {
 	int enc_dec;
 	uchar_t *salt;
 	int saltlen;
+	int keylen;
 } crypto_ctx_t;
 
 typedef struct {
@@ -93,7 +104,7 @@ void deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes);
  * Encryption related functions.
  */
 int init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
-	       uchar_t *salt, int saltlen, uint64_t nonce, int enc_dec);
+	       uchar_t *salt, int saltlen, int keylen, uint64_t nonce, int enc_dec);
 int crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, uint64_t bytes, uint64_t id);
 uint64_t crypto_nonce(crypto_ctx_t *cctx);
 void crypto_clean_pkey(crypto_ctx_t *cctx);

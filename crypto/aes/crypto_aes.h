@@ -30,20 +30,19 @@
 #include <openssl/evp.h>
 #endif
 #include <openssl/opensslv.h>
+#include <crypto_utils.h>
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
-#ifndef KEYLEN
-#define	KEYLEN 16
-#endif
 #define	PBE_ROUNDS 1000
 
 typedef struct {
 	uint64_t nonce;
 	AES_KEY key;
-	uchar_t pkey[KEYLEN];
+	int keylen;
+	uchar_t pkey[MAX_KEYLEN];
 } aes_ctx_t;
 
 int aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,

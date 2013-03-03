@@ -149,21 +149,21 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 
 	pickparams(&logN, &r, &p);
 	N = (uint64_t)(1) << logN;
-	if (crypto_scrypt(pwd, pwd_len, salt, saltlen, N, r, p, key, KEYLEN)) {
+	if (crypto_scrypt(pwd, pwd_len, salt, saltlen, N, r, p, key, ctx->keylen)) {
 		fprintf(stderr, "Scrypt failed\n");
 		return (-1);
 	}
 #else
 	rv = PKCS5_PBKDF2_HMAC(pwd, pwd_len, salt, saltlen, PBE_ROUNDS, EVP_sha256(),
-			       KEYLEN, key);
-	if (rv != KEYLEN) {
-		fprintf(stderr, "Key size is %d bytes - should be %d bits\n", i, KEYLEN);
+			       ctx->keylen, key);
+	if (rv != ctx->keylen) {
+		fprintf(stderr, "Key size is %d bytes - should be %d bits\n", i, ctx->keylen);
 		return (-1);
 	}
 #endif
 
 	if (enc) {
-		enc_setkey(key, (KEYLEN << 3), &(ctx->key));
+		enc_setkey(key, (ctx->keylen << 3), &(ctx->key));
 		// Derive nonce from salt
 		if (clock_gettime(CLOCK_MONOTONIC, &tp) == -1) {
 			time((time_t *)&tv);
@@ -181,7 +181,7 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 		tv = 0;
 	} else {
 		ctx->nonce = nonce;
-		enc_setkey(key, (KEYLEN << 3), &(ctx->key));
+		enc_setkey(key, (ctx->keylen << 3), &(ctx->key));
 	}
 	return (0);
 }
@@ -243,7 +243,7 @@ aes_nonce(aes_ctx_t *ctx)
 void
 aes_clean_pkey(aes_ctx_t *ctx)
 {
-	memset(ctx->pkey, 0, KEYLEN);
+	memset(ctx->pkey, 0, ctx->keylen);
 }
 
 void

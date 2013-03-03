@@ -13,20 +13,21 @@ ${prog} [<options>]
 --enable-debug-stats	Enable printing of some verbose debug info (default: disabled).
 --with-libbsc=<path to libbsc source>
 			Enable support for libbsc (See: libbsc.com). Full path to the libbsc
-                        source tree must be provided. It links the library statically.
+			source tree must be provided. It links the library statically.
 --with-openssl=<path to OpenSSL installation tree> (Default: System)
-                        This defaults to the system's OpenSSL library. You can use this option
-                        if you want to use an alternate OpenSSL installation.
+			This defaults to the system's OpenSSL library. You can use this option
+			if you want to use an alternate OpenSSL installation.
 --with-zlib=<path to zlib installation tree> (Default: System)
-                        Enable building against an alternate Zlib installation.
+			Enable building against an alternate Zlib installation.
 --with-bzlib=<path to Bzip2 library installation tree> (Default: System)
-                        Enable building against an alternate Bzip2 and library installation.
+			Enable building against an alternate Bzip2 and library installation.
 --no-sse-detect		Do NOT attempt to probe the system's SSE/AVX capability for build flags. 
 --no-1.3-archive-compat Disable compatibility with compressed archives created with Pcompress
-                        version 1.3 (default: retain compatibility). Hash formats changed from
-                        version 1.3 to 1.4 so this option is required if files created using
-                        1.3 need to be decompressed by version 1.4 onwards.
---use-key256		Use 256-bit encryption keys. Default key length is 128-bit.
+			version 1.3 (default: retain compatibility). Hash formats changed from
+			version 1.3 to 1.4 so this option is required if files created using
+			1.3 need to be decompressed by version 1.4 onwards.
+--limit-key128		Limit key length to 128-bit encryption keys. Otherwise the default is to
+			use 256-bit keys changeable at runtime via the '-k <keylen>' option.
 --help			Display this help message.
 
 _EOF
@@ -145,7 +146,7 @@ do
 		bzlib_prefix=`echo ${arg1} | cut -f2 -d"="`
 	;;
 	--use-key256)
-		keylen='-DKEYLEN=32'
+		keylen='-DDEFAULT_KEYLEN=16'
 	;;
 	--no-sse-detect)
 		sse_detect=0

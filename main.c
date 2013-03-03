@@ -98,7 +98,7 @@ static int do_compress = 0;
 static int do_uncompress = 0;
 static int cksum_bytes, mac_bytes;
 static int cksum = 0, t_errored = 0;
-static int rab_blk_size = 0;
+static int rab_blk_size = 0, keylen;
 static crypto_ctx_t crypto_ctx;
 static char *pwd_file = NULL, *f_name = NULL;
 
@@ -169,6 +169,18 @@ usage(void)
 	    "           - Specify an average Dedupe block size. 1 - 4K, 2 - 8K ... 5 - 64K.\n"
 	    "   '-M'    - Display memory allocator statistics\n"
 	    "   '-C'    - Display compression statistics\n\n");
+	fprintf(stderr, "\n"
+	    "8) Encryption flags:\n"
+	    "   '-e'    - Encrypt chunks with AES-CTR. The password can be prompted from the\n"
+	    "             user or read from a file. Unique keys are generated every time\n"
+	    "             pcompress is run even when giving the same password.\n"
+	    "   '-w <pathname>'\n"
+	    "           - Provide a file which contains the encryption password. This file must\n"
+	    "             be readable and writable since it is zeroed out after the password is\n"
+	    "             read.\n"
+	    "   '-k <key length>\n"
+	    "           - Specify key length. Can be 16 for 128 bit or 32 for 256 bit. Default\n"
+	    "             is 32 for 256 bit keys.\n\n");
 }
 
 void
@@ -787,7 +799,7 @@ start_decompress(const char *filename, const char *to_filename)
 	if (flags & MASK_CRYPTO_ALG) {
 		int saltlen;
 		uchar_t *salt1, *salt2;
-		uint64_t nonce;
+		uint64_t nonce, d3;
 		uchar_t pw[MAX_PW_LEN];
 		int pw_len;
 		mac_ctx_t hdr_mac;
@@ -817,20 +829,34 @@ start_decompress(const char *filename, const char *to_filename)
 			UNCOMP_BAIL;
 		}
 		deserialize_checksum(salt2, salt1, saltlen);
-		memset(salt1, 0, saltlen);
-		free(salt1);
 
 		if (Read(compfd, &nonce, sizeof (nonce)) < sizeof (nonce)) {
 			memset(salt2, 0, saltlen);
 			free(salt2);
+			memset(salt1, 0, saltlen);
+			free(salt1);
 			perror("Read: ");
 			UNCOMP_BAIL;
 		}
 		nonce = ntohll(nonce);
 
+		if (version > 6) {
+			if (Read(compfd, &keylen, sizeof (keylen)) < sizeof (keylen)) {
+				memset(salt2, 0, saltlen);
+				free(salt2);
+				memset(salt1, 0, saltlen);
+				free(salt1);
+				perror("Read: ");
+				UNCOMP_BAIL;
+			}
+			keylen = ntohl(keylen);
+		}
+
 		if (Read(compfd, hdr_hash1, mac_bytes) < mac_bytes) {
 			memset(salt2, 0, saltlen);
 			free(salt2);
+			memset(salt1, 0, saltlen);
+			free(salt1);
 			perror("Read: ");
 			UNCOMP_BAIL;
 		}
@@ -842,6 +868,8 @@ start_decompress(const char *filename, const char *to_filename)
 			if (pw_len == -1) {
 				memset(salt2, 0, saltlen);
 				free(salt2);
+				memset(salt1, 0, saltlen);
+				free(salt1);
 				err_exit(0, "Failed to get password.\n");
 			}
 		} else {
@@ -874,6 +902,8 @@ start_decompress(const char *filename, const char *to_filename)
 				perror(" ");
 				memset(salt2, 0, saltlen);
 				free(salt2);
+				memset(salt1, 0, saltlen);
+				free(salt1);
 				close(uncompfd); unlink(to_filename);
 				err_exit(0, "Failed to get password.\n");
 			}
@@ -881,16 +911,17 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 
 		if (init_crypto(&crypto_ctx, pw, pw_len, encrypt_type, salt2,
-		    saltlen, nonce, DECRYPT_FLAG) == -1) {
+		    saltlen, keylen, nonce, DECRYPT_FLAG) == -1) {
 			memset(salt2, 0, saltlen);
 			free(salt2);
+			memset(salt1, 0, saltlen);
+			free(salt1);
 			memset(pw, 0, MAX_PW_LEN);
 			close(uncompfd); unlink(to_filename);
 			err_exit(0, "Failed to initialize crypto\n");
 		}
 		memset(salt2, 0, saltlen);
 		free(salt2);
-		nonce = 0;
 		memset(pw, 0, MAX_PW_LEN);
 
 		/*
@@ -905,12 +936,24 @@ start_decompress(const char *filename, const char *to_filename)
 		hmac_update(&hdr_mac, (uchar_t *)&d1, sizeof (version));
 		d1 = htons(flags);
 		hmac_update(&hdr_mac, (uchar_t *)&d1, sizeof (flags));
-		nonce = htonll(chunksize); 
-		hmac_update(&hdr_mac, (uchar_t *)&nonce, sizeof (nonce));
+		d3 = htonll(chunksize); 
+		hmac_update(&hdr_mac, (uchar_t *)&d3, sizeof (nonce));
 		d2 = htonl(level);
 		hmac_update(&hdr_mac, (uchar_t *)&d2, sizeof (level));
+		if (version > 6) {
+			d2 = htonl(saltlen);
+			hmac_update(&hdr_mac, (uchar_t *)&d2, sizeof (saltlen));
+			hmac_update(&hdr_mac, salt1, saltlen);
+			nonce = htonll(nonce);
+			hmac_update(&hdr_mac, (uchar_t *)&nonce, sizeof (nonce));
+			d2 = htonl(keylen);
+			hmac_update(&hdr_mac, (uchar_t *)&d2, sizeof (keylen));
+		}
 		hmac_final(&hdr_mac, hdr_hash1, &hlen);
 		hmac_cleanup(&hdr_mac);
+		memset(salt1, 0, saltlen);
+		free(salt1);
+		nonce = 0;
 		if (memcmp(hdr_hash2, hdr_hash1, mac_bytes) != 0) {
 			close(uncompfd); unlink(to_filename);
 			err_exit(0, "Header verification failed! File tampered or wrong password.\n");
@@ -1600,7 +1643,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			close(fd);
 		}
 		if (init_crypto(&crypto_ctx, pw, pw_len, encrypt_type, NULL,
-		    0, 0, ENCRYPT_FLAG) == -1) {
+		    0, keylen, 0, ENCRYPT_FLAG) == -1) {
 			memset(pw, 0, MAX_PW_LEN);
 			err_exit(0, "Failed to initialize crypto\n");
 		}
@@ -1791,14 +1834,28 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	pos += sizeof (n_chunksize);
 	memcpy(pos, &level, sizeof (level));
 	pos += sizeof (level);
+
+	/*
+	 * If encryption is enabled, include salt, nonce and keylen in the header
+	 * to be HMAC-ed (archive version 7 and greater).
+	 */
+	if (encrypt_type) {
+		*((int *)pos) = htonl(crypto_ctx.saltlen);
+		pos += sizeof (int);
+		serialize_checksum(crypto_ctx.salt, pos, crypto_ctx.saltlen);
+		pos += crypto_ctx.saltlen;
+		*((uint64_t *)pos) = htonll(crypto_nonce(&crypto_ctx));
+		pos += 8;
+		*((int *)pos) = htonl(keylen);
+		pos += sizeof (int);
+	}
 	if (Write(compfd, cread_buf, pos - cread_buf) != pos - cread_buf) {
 		perror("Write ");
 		COMP_BAIL;
 	}
 
 	/*
-	 * If encryption is enabled, compute header HMAC. Then
-	 * write the salt, nonce and header hmac in that order.
+	 * If encryption is enabled, compute header HMAC and write it.
 	 */
 	if (encrypt_type) {
 		mac_ctx_t hdr_mac;
@@ -1817,12 +1874,6 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		crypto_clean_pkey(&crypto_ctx);
 
 		pos = cread_buf;
-		*((int *)pos) = htonl(crypto_ctx.saltlen);
-		pos += sizeof (int);
-		serialize_checksum(crypto_ctx.salt, pos, crypto_ctx.saltlen);
-		pos += crypto_ctx.saltlen;
-		*((uint64_t *)pos) = htonll(crypto_nonce(&crypto_ctx));
-		pos += 8;
 		serialize_checksum(hdr_hash, pos, hlen);
 		pos += hlen;
 		if (Write(compfd, cread_buf, pos - cread_buf) != pos - cread_buf) {
@@ -2196,10 +2247,11 @@ main(int argc, char *argv[])
 	exec_name = get_execname(argv[0]);
 	level = 6;
 	err = 0;
+	keylen = DEFAULT_KEYLEN;
 	slab_init();
 	init_pcompress();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEew:rLPS:B:F")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEew:rLPS:B:Fk:")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -2295,6 +2347,13 @@ main(int argc, char *argv[])
 
 		    case 'r':
 			enable_rabin_split = 0;
+			break;
+
+		    case 'k':
+			keylen = atoi(optarg);
+			if ((keylen != 16 && keylen != 32) || keylen > MAX_KEYLEN) {
+				err_exit(0, "Encryption KEY length should be 16 or 32.\n", optarg);
+			}
 			break;
 
 		    case 'S':
