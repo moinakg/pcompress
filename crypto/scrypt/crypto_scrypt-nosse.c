@@ -50,6 +50,47 @@ static void blockmix_salsa8(uint32_t *, uint32_t *, uint32_t *, size_t);
 static uint64_t integerify(void *, size_t);
 static void smix(uint8_t *, size_t, uint64_t, uint32_t *, uint32_t *);
 
+/*
+ * Fixup parameters for scrypt. Memory is hardcoded here for
+ * reproducibility.
+ */
+void
+pickparams(int * logN, uint32_t * r, uint32_t * p)
+{
+	size_t memlimit = 512UL * 1024UL * 1024UL; // 512M
+	double opslimit = 65536;
+	double maxN, maxrp;
+
+	*r = 8;
+	/*
+	 * The memory limit requires that 128Nr <= memlimit, while the CPU
+	 * limit requires that 4Nrp <= opslimit.  If opslimit < memlimit/32,
+	 * opslimit imposes the stronger limit on N.
+	 */
+	if (opslimit < memlimit/32) {
+		/* Set p = 1 and choose N based on the CPU limit. */
+		*p = 1;
+		maxN = opslimit / (*r * 4);
+		for (*logN = 1; *logN < 63; *logN += 1) {
+			if ((uint64_t)(1) << *logN > maxN / 2)
+				break;
+		}
+	} else {
+		/* Set N based on the memory limit. */
+		maxN = memlimit / (*r * 128);
+		for (*logN = 1; *logN < 63; *logN += 1) {
+			if ((uint64_t)(1) << *logN > maxN / 2)
+				break;
+		}
+
+		/* Choose p based on the CPU limit. */
+		maxrp = (opslimit / 4) / ((uint64_t)(1) << *logN);
+		if (maxrp > 0x3fffffff)
+			maxrp = 0x3fffffff;
+		*p = (uint32_t)(maxrp) / *r;
+	}
+}
+
 static void
 blkcpy(void * dest, void * src, size_t len)
 {

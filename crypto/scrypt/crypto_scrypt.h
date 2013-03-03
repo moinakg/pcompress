@@ -44,6 +44,8 @@
 int crypto_scrypt(const uint8_t *, size_t, const uint8_t *, size_t, uint64_t,
     uint32_t, uint32_t, uint8_t *, size_t);
 
+void pickparams(int * logN, uint32_t * r, uint32_t * p);
+
 #define	HAVE_POSIX_MEMALIGN
 
 #endif /* !_CRYPTO_SCRYPT_H_ */

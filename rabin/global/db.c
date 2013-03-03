@@ -219,7 +219,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 	index_t *indx = (index_t *)(cfg->dbdata);
 	hash_entry_t **htab, *ent, **pent;
 
-	assert(cfg->similarity_cksum_sz & (sizeof (size_t) - 1) == 0);
+	assert(cfg->similarity_cksum_sz && (sizeof (size_t) - 1) == 0);
 	htab_entry = XXH32(sim_cksum, cfg->similarity_cksum_sz, 0);
 	htab_entry ^= (htab_entry / cfg->similarity_cksum_sz);
 	htab_entry = htab_entry % indx->hash_slots;
