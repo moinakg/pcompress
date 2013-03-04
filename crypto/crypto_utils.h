@@ -47,8 +47,9 @@ extern "C" {
 #define	MAX_KEYLEN DEFAULT_KEYLEN
 #endif
 
-#define ENCRYPT_FLAG		1
-#define DECRYPT_FLAG		0
+#define	OLD_KEYLEN		16
+#define	ENCRYPT_FLAG		1
+#define	DECRYPT_FLAG		0
 #define	CRYPTO_ALG_AES		0x10
 #define	CRYPTO_ALG_SALSA20	0x20
 #define	MAX_SALTLEN		64

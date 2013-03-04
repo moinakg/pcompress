@@ -818,6 +818,8 @@ start_decompress(const char *filename, const char *to_filename)
 		pw_len = -1;
 		compressed_chunksize += mac_bytes;
 		encrypt_type = flags & MASK_CRYPTO_ALG;
+		if (version < 7)
+			keylen = OLD_KEYLEN;
 
 		if (encrypt_type == CRYPTO_ALG_AES) {
 			noncelen = 8;
