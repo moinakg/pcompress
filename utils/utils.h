@@ -59,6 +59,11 @@ extern "C" {
 #               define UINT64_C(n) n ## UL
 #       endif
 #endif
+
+#ifndef UINT64_MAX
+#define	UINT64_MAX (18446744073709551615ULL)
+#endif
+
 typedef unsigned long uintptr_t;
 typedef int32_t bsize_t;
 

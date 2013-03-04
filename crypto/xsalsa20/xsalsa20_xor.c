@@ -47,6 +47,10 @@ salsa20_init(salsa20_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int p
 	uint32_t r, p;
 	uint64_t N;
 
+	if (XSALSA20_CRYPTO_NONCEBYTES % 8) {
+		fprintf(stderr, "XSALSA20_CRYPTO_NONCEBYTES is not a multiple of 8!\n");
+		return (-1);
+	}
 	pickparams(&logN, &r, &p);
 	N = (uint64_t)(1) << logN;
 	if (crypto_scrypt(pwd, pwd_len, salt, saltlen, N, r, p, key, ctx->keylen)) {
@@ -78,7 +82,10 @@ salsa20_init(salsa20_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int p
 		k = ctx->key + ctx->keylen;
 		memcpy(k, key, XSALSA20_CRYPTO_KEYBYTES - ctx->keylen);
 	}
+
 	if (enc) {
+		int i;
+		uint64_t *n, *n1;
 
 		// Derive 192-bit nonce
 		if (RAND_status() != 1 || RAND_bytes(IV, XSALSA20_CRYPTO_NONCEBYTES) != 1) {
@@ -93,7 +100,13 @@ salsa20_init(salsa20_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int p
 						saltlen, PBE_ROUNDS, EVP_sha256(), 32, IV);
 			}
 		}
-		memcpy(ctx->nonce, IV, XSALSA20_CRYPTO_NONCEBYTES);
+		n = (uint64_t *)IV;
+		n1 = (uint64_t *)(ctx->nonce);
+		for (i = 0; i < XSALSA20_CRYPTO_NONCEBYTES/8; i++) {
+			*n1 = ntohll(*n);
+			n++;
+			n1++;
+		}
 
 		// Nullify stack components
 		memset(num, 0, 25);
@@ -110,13 +123,59 @@ salsa20_init(salsa20_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int p
 int
 salsa20_encrypt(salsa20_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, uint64_t len, uint64_t id)
 {
-	return (crypto_salsa20(ciphertext, plaintext, len, ctx->nonce + id, ctx->key, ctx->keylen));
+	uchar_t nonce[XSALSA20_CRYPTO_NONCEBYTES];
+	int i;
+	uint64_t *n, carry;
+
+	for (i = 0; i < XSALSA20_CRYPTO_NONCEBYTES; i++) nonce[i] = ctx->nonce[i];
+	carry = id;
+	n = (uint64_t *)nonce;
+	for (i = 0; i < XSALSA20_CRYPTO_NONCEBYTES/8; i++) {
+		if (UINT64_MAX - *n < carry) {
+			carry = carry - (UINT64_MAX - *n);
+			*n = 0;
+		} else {
+			*n += carry;
+			carry = 0;
+			break;
+		}
+		n++;
+	}
+	if (carry) {
+		n = (uint64_t *)nonce;
+		*n += carry;
+	}
+
+	return (crypto_salsa20(ciphertext, plaintext, len, nonce, ctx->key, ctx->keylen));
 }
 
 int
 salsa20_decrypt(salsa20_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, uint64_t len, uint64_t id)
 {
-	return (crypto_salsa20(plaintext, ciphertext, len, ctx->nonce + id, ctx->key, ctx->keylen));
+	uchar_t nonce[XSALSA20_CRYPTO_NONCEBYTES];
+	int i;
+	uint64_t *n, carry;
+
+	for (i = 0; i < XSALSA20_CRYPTO_NONCEBYTES; i++) nonce[i] = ctx->nonce[i];
+	carry = id;
+	n = (uint64_t *)nonce;
+	for (i = 0; i < XSALSA20_CRYPTO_NONCEBYTES/8; i++) {
+		if (UINT64_MAX - *n < carry) {
+			carry = carry - (UINT64_MAX - *n);
+			*n = 0;
+		} else {
+			*n += carry;
+			carry = 0;
+			break;
+		}
+		n++;
+	}
+	if (carry) {
+		n = (uint64_t *)nonce;
+		*n += carry;
+	}
+
+	return (crypto_salsa20(plaintext, ciphertext, len, nonce, ctx->key, ctx->keylen));
 }
 
 uchar_t *

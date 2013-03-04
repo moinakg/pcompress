@@ -137,7 +137,16 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 				PKCS5_PBKDF2_HMAC((const char *)num, strlen((char *)num), salt,
 						saltlen, PBE_ROUNDS, EVP_sha256(), 32, IV);
 				ctx->nonce = lzma_crc64(IV, 32, 0);
+			} else {
+				tv = ntohll(ctx->nonce);
+				ctx->nonce = tv;
 			}
+		} else {
+			/*
+			 * Random bytes are treated as being in big-endian format.
+			 */
+			tv = ntohll(ctx->nonce);
+			ctx->nonce = tv;
 		}
 		// Nullify stack components
 		memset(num, 0, 25);
