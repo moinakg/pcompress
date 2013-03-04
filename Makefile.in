@@ -29,15 +29,22 @@ MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heapq.h 
 	utils/cpuid.h utils/xxhash.h
 MAINOBJS = $(MAINSRCS:.c=.o)
 
+XSALSA20_STREAM_C = crypto/xsalsa20/stream.c
+XSALSA20_STREAM_ASM = crypto/xsalsa20/stream.s
+XSALSA20_DEBUG = -DSALSA20_DEBUG
+
 CRYPTO_SRCS = crypto/aes/crypto_aes.c crypto/scrypt/crypto_scrypt-nosse.c \
 	crypto/scrypt/sha256.c crypto/scrypt/crypto_aesctr.c crypto/crypto_utils.c \
-	crypto/sha2_utils.c crypto/sha3_utils.c
+	crypto/sha2_utils.c crypto/sha3_utils.c crypto/xsalsa20/xsalsa20_xor.c \
+	crypto/xsalsa20/hsalsa_core.c @XSALSA20_STREAM_C@
 CRYPTO_HDRS = crypto/crypto_utils.h crypto/scrypt/crypto_scrypt.h \
 	crypto/scrypt/sha256.h crypto/scrypt/crypto_aesctr.h crypto/aes/crypto_aes.h \
-	crypto/sha2_utils.h crypto/sha3_utils.h $(MAINHDRS)
-CRYPTO_ASM_SRCS = crypto/aes/vpaes-x86_64.s crypto/aes/aesni-x86_64.s
-CRYPTO_ASM_OBJS = crypto/aes/vpaes-x86_64.o crypto/aes/aesni-x86_64.o
-CRYPTO_ASM_HDRS = crypto/aes/crypto_aes.h
+	crypto/sha2_utils.h crypto/sha3_utils.h crypto/xsalsa20/crypto_core_hsalsa20.h \
+	crypto/xsalsa20/crypto_stream_salsa20.h crypto/xsalsa20/crypto_xsalsa20.h \
+	$(MAINHDRS)
+CRYPTO_ASM_SRCS = crypto/aes/vpaes-x86_64.s crypto/aes/aesni-x86_64.s @XSALSA20_STREAM_ASM@
+CRYPTO_ASM_OBJS = $(CRYPTO_ASM_SRCS:.s=.o)
+CRYPTO_ASM_HDRS = crypto/aes/crypto_aes.h crypto/xsalsa20/crypto_stream_salsa20.h
 CRYPTO_COMPAT_SRCS = crypto/old/sha2_utils_old.c crypto/old/sha3_utils_old.c
 CRYPTO_COMPAT_HDRS = crypto/old/sha2_utils_old.h crypto/old/sha3_utils_old.h
 CRYPTO_OBJS = $(CRYPTO_SRCS:.c=.o)
@@ -175,9 +182,10 @@ COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
 	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I./crypto/sha2 \
 	-I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ -I./rabin/global \
-	-I./crypto/keccak -I./transpose -I./crypto/blake2 $(EXTRA_CPPFLAGS) -pedantic -Wall -std=gnu99 \
+	-I./crypto/keccak -I./transpose -I./crypto/blake2 $(EXTRA_CPPFLAGS) \
+	-I./crypto/xsalsa20 -pedantic -Wall -std=gnu99 \
 	-fno-strict-aliasing -Wno-unused-but-set-variable -Wno-enum-compare \
-	@COMPAT_CPPFLAGS@
+	@COMPAT_CPPFLAGS@ @XSALSA20_DEBUG@
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -L./buildtmp -Wl,-R@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,-R@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \

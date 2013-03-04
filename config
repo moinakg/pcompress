@@ -63,6 +63,9 @@ sse_detect=1
 sse_opt_flags="-msse2"
 crypto_compat_objs='\$\(CRYPTO_COMPAT_OBJS\)'
 crypto_compat_flags="-D__HASH_COMPATIBILITY_"
+salsa20_stream_c=
+salsa20_stream_asm='\$\(XSALSA20_STREAM_ASM\)'
+salsa20_debug=
 
 rm -rf ./buildtmp
 mkdir ./buildtmp
@@ -168,6 +171,9 @@ done
 if [ $debug -eq 1 ]
 then
 	typ="DEBUG"
+	salsa20_stream_c='\$\(XSALSA20_STREAM_C\)'
+	salsa20_stream_asm=
+	salsa20_debug='\$\(XSALSA20_DEBUG\)'
 else
 	typ="RELEASE"
 fi
@@ -523,6 +529,9 @@ keccak_srcs_asm_var="KECCAK_SRCS_ASM"
 
 crypto_compat_objs_var="CRYPTO_COMPAT_OBJS"
 crypto_compat_flags_var="COMPAT_CPPFLAGS"
+salsa20_stream_c_var="XSALSA20_STREAM_C"
+salsa20_stream_asm_var="XSALSA20_STREAM_ASM"
+salsa20_debug_var="XSALSA20_DEBUG"
 
 noslabcppflagsval=
 debugstatscppflagsval=
@@ -567,5 +576,8 @@ s#@${extra_opt_flags_var}@#${extra_opt_flags}#g
 s#@${sse_opt_flags_var}@#${sse_opt_flags}#g
 s#@${crypto_compat_objs_var}@#${crypto_compat_objs}#g
 s#@${crypto_compat_flags_var}@#${crypto_compat_flags}#g
+s#@${salsa20_stream_c_var}@#${salsa20_stream_c}#g
+s#@${salsa20_stream_asm_var}@#${salsa20_stream_asm}#g
+s#@${salsa20_debug_var}@#${salsa20_debug}#g
 " > Makefile
 

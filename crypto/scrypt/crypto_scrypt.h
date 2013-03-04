@@ -32,6 +32,8 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#define	PBE_ROUNDS	50000
+
 /**
  * crypto_scrypt(passwd, passwdlen, salt, saltlen, N, r, p, buf, buflen):
  * Compute scrypt(passwd[0 .. passwdlen - 1], salt[0 .. saltlen - 1], N, r,

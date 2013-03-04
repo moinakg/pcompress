@@ -50,6 +50,7 @@
 #include <transpose.h>
 #include <delta2/delta2.h>
 #include <crypto/crypto_utils.h>
+#include <crypto_xsalsa20.h>
 #include <ctype.h>
 
 /*
@@ -797,9 +798,9 @@ start_decompress(const char *filename, const char *to_filename)
 	 * If encryption is enabled initialize crypto.
 	 */
 	if (flags & MASK_CRYPTO_ALG) {
-		int saltlen;
+		int saltlen, noncelen;
 		uchar_t *salt1, *salt2;
-		uint64_t nonce, d3;
+		uchar_t nonce[MAX_NONCE], n1[MAX_NONCE];
 		uchar_t pw[MAX_PW_LEN];
 		int pw_len;
 		mac_ctx_t hdr_mac;
@@ -807,6 +808,7 @@ start_decompress(const char *filename, const char *to_filename)
 		unsigned int hlen;
 		unsigned short d1;
 		unsigned int d2;
+		uint64_t d3;
 
 		/*
 		 * In encrypted files we do not have a normal digest. The HMAC
@@ -816,6 +818,15 @@ start_decompress(const char *filename, const char *to_filename)
 		pw_len = -1;
 		compressed_chunksize += mac_bytes;
 		encrypt_type = flags & MASK_CRYPTO_ALG;
+
+		if (encrypt_type == CRYPTO_ALG_AES) {
+			noncelen = 8;
+		} else if (encrypt_type == CRYPTO_ALG_SALSA20) {
+			noncelen = XSALSA20_CRYPTO_NONCEBYTES;
+		} else {
+			fprintf(stderr, "Invalid Encryption algorithm code: %d. File corrupt ?\n", encrypt_type);
+			UNCOMP_BAIL;
+		}
 		if (Read(compfd, &saltlen, sizeof (saltlen)) < sizeof (saltlen)) {
 			perror("Read: ");
 			UNCOMP_BAIL;
@@ -830,7 +841,7 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 		deserialize_checksum(salt2, salt1, saltlen);
 
-		if (Read(compfd, &nonce, sizeof (nonce)) < sizeof (nonce)) {
+		if (Read(compfd, n1, noncelen) < noncelen) {
 			memset(salt2, 0, saltlen);
 			free(salt2);
 			memset(salt1, 0, saltlen);
@@ -838,7 +849,13 @@ start_decompress(const char *filename, const char *to_filename)
 			perror("Read: ");
 			UNCOMP_BAIL;
 		}
-		nonce = ntohll(nonce);
+
+		if (encrypt_type == CRYPTO_ALG_AES) {
+			*((uint64_t *)nonce) = ntohll(*((uint64_t *)n1));
+
+		} else if (encrypt_type == CRYPTO_ALG_SALSA20) {
+			deserialize_checksum(nonce, n1, noncelen);
+		}
 
 		if (version > 6) {
 			if (Read(compfd, &keylen, sizeof (keylen)) < sizeof (keylen)) {
@@ -923,6 +940,7 @@ start_decompress(const char *filename, const char *to_filename)
 		memset(salt2, 0, saltlen);
 		free(salt2);
 		memset(pw, 0, MAX_PW_LEN);
+		memset(nonce, 0, noncelen);
 
 		/*
 		 * Verify file header HMAC.
@@ -936,16 +954,15 @@ start_decompress(const char *filename, const char *to_filename)
 		hmac_update(&hdr_mac, (uchar_t *)&d1, sizeof (version));
 		d1 = htons(flags);
 		hmac_update(&hdr_mac, (uchar_t *)&d1, sizeof (flags));
-		d3 = htonll(chunksize); 
-		hmac_update(&hdr_mac, (uchar_t *)&d3, sizeof (nonce));
+		d3 = htonll(chunksize);
+		hmac_update(&hdr_mac, (uchar_t *)&d3, sizeof (chunksize));
 		d2 = htonl(level);
 		hmac_update(&hdr_mac, (uchar_t *)&d2, sizeof (level));
 		if (version > 6) {
 			d2 = htonl(saltlen);
 			hmac_update(&hdr_mac, (uchar_t *)&d2, sizeof (saltlen));
 			hmac_update(&hdr_mac, salt1, saltlen);
-			nonce = htonll(nonce);
-			hmac_update(&hdr_mac, (uchar_t *)&nonce, sizeof (nonce));
+			hmac_update(&hdr_mac, n1, noncelen);
 			d2 = htonl(keylen);
 			hmac_update(&hdr_mac, (uchar_t *)&d2, sizeof (keylen));
 		}
@@ -953,7 +970,7 @@ start_decompress(const char *filename, const char *to_filename)
 		hmac_cleanup(&hdr_mac);
 		memset(salt1, 0, saltlen);
 		free(salt1);
-		nonce = 0;
+		memset(n1, 0, noncelen);
 		if (memcmp(hdr_hash2, hdr_hash1, mac_bytes) != 0) {
 			close(uncompfd); unlink(to_filename);
 			err_exit(0, "Header verification failed! File tampered or wrong password.\n");
@@ -1844,8 +1861,14 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		pos += sizeof (int);
 		serialize_checksum(crypto_ctx.salt, pos, crypto_ctx.saltlen);
 		pos += crypto_ctx.saltlen;
-		*((uint64_t *)pos) = htonll(crypto_nonce(&crypto_ctx));
-		pos += 8;
+		if (encrypt_type == CRYPTO_ALG_AES) {
+			*((uint64_t *)pos) = htonll(*((uint64_t *)crypto_nonce(&crypto_ctx)));
+			pos += 8;
+
+		} else if (encrypt_type == CRYPTO_ALG_SALSA20) {
+			serialize_checksum(crypto_nonce(&crypto_ctx), pos, XSALSA20_CRYPTO_NONCEBYTES);
+			pos += XSALSA20_CRYPTO_NONCEBYTES;
+		}
 		*((int *)pos) = htonl(keylen);
 		pos += sizeof (int);
 	}
@@ -2251,7 +2274,7 @@ main(int argc, char *argv[])
 	slab_init();
 	init_pcompress();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEew:rLPS:B:Fk:")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEe:w:rLPS:B:Fk:")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -2325,7 +2348,10 @@ main(int argc, char *argv[])
 			break;
 
 		    case 'e':
-			encrypt_type = CRYPTO_ALG_AES;
+			encrypt_type = get_crypto_alg(optarg);
+			if (encrypt_type == 0) {
+				err_exit(0, "Invalid encryption algorithm. Should be AES or SALSA20.\n", optarg);
+			}
 			break;
 
 		    case 'w':

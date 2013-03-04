@@ -41,6 +41,7 @@
 #include <crypto_aes.h>
 #include <KeccakNISTInterface.h>
 #include <utils.h>
+#include <crypto_xsalsa20.h>
 
 #include "crypto_utils.h"
 #include "sha2_utils.h"
@@ -56,7 +57,6 @@
 
 static void init_sha512(void);
 static void init_blake2(void);
-static int geturandom_bytes(uchar_t rbytes[32]);
 static struct blake2_dispatch	bdsp;
 
 /*
@@ -172,6 +172,25 @@ PKCS5_PBKDF2_HMAC(const char *pass, int passlen,
 	return (1);
 }
 #endif
+
+int
+get_crypto_alg(char *name)
+{
+	if (name[0] == 0 || name[1] == 0 || name[2] == 0) {
+		return (0);
+	}
+	if (strncmp(name, "AES", 3) == 0) {
+		return (CRYPTO_ALG_AES);
+	} else {
+		if (name[3] == 0 || name[4] == 0 || name[5] == 0 || name[6] == 0) {
+			return (0);
+		}
+		if (strncmp(name, "SALSA20", 3) == 0) {
+			return (CRYPTO_ALG_SALSA20);
+		}
+	}
+	return (0);
+}
 
 /*
  * Compute a digest of the given data segment. The parameter mt indicates whether
@@ -401,13 +420,12 @@ deserialize_checksum(uchar_t *checksum, uchar_t *buf, int cksum_bytes)
 int
 hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 {
-	aes_ctx_t *actx = (aes_ctx_t *)(cctx->crypto_ctx);
 	mctx->mac_cksum = cksum;
 
 	if (cksum == CKSUM_BLAKE256) {
 		blake2b_state *ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
 		if (!ctx) return (-1);
-		if (bdsp.blake2b_init_key(ctx, 32, actx->pkey, cctx->keylen) != 0)
+		if (bdsp.blake2b_init_key(ctx, 32, cctx->pkey, cctx->keylen) != 0)
 			return (-1);
 		mctx->mac_ctx = ctx;
 		ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
@@ -421,7 +439,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 	} else if (cksum == CKSUM_BLAKE512) {
 		blake2b_state *ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
 		if (!ctx) return (-1);
-		if (bdsp.blake2b_init_key(ctx, 64, actx->pkey, cctx->keylen) != 0)
+		if (bdsp.blake2b_init_key(ctx, 64, cctx->pkey, cctx->keylen) != 0)
 			return (-1);
 		mctx->mac_ctx = ctx;
 		ctx = (blake2b_state *)malloc(sizeof (blake2b_state));
@@ -436,7 +454,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 		Skein_512_Ctxt_t *ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) return (-1);
 		Skein_512_InitExt(ctx, 256, SKEIN_CFG_TREE_INFO_SEQUENTIAL,
-				 actx->pkey, cctx->keylen);
+				 cctx->pkey, cctx->keylen);
 		mctx->mac_ctx = ctx;
 		ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) {
@@ -450,7 +468,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 		Skein_512_Ctxt_t *ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) return (-1);
 		Skein_512_InitExt(ctx, 512, SKEIN_CFG_TREE_INFO_SEQUENTIAL,
-				  actx->pkey, cctx->keylen);
+				  cctx->pkey, cctx->keylen);
 		mctx->mac_ctx = ctx;
 		ctx = (Skein_512_Ctxt_t *)malloc(sizeof (Skein_512_Ctxt_t));
 		if (!ctx) {
@@ -465,7 +483,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 			HMAC_CTX *ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
 			if (!ctx) return (-1);
 			HMAC_CTX_init(ctx);
-			HMAC_Init_ex(ctx, actx->pkey, cctx->keylen, EVP_sha256(), NULL);
+			HMAC_Init_ex(ctx, cctx->pkey, cctx->keylen, EVP_sha256(), NULL);
 			mctx->mac_ctx = ctx;
 
 			ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
@@ -482,7 +500,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 		} else {
 			HMAC_SHA512_Context *ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
 			if (!ctx) return (-1);
-			opt_HMAC_SHA512t256_Init(ctx, actx->pkey, cctx->keylen);
+			opt_HMAC_SHA512t256_Init(ctx, cctx->pkey, cctx->keylen);
 			mctx->mac_ctx = ctx;
 
 			ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
@@ -498,7 +516,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 			HMAC_CTX *ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
 			if (!ctx) return (-1);
 			HMAC_CTX_init(ctx);
-			HMAC_Init_ex(ctx, actx->pkey, cctx->keylen, EVP_sha512(), NULL);
+			HMAC_Init_ex(ctx, cctx->pkey, cctx->keylen, EVP_sha512(), NULL);
 			mctx->mac_ctx = ctx;
 
 			ctx = (HMAC_CTX *)malloc(sizeof (HMAC_CTX));
@@ -515,7 +533,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 		} else {
 			HMAC_SHA512_Context *ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
 			if (!ctx) return (-1);
-			opt_HMAC_SHA512_Init(ctx, actx->pkey, cctx->keylen);
+			opt_HMAC_SHA512_Init(ctx, cctx->pkey, cctx->keylen);
 			mctx->mac_ctx = ctx;
 
 			ctx = (HMAC_SHA512_Context *)malloc(sizeof (HMAC_SHA512_Context));
@@ -538,7 +556,7 @@ hmac_init(mac_ctx_t *mctx, int cksum, crypto_ctx_t *cctx)
 			if (Keccak_Init(ctx, 512) != 0)
 				return (-1);
 		}
-		if (Keccak_Update(ctx, actx->pkey, cctx->keylen << 3) != 0)
+		if (Keccak_Update(ctx, cctx->pkey, cctx->keylen << 3) != 0)
 			return (-1);
 		mctx->mac_ctx = ctx;
 
@@ -719,13 +737,27 @@ hmac_cleanup(mac_ctx_t *mctx)
  */
 int
 init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
-	    uchar_t *salt, int saltlen, int keylen, uint64_t nonce, int enc_dec)
+	    uchar_t *salt, int saltlen, int keylen, uchar_t *nonce, int enc_dec)
 {
-	if (crypto_alg == CRYPTO_ALG_AES) {
-		aes_ctx_t *actx = (aes_ctx_t *)malloc(sizeof (aes_ctx_t));
-		aes_module_init(&proc_info);
+	if (crypto_alg == CRYPTO_ALG_AES || crypto_alg == CRYPTO_ALG_SALSA20) {
+		aes_ctx_t *actx;
+		salsa20_ctx_t *sctx;
+
+		/* Silence compiler warnings */
+		actx = NULL;
+		sctx = NULL;
+
+		if (crypto_alg == CRYPTO_ALG_AES) {
+			actx = (aes_ctx_t *)malloc(sizeof (aes_ctx_t));
+			actx->keylen = keylen;
+			cctx->pkey = actx->pkey;
+			aes_module_init(&proc_info);
+		} else {
+			sctx = (salsa20_ctx_t *)malloc(sizeof (salsa20_ctx_t));
+			sctx->keylen = keylen;
+			cctx->pkey = sctx->pkey;
+		}
 		cctx->keylen = keylen;
-		actx->keylen = keylen;
 
 		if (enc_dec) {
 			/*
@@ -735,7 +767,7 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 			salt = cctx->salt;
 			cctx->saltlen = 32;
 			if (RAND_status() != 1 || RAND_bytes(salt, 32) != 1) {
-				if (geturandom_bytes(salt) != 0) {
+				if (geturandom_bytes(salt, 32) != 0) {
 					uchar_t sb[64];
 					int b;
 					struct timespec tp;
@@ -765,9 +797,16 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 			/*
 			 * Zero nonce (arg #6) since it will be generated.
 			 */
-			if (aes_init(actx, salt, 32, pwd, pwd_len, 0, enc_dec) != 0) {
-				fprintf(stderr, "Failed to initialize AES context\n");
-				return (-1);
+			if (crypto_alg == CRYPTO_ALG_AES) {
+				if (aes_init(actx, salt, 32, pwd, pwd_len, 0, enc_dec) != 0) {
+					fprintf(stderr, "Failed to initialize AES context\n");
+					return (-1);
+				}
+			} else {
+				if (salsa20_init(sctx, salt, 32, pwd, pwd_len, 0, enc_dec) != 0) {
+					fprintf(stderr, "Failed to initialize SALSA20 context\n");
+					return (-1);
+				}
 			}
 		} else {
 			/*
@@ -783,13 +822,24 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 			cctx->salt = (uchar_t *)malloc(saltlen);
 			memcpy(cctx->salt, salt, saltlen);
 
-			if (aes_init(actx, cctx->salt, saltlen, pwd, pwd_len, nonce,
-			    enc_dec) != 0) {
-				fprintf(stderr, "Failed to initialize AES context\n");
-				return (-1);
+			if (crypto_alg == CRYPTO_ALG_AES) {
+				if (aes_init(actx, cctx->salt, saltlen, pwd, pwd_len, *((uint64_t *)nonce),
+				    enc_dec) != 0) {
+					fprintf(stderr, "Failed to initialize AES context\n");
+					return (-1);
+				}
+			} else {
+				if (salsa20_init(sctx, salt, 32, pwd, pwd_len, nonce, enc_dec) != 0) {
+					fprintf(stderr, "Failed to initialize SALSA20 context\n");
+					return (-1);
+				}
 			}
 		}
-		cctx->crypto_ctx = actx;
+		if (crypto_alg == CRYPTO_ALG_AES) {
+			cctx->crypto_ctx = actx;
+		} else {
+			cctx->crypto_ctx = sctx;
+		}
 		cctx->crypto_alg = crypto_alg;
 		cctx->enc_dec = enc_dec;
 	} else {
@@ -808,6 +858,12 @@ crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, uint64_t bytes, uint6
 		} else {
 			return (aes_decrypt((aes_ctx_t *)(cctx->crypto_ctx), from, to, bytes, id));
 		}
+	} else if (cctx->crypto_alg == CRYPTO_ALG_SALSA20) {
+		if (cctx->enc_dec == ENCRYPT_FLAG) {
+			return (salsa20_encrypt((salsa20_ctx_t *)(cctx->crypto_ctx), from, to, bytes, id));
+		} else {
+			return (salsa20_decrypt((salsa20_ctx_t *)(cctx->crypto_ctx), from, to, bytes, id));
+		}
 	} else {
 		fprintf(stderr, "Unrecognized algorithm code: %d\n", cctx->crypto_alg);
 		return (-1);
@@ -815,37 +871,56 @@ crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, uint64_t bytes, uint6
 	return (0);
 }
 
-uint64_t
+uchar_t *
 crypto_nonce(crypto_ctx_t *cctx)
 {
-	return (aes_nonce((aes_ctx_t *)(cctx->crypto_ctx)));
+	if (cctx->crypto_alg == CRYPTO_ALG_AES) {
+		return (aes_nonce((aes_ctx_t *)(cctx->crypto_ctx)));
+	}
+	return (salsa20_nonce((salsa20_ctx_t *)(cctx->crypto_ctx)));
 }
 
 void
 crypto_clean_pkey(crypto_ctx_t *cctx)
 {
-	aes_clean_pkey((aes_ctx_t *)(cctx->crypto_ctx));
+	if (cctx->crypto_alg == CRYPTO_ALG_AES) {
+		aes_clean_pkey((aes_ctx_t *)(cctx->crypto_ctx));
+	} else {
+		salsa20_clean_pkey((salsa20_ctx_t *)(cctx->crypto_ctx));
+	}
+	cctx->pkey = NULL;
 }
 
 void
 cleanup_crypto(crypto_ctx_t *cctx)
 {
-	aes_cleanup((aes_ctx_t *)(cctx->crypto_ctx));
+	if (cctx->crypto_alg == CRYPTO_ALG_AES) {
+		aes_cleanup((aes_ctx_t *)(cctx->crypto_ctx));
+	} else {
+		salsa20_cleanup((salsa20_ctx_t *)(cctx->crypto_ctx));
+	}
 	memset(cctx->salt, 0, 32);
 	free(cctx->salt);
 	free(cctx);
 }
 
-static int
-geturandom_bytes(uchar_t rbytes[32])
+int
+geturandom_bytes(uchar_t *rbytes, int buflen)
 {
 	int fd;
 	int64_t lenread;
 	uchar_t * buf = rbytes;
-	uint64_t buflen = 32;
 
-	/* Open /dev/urandom. */
-	if ((fd = open("/dev/urandom", O_RDONLY)) == -1)
+	/* Open /dev/urandom. Upto 10 retries. */
+	fd = -1;
+	lenread = 1;
+	while (fd == -1 && lenread < 10) {
+		if ((fd = open("/dev/urandom", O_RDONLY)) != -1)
+			break;
+		lenread++;
+		sleep(1);
+	}
+	if (fd == -1)
 		goto err0;
 	
 	/* Read bytes until we have filled the buffer. */

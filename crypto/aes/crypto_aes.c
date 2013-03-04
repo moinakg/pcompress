@@ -58,12 +58,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <openssl/rand.h>
 #include <openssl/evp.h>
 #include <crypto_scrypt.h>
 #include <crypto_aesctr.h>
 #include <utils.h>
 #include "crypto_aes.h"
 
+extern int geturandom_bytes(uchar_t *rbytes, int nbytes);
 extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
 extern int vpaes_set_encrypt_key(const unsigned char *userKey, int bits, AES_KEY *key);
 extern void vpaes_encrypt(const unsigned char *in, unsigned char *out, const AES_KEY *key);
@@ -123,16 +125,20 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 
 	if (enc) {
 		enc_setkey(key, (ctx->keylen << 3), &(ctx->key));
-		// Derive nonce from salt
-		if (clock_gettime(CLOCK_MONOTONIC, &tp) == -1) {
-			time((time_t *)&tv);
-		} else {
-			tv = tp.tv_sec * 1000UL + tp.tv_nsec;
+		// Derive 64-bit nonce
+		if (RAND_status() != 1 || RAND_bytes((uchar_t *)&(ctx->nonce), 8) != 1) {
+			if (geturandom_bytes((uchar_t *)&(ctx->nonce), 8) != 0) {
+				if (clock_gettime(CLOCK_MONOTONIC, &tp) == -1) {
+					time((time_t *)&tv);
+				} else {
+					tv = tp.tv_sec * 1000UL + tp.tv_nsec;
+				}
+				sprintf((char *)num, "%" PRIu64, tv);
+				PKCS5_PBKDF2_HMAC((const char *)num, strlen((char *)num), salt,
+						saltlen, PBE_ROUNDS, EVP_sha256(), 32, IV);
+				ctx->nonce = lzma_crc64(IV, 32, 0);
+			}
 		}
-		sprintf((char *)num, "%" PRIu64, tv);
-		PKCS5_PBKDF2_HMAC((const char *)num, strlen((char *)num), salt,
-				  saltlen, PBE_ROUNDS, EVP_sha256(), 32, IV);
-		ctx->nonce = lzma_crc64(IV, 32, 0) & 0xffffffff00000000ULL;
 		// Nullify stack components
 		memset(num, 0, 25);
 		memset(IV, 0, 32);
@@ -193,10 +199,10 @@ aes_decrypt(aes_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, uint64_t le
 	return (0);
 }
 
-uint64_t
+uchar_t *
 aes_nonce(aes_ctx_t *ctx)
 {
-	return (ctx->nonce);
+	return ((uchar_t *)&(ctx->nonce));
 }
 
 void
