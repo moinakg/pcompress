@@ -842,6 +842,8 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 		}
 		cctx->crypto_alg = crypto_alg;
 		cctx->enc_dec = enc_dec;
+		actx = NULL;
+		sctx = NULL;
 	} else {
 		fprintf(stderr, "Unrecognized algorithm code: %d\n", crypto_alg);
 		return (-1);

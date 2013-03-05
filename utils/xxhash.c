@@ -175,7 +175,7 @@ unsigned int CPUCAP_NM(XXH32)(const void* input, int len, unsigned int seed)
 
 		/*
 		 * 4-way SIMD calculations with 4 ints in two blocks for 2 accumulators will
-		 * interleave to some extent on a hyperthreaded processor providing 10% - 14%
+		 * interleave to some extent on a superscalar processor providing 10% - 14%
 		 * speedup over original xxhash depending on processor. We could have used
 		 * aligned loads but we actually want the unaligned penalty. It helps to
 		 * interleave better for a slight benefit over aligned loads here!

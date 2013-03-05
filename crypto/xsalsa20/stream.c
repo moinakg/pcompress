@@ -15,6 +15,10 @@ rotate(uint32_t u,int c)
   return (u << c) | (u >> (32 - c));
 }
 
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define	load_littleendian(x) *((uint32_t *)(x))
+#define	store_littleendian(x, u) *((uint32_t *)(x)) = (u);
+#else
 static uint32_t
 load_littleendian(const unsigned char *x)
 {
@@ -34,6 +38,7 @@ store_littleendian(unsigned char *x, uint32_t u)
   x[2] = u; u >>= 8;
   x[3] = u;
 }
+#endif
 
 static int
 crypto_core(

@@ -180,6 +180,9 @@ aes_encrypt(aes_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, uint64_t le
 	}
 	crypto_aesctr_stream(strm, plaintext, ciphertext, len);
 	crypto_aesctr_free(strm);
+	strm = NULL;
+	k1 = NULL;
+	k2 = NULL;
 	memset(&key, 0, sizeof (key));
 	return (0);
 }
@@ -204,6 +207,9 @@ aes_decrypt(aes_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, uint64_t le
 	}
 	crypto_aesctr_stream(strm, ciphertext, plaintext, len);
 	crypto_aesctr_free(strm);
+	strm = NULL;
+	k1 = NULL;
+	k2 = NULL;
 	memset(&key, 0, sizeof (key));
 	return (0);
 }

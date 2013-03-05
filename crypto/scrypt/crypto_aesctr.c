@@ -49,6 +49,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <openssl/aes.h>
 #ifdef __USE_SSE_INTRIN__
 #include <emmintrin.h>
@@ -135,7 +136,10 @@ do_last:
 		stream->bytectr += 1;
 	}
 #ifdef __USE_SSE_INTRIN__
-	if (last) return;
+	if (last) {
+		memset(pblk, 0, 16);
+		return;
+	}
 	for (; pos < buflen-15; pos += 16) {
 		__m128i cblk, dat, odat;
 

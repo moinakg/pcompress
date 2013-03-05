@@ -10,6 +10,7 @@ Public domain.
 #include <time.h>
 #include <openssl/rand.h>
 #include <openssl/evp.h>
+#include <assert.h>
 #include <crypto_scrypt.h>
 #include "crypto_core_hsalsa20.h"
 #include "crypto_stream_salsa20.h"
@@ -21,10 +22,12 @@ static const unsigned char sigma[16] = "expand 32-byte k";
 static const unsigned char tau[16] = "expand 16-byte k";
 
 static int
-crypto_salsa20(unsigned char *c, const unsigned char *m, unsigned long long mlen,
+crypto_xsalsa20(unsigned char *c, const unsigned char *m, unsigned long long mlen,
   const unsigned char *n, const unsigned char *k, int klen)
 {
 	unsigned char subkey[32];
+
+	assert(klen == 32 || klen == 16);
 	if (klen < XSALSA20_CRYPTO_KEYBYTES)
 		crypto_core_hsalsa20(subkey,n,k,tau);
 	else
@@ -124,7 +127,7 @@ int
 salsa20_encrypt(salsa20_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, uint64_t len, uint64_t id)
 {
 	uchar_t nonce[XSALSA20_CRYPTO_NONCEBYTES];
-	int i;
+	int i, rv;
 	uint64_t *n, carry;
 
 	for (i = 0; i < XSALSA20_CRYPTO_NONCEBYTES; i++) nonce[i] = ctx->nonce[i];
@@ -139,21 +142,28 @@ salsa20_encrypt(salsa20_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, uin
 			carry = 0;
 			break;
 		}
-		n++;
+		++n;
 	}
 	if (carry) {
 		n = (uint64_t *)nonce;
 		*n += carry;
+		carry = 0;
 	}
 
-	return (crypto_salsa20(ciphertext, plaintext, len, nonce, ctx->key, ctx->keylen));
+	rv = crypto_xsalsa20(ciphertext, plaintext, len, nonce, ctx->key, ctx->keylen);
+	n = (uint64_t *)nonce;
+	for (i = 0; i < XSALSA20_CRYPTO_NONCEBYTES/8; i++) {
+		*n = 0;
+		++n;
+	}
+	return (rv);
 }
 
 int
 salsa20_decrypt(salsa20_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, uint64_t len, uint64_t id)
 {
 	uchar_t nonce[XSALSA20_CRYPTO_NONCEBYTES];
-	int i;
+	int i, rv;
 	uint64_t *n, carry;
 
 	for (i = 0; i < XSALSA20_CRYPTO_NONCEBYTES; i++) nonce[i] = ctx->nonce[i];
@@ -168,14 +178,21 @@ salsa20_decrypt(salsa20_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, uin
 			carry = 0;
 			break;
 		}
-		n++;
+		++n;
 	}
 	if (carry) {
 		n = (uint64_t *)nonce;
 		*n += carry;
+		carry = 0;
 	}
 
-	return (crypto_salsa20(plaintext, ciphertext, len, nonce, ctx->key, ctx->keylen));
+	rv = crypto_xsalsa20(plaintext, ciphertext, len, nonce, ctx->key, ctx->keylen);
+	n = (uint64_t *)nonce;
+	for (i = 0; i < XSALSA20_CRYPTO_NONCEBYTES/8; i++) {
+		*n = 0;
+		++n;
+	}
+	return (rv);
 }
 
 uchar_t *
