@@ -35,7 +35,7 @@ do
 	break
 done
 
-for feat in "-B8 -s2m -l1" "-B0 -s2m -l1" "-D -s10k -l1" "-D -F -s2m -l1" "-p -e -s2m -l1" "-s2m -l15"
+for feat in "-B8 -s2m -l1" "-B0 -s2m -l1" "-D -s10k -l1" "-D -F -s2m -l1" "-p -e AES -s2m -l1" "-s2m -l15" "-e AES -k64" "-e SALSA20 -k8" "-e AES -k8" "-e SALSA20 -k64"
 do
 	for algo in lzfx lz4 zlib bzip2 libbsc ppmd lzma
 	do
@@ -117,7 +117,7 @@ do
 
 	rm -f ${tstf}.1 ${tstf}.1.pz ${tstf}.pz
 	echo "plainpass" > /tmp/pwf
-	cmd="../../pcompress -c zlib -l3 -s1m -e -w /tmp/pwf $feat ${tstf}"
+	cmd="../../pcompress -c zlib -l3 -s1m -e SALSA20 -w /tmp/pwf $feat ${tstf}"
 	echo "Running $cmd"
 	eval $cmd
 	if [ $? -ne 0 ]

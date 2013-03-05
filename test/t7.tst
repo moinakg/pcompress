@@ -12,7 +12,7 @@ for algo in lzfx adapt2
 do
 	for tf in `cat files.lst`
 	do
-		for feat in "-e" "-e -L" "-D -e" "-D -EE -L -e" "-e -S CRC64"
+		for feat in "-e SALSA20" "-e AES -L" "-D -e SALSA20" "-D -EE -L -e AES" "-e SALSA20 -S CRC64" "-e SALSA20 -L" "-e AES -E"
 		do
 			for seg in 2m 5m
 			do

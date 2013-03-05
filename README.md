@@ -131,11 +131,17 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
        '-C' -     Display compression statistics
 
     Encryption flags:
-       '-e'       Encrypt chunks with AES-CTR. The password can be prompted from the user
-                  or read from a file. Unique keys are generated every time pcompress is
-                  run even when giving the same password. Of course enough info is stored\
-                  in the compresse file so that the key used for the file can be
-                  re-created given the correct password.
+       '-e <ALGO>'
+                  Encrypt chunks using the given encryption algorithm. The algo parameter
+                  can be one of AES or SALSA20. Both are used in CTR stream encryption
+                  mode.
+                  The password can be prompted from the user or read from a file. Unique
+                  keys are generated every time pcompress is run even when giving the same
+                  password. Of course enough info is stored in the compresse file so that
+                  the key used for the file can be re-created given the correct password.
+
+                  Default key length if 256 bits but can be reduced to 128 bits using the
+                  '-k' option.
 
                   The Scrypt algorithm from Tarsnap is used
                   (See: http://www.tarsnap.com/scrypt.html) for generating keys from
@@ -148,7 +154,7 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
 
        '-k <key length>'
                   Specify the key length. Can be 16 for 128 bit keys or 32 for 256 bit
-                  keys. Default value is 23 for 256 bit keys.
+                  keys. Default value is 32 for 256 bit keys.
 
 NOTE: When using pipe-mode via -p the only way to provide a password is to use '-w'.
 
