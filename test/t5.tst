@@ -10,7 +10,7 @@ do
 	for tf in `cat files.lst`
 	do
 		rm -f ${tf}.*
-		for feat in "-e AES" "-e AES -L -S SHA256" "-D -e SALSA20 -S SHA512" "-D -EE -L -e SALSA20 -S BLAKE512" "-e AES -S CRC64" "-e -P" "-e AES -L -P -S KECCAK256" "-D -e SALSA20 -L -S KECCAK512" "-e AES -k16" "-e SALSA20 -k16"
+		for feat in "-e AES" "-e AES -L -S SHA256" "-D -e SALSA20 -S SHA512" "-D -EE -L -e SALSA20 -S BLAKE512" "-e AES -S CRC64" "-e SALSA20 -P" "-e AES -L -P -S KECCAK256" "-D -e SALSA20 -L -S KECCAK512" "-e AES -k16" "-e SALSA20 -k16"
 		do
 			for seg in 2m 100m
 			do
