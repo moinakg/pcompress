@@ -1,3 +1,42 @@
+== 1.4.0 Update Release ==
+Update couple more test parameters with new crypto options.
+Update README and test cases with new crypto options.
+Update usage text.
+Cleanup more stack parameters after use in various crypto functions.
+Fix increment of XSalsa20 192-bit nonce value.
+Handle nonce bytes in endian neutral way.
+Use 128-bit key length when decompressing older version archives.
+Add XSalsa20 encryption algorithm from the NaCL library.
+Include 128-bit key support based on the Salsa20 eSTREAM submission.
+Allow variable-length nonces.
+Use random bytes for initial nonce value.
+Increase PBE hash rounds to 50000.
+Move Scrypt helper function out of AES module.
+Change default encryption key length to 256 bits.
+Add optional ability to change key length at runtime via cli option.
+Include key length property in archive header.
+Fix header HMAC to include salt, nonce and key length properties.
+Retain backward compatibility to handle older format archives.
+Fix compilation of AES ASM code.
+Add AES-NI optimized code derived from latest OpenSSL upstream.
+Add AES instruction set detection.
+Add Vector Permute AES from OpenSSL 1.0.1e. Remain compatible with older OpenSSL versions.
+Add compatibility to decode old-format parallel hashes created with version 1.2.
+Bump archive version to 7 as parallel hashes are now merkle style hashes.
+Add lookup and insert functionality for global index.
+Use PPMd fallback for adapt2 if BSC is not enabled.
+Improve XML detection in adaptive mode.
+Make global dedupe bits buildable and fix errors.
+Rename Adaptive compression type constants to avoid conflict with global constants.
+Work in progress global dedupe.
+Fixes for issues/warnings reported in issue #4.
+Global dedupe work in progress.
+Use OpenMP parallelism when computing xxHashes for chunks.
+Use 2-stage Merkle Tree hashing for parallel hashes for better crypto properties.
+Update xxhash comment.
+Reduce dedupe hash table collisions by half.
+Improve Deduplication performance by another 95%.
+Start sliding window scanning near minimum chunk size boundaries to avoid scanning whole chunk.
 == 1.3.0 Major Performance Release ==
 Fix return from parallel versions of Keccak_Hash() function.
 Add parallel versions of various checksums for single-segment, single-thread compression.
