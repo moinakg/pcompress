@@ -208,13 +208,17 @@ Other flags:
       LZP internally as well.</p>
 
 <pre><code>Encryption flags:
-   '-e'       Encrypt chunks with AES. The password can be prompted from the user
-              or read from a file. Whether 128-Bit or 256-Bit keys are used depends
-              on how the pcompress binary was built. Default build uses 128-Bit keys.
-              Unique keys are generated every time pcompress is run even when giving
-              the same password. Of course enough info is stored in the compressed
-              file so that the key used for the file can be re-created given the
-              correct password.
+   '-e &lt;ALGO&gt;'
+              Encrypt chunks using the given encryption algorithm. The algo parameter
+              can be one of AES or SALSA20. Both are used in CTR stream encryption
+              mode.
+              The password can be prompted from the user or read from a file. Unique
+              keys are generated every time pcompress is run even when giving the same
+              password. Of course enough info is stored in the compresse file so that
+              the key used for the file can be re-created given the correct password.
+
+              Default key length if 256 bits but can be reduced to 128 bits using the
+              '-k' option.
 
               The Scrypt algorithm from Tarsnap is used
               (See: http://www.tarsnap.com/scrypt.html) for generating keys from
@@ -224,6 +228,10 @@ Other flags:
               Provide a file which contains the encryption password. This file must
               be readable and writable since it is zeroed out after the password is
               read.
+
+   '-k &lt;key length&gt;'
+              Specify the key length. Can be 16 for 128 bit keys or 32 for 256 bit
+              keys. Default value is 32 for 256 bit keys.
 </code></pre>
 
 <p>NOTE: When using pipe-mode via -p the only way to provide a password is to use '-w'.</p>
