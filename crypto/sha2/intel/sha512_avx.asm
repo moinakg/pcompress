@@ -1,3 +1,39 @@
+;
+; This file is a part of Pcompress, a chunked parallel multi-
+; algorithm lossless compression and decompression program.
+;
+; Copyright (C) 2012-2013 Moinak Ghosh. All rights reserved.
+; Use is subject to license terms.
+;
+; This program is free software; you can redistribute it and/or
+; modify it under the terms of the GNU Lesser General Public
+; License as published by the Free Software Foundation; either
+; version 3 of the License, or (at your option) any later version.
+;
+; This program is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+; Lesser General Public License for more details.
+;
+; You should have received a copy of the GNU Lesser General Public
+; License along with this program.
+; If not, see <http://www.gnu.org/licenses/>.
+;
+; moinakg@belenix.org, http://moinakg.wordpress.com/
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; NOTE:
+; The code in this file is covered by the Intel Open Software License
+; Agreement a copy of which is provided in the file
+; open_software_license.txt
+;
+; This source was downloaded from the following URL:
+; http://www.intel.com/content/www/us/en/intelligent-systems/crystal-forest-gladden/sha512-code-edc.html
+;
+; Only the Intel license terms will apply when this file is used outside
+; of this software project.
+;
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Copyright 2012 Intel Corporation All Rights Reserved.
 ; 

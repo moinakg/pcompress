@@ -2,7 +2,7 @@
  * This file is a part of Pcompress, a chunked parallel multi-
  * algorithm lossless compression and decompression program.
  *
- * Copyright (C) 2012 Moinak Ghosh. All rights reserved.
+ * Copyright (C) 2012-2013 Moinak Ghosh. All rights reserved.
  * Use is subject to license terms.
  *
  * This program is free software; you can redistribute it and/or
@@ -14,6 +14,10 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this program.
+ * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
  */

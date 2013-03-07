@@ -1,3 +1,197 @@
+;#
+;# This file is a part of Pcompress, a chunked parallel multi-
+;# algorithm lossless compression and decompression program.
+;#
+;# Copyright (C) 2012-2013 Moinak Ghosh. All rights reserved.
+;# Use is subject to license terms.
+;#
+;# This program is free software; you can redistribute it and/or
+;# modify it under the terms of the GNU Lesser General Public
+;# License as published by the Free Software Foundation; either
+;# version 3 of the License, or (at your option) any later version.
+;#
+;# This program is distributed in the hope that it will be useful,
+;# but WITHOUT ANY WARRANTY; without even the implied warranty of
+;# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+;# Lesser General Public License for more details.
+;#
+;# You should have received a copy of the GNU Lesser General Public
+;# License along with this program.
+;# If not, see <http://www.gnu.org/licenses/>.
+;#
+;# moinakg@belenix.org, http://moinakg.wordpress.com/
+;#      
+
+;#
+;# NOTE:
+;# This file was obtained from the OpenSSL distribution and as such is
+;# governed by the OpenSSL license in addition to the license text mentioned
+;# above. A copy of those license terms is included in the file:
+;# OPENSSL.LICENSE
+;#
+;# Only the OpenSSL license terms will apply when this file is used outside
+;# of this software project.
+;#
+
+;#
+;# ====================================================================
+;# Written by Andy Polyakov <appro@fy.chalmers.se> for the OpenSSL
+;# project. The module is, however, dual licensed under OpenSSL and
+;# CRYPTOGAMS licenses depending on where you obtain it. For further
+;# details see http://www.openssl.org/~appro/cryptogams/.
+;# ====================================================================
+;#
+;# This module implements support for Intel AES-NI extension. In
+;# OpenSSL context it's used with Intel engine, but can also be used as
+;# drop-in replacement for crypto/aes/asm/aes-x86_64.pl [see below for
+;# details].
+;#
+;# Performance.
+;#
+;# Given aes(enc|dec) instructions' latency asymptotic performance for
+;# non-parallelizable modes such as CBC encrypt is 3.75 cycles per byte
+;# processed with 128-bit key. And given their throughput asymptotic
+;# performance for parallelizable modes is 1.25 cycles per byte. Being
+;# asymptotic limit it's not something you commonly achieve in reality,
+;# but how close does one get? Below are results collected for
+;# different modes and block sized. Pairs of numbers are for en-/
+;# decryption.
+;#
+;#       16-byte     64-byte     256-byte    1-KB        8-KB
+;# ECB   4.25/4.25   1.38/1.38   1.28/1.28   1.26/1.26   1.26/1.26
+;# CTR   5.42/5.42   1.92/1.92   1.44/1.44   1.28/1.28   1.26/1.26
+;# CBC   4.38/4.43   4.15/1.43   4.07/1.32   4.07/1.29   4.06/1.28
+;# CCM   5.66/9.42   4.42/5.41   4.16/4.40   4.09/4.15   4.06/4.07   
+;# OFB   5.42/5.42   4.64/4.64   4.44/4.44   4.39/4.39   4.38/4.38
+;# CFB   5.73/5.85   5.56/5.62   5.48/5.56   5.47/5.55   5.47/5.55
+;#
+;# ECB, CTR, CBC and CCM results are free from EVP overhead. This means
+;# that otherwise used 'openssl speed -evp aes-128-??? -engine aesni
+;# [-decrypt]' will exhibit 10-15% worse results for smaller blocks.
+;# The results were collected with specially crafted speed.c benchmark
+;# in order to compare them with results reported in "Intel Advanced
+;# Encryption Standard (AES) New Instruction Set" White Paper Revision
+;# 3.0 dated May 2010. All above results are consistently better. This
+;# module also provides better performance for block sizes smaller than
+;# 128 bytes in points *not* represented in the above table.
+;#
+;# Looking at the results for 8-KB buffer.
+;#
+;# CFB and OFB results are far from the limit, because implementation
+;# uses "generic" CRYPTO_[c|o]fb128_encrypt interfaces relying on
+;# single-block aesni_encrypt, which is not the most optimal way to go.
+;# CBC encrypt result is unexpectedly high and there is no documented
+;# explanation for it. Seemingly there is a small penalty for feeding
+;# the result back to AES unit the way it's done in CBC mode. There is
+;# nothing one can do and the result appears optimal. CCM result is
+;# identical to CBC, because CBC-MAC is essentially CBC encrypt without
+;# saving output. CCM CTR "stays invisible," because it's neatly
+;# interleaved wih CBC-MAC. This provides ~30% improvement over
+;# "straghtforward" CCM implementation with CTR and CBC-MAC performed
+;# disjointly. Parallelizable modes practically achieve the theoretical
+;# limit.
+;#
+;# Looking at how results vary with buffer size.
+;#
+;# Curves are practically saturated at 1-KB buffer size. In most cases
+;# "256-byte" performance is >95%, and "64-byte" is ~90% of "8-KB" one.
+;# CTR curve doesn't follow this pattern and is "slowest" changing one
+;# with "256-byte" result being 87% of "8-KB." This is because overhead
+;# in CTR mode is most computationally intensive. Small-block CCM
+;# decrypt is slower than encrypt, because first CTR and last CBC-MAC
+;# iterations can't be interleaved.
+;#
+;# Results for 192- and 256-bit keys.
+;#
+;# EVP-free results were observed to scale perfectly with number of
+;# rounds for larger block sizes, i.e. 192-bit result being 10/12 times
+;# lower and 256-bit one - 10/14. Well, in CBC encrypt case differences
+;# are a tad smaller, because the above mentioned penalty biases all
+;# results by same constant value. In similar way function call
+;# overhead affects small-block performance, as well as OFB and CFB
+;# results. Differences are not large, most common coefficients are
+;# 10/11.7 and 10/13.4 (as opposite to 10/12.0 and 10/14.0), but one
+;# observe even 10/11.2 and 10/12.4 (CTR, OFB, CFB)...
+
+;# January 2011
+;#
+;# While Westmere processor features 6 cycles latency for aes[enc|dec]
+;# instructions, which can be scheduled every second cycle, Sandy
+;# Bridge spends 8 cycles per instruction, but it can schedule them
+;# every cycle. This means that code targeting Westmere would perform
+;# suboptimally on Sandy Bridge. Therefore this update.
+;#
+;# In addition, non-parallelizable CBC encrypt (as well as CCM) is
+;# optimized. Relative improvement might appear modest, 8% on Westmere,
+;# but in absolute terms it's 3.77 cycles per byte encrypted with
+;# 128-bit key on Westmere, and 5.07 - on Sandy Bridge. These numbers
+;# should be compared to asymptotic limits of 3.75 for Westmere and
+;# 5.00 for Sandy Bridge. Actually, the fact that they get this close
+;# to asymptotic limits is quite amazing. Indeed, the limit is
+;# calculated as latency times number of rounds, 10 for 128-bit key,
+;# and divided by 16, the number of bytes in block, or in other words
+;# it accounts *solely* for aesenc instructions. But there are extra
+;# instructions, and numbers so close to the asymptotic limits mean
+;# that it's as if it takes as little as *one* additional cycle to
+;# execute all of them. How is it possible? It is possible thanks to
+;# out-of-order execution logic, which manages to overlap post-
+;# processing of previous block, things like saving the output, with
+;# actual encryption of current block, as well as pre-processing of
+;# current block, things like fetching input and xor-ing it with
+;# 0-round element of the key schedule, with actual encryption of
+;# previous block. Keep this in mind...
+;#
+;# For parallelizable modes, such as ECB, CBC decrypt, CTR, higher
+;# performance is achieved by interleaving instructions working on
+;# independent blocks. In which case asymptotic limit for such modes
+;# can be obtained by dividing above mentioned numbers by AES
+;# instructions' interleave factor. Westmere can execute at most 3 
+;# instructions at a time, meaning that optimal interleave factor is 3,
+;# and that's where the "magic" number of 1.25 come from. "Optimal
+;# interleave factor" means that increase of interleave factor does
+;# not improve performance. The formula has proven to reflect reality
+;# pretty well on Westmere... Sandy Bridge on the other hand can
+;# execute up to 8 AES instructions at a time, so how does varying
+;# interleave factor affect the performance? Here is table for ECB
+;# (numbers are cycles per byte processed with 128-bit key):
+;#
+;# instruction interleave factor         3x      6x      8x
+;# theoretical asymptotic limit          1.67    0.83    0.625
+;# measured performance for 8KB block    1.05    0.86    0.84
+;#
+;# "as if" interleave factor             4.7x    5.8x    6.0x
+;#
+;# Further data for other parallelizable modes:
+;#
+;# CBC decrypt                           1.16    0.93    0.93
+;# CTR                                   1.14    0.91    n/a
+;#
+;# Well, given 3x column it's probably inappropriate to call the limit
+;# asymptotic, if it can be surpassed, isn't it? What happens there?
+;# Rewind to CBC paragraph for the answer. Yes, out-of-order execution
+;# magic is responsible for this. Processor overlaps not only the
+;# additional instructions with AES ones, but even AES instuctions
+;# processing adjacent triplets of independent blocks. In the 6x case
+;# additional instructions  still claim disproportionally small amount
+;# of additional cycles, but in 8x case number of instructions must be
+;# a tad too high for out-of-order logic to cope with, and AES unit
+;# remains underutilized... As you can see 8x interleave is hardly
+;# justifiable, so there no need to feel bad that 32-bit aesni-x86.pl
+;# utilizies 6x interleave because of limited register bank capacity.
+;#
+;# Higher interleave factors do have negative impact on Westmere
+;# performance. While for ECB mode it's negligible ~1.5%, other
+;# parallelizables perform ~5% worse, which is outweighed by ~25%
+;# improvement on Sandy Bridge. To balance regression on Westmere
+;# CTR mode was implemented with 6x aesenc interleave factor.
+
+;# April 2011
+;#
+;# Add aesni_xts_[en|de]crypt. Westmere spends 1.33 cycles processing
+;# one byte out of 8KB with 128-bit key, Sandy Bridge - 0.97. Just like
+;# in CTR mode AES instruction interleave factor was chosen to be 6x.
+;#
+
 .text	
 .globl	aesni_encrypt
 .type	aesni_encrypt,@function
