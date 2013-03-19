@@ -33,8 +33,9 @@ extern "C" {
 
 archive_config_t *init_global_db(char *configfile);
 archive_config_t *init_global_db_s(char *path, char *tmppath, uint32_t chunksize,
-			int pct_interval, compress_algo_t algo, cksum_t ck,
-			cksum_t ck_sim, size_t file_sz, size_t memlimit, int nthreads);
+			uint64_t user_chunk_sz, int pct_interval, compress_algo_t algo,
+			cksum_t ck, cksum_t ck_sim, size_t file_sz, size_t memlimit,
+			int nthreads);
 uint64_t db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		   uint64_t seg_offset, int do_insert);
 

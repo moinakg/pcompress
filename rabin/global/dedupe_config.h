@@ -44,6 +44,12 @@ extern "C" {
 // 8GB
 #define	MIN_ARCHIVE_SZ (8589934592ULL)
 
+typedef enum {
+	MODE_SIMPLE = 0,
+	MODE_SIMILARITY,
+	MODE_ARCHIVE
+} dedupe_mode_t;
+
 typedef struct {
 	char rootdir[PATH_MAX+1];
 	uint32_t chunk_sz; // Numeric ID: 1 - 4k ... 5 - 64k
@@ -58,9 +64,10 @@ typedef struct {
 	int pct_interval; // Similarity based match intervals in %age.
 			// The items below are computed given the above
 			// components.
+	dedupe_mode_t dedupe_mode;
 
 	uint32_t chunk_sz_bytes; // Average chunk size
-	uint32_t segment_sz_bytes; // Segment size in bytes
+	uint64_t segment_sz_bytes; // Segment size in bytes
 	uint32_t segment_sz; // Number of chunks in one segment
 	uint32_t container_sz; // Number of segments
 	int directory_fanout; // Number of subdirectories in a directory
@@ -80,7 +87,8 @@ typedef struct _segment_entry {
 int read_config(char *configfile, archive_config_t *cfg);
 int write_config(char *configfile, archive_config_t *cfg);
 int set_config_s(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, cksum_t ck_sim,
-		      uint32_t chunksize, size_t file_sz, int pct_interval);
+		uint32_t chunksize, size_t file_sz, uint64_t user_chunk_sz,
+		int pct_interval);
 
 #ifdef	__cplusplus
 }

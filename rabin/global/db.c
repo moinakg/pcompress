@@ -38,11 +38,6 @@
 
 #include "db.h"
 
-#define	ONE_PB (1125899906842624ULL)
-#define	ONE_TB (1099511627776ULL)
-#define	FOUR_MB (4194304ULL)
-#define	EIGHT_MB (8388608ULL)
-
 /*
  * Hashtable structures for in-memory index.
  */
@@ -103,16 +98,16 @@ static cleanup_indx(index_t *indx)
 }
 
 archive_config_t *
-init_global_db_s(char *path, char *tmppath, uint32_t chunksize, int pct_interval,
-		 compress_algo_t algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
-		 size_t memlimit, int nthreads)
+init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_chunk_sz,
+		 int pct_interval, compress_algo_t algo, cksum_t ck, cksum_t ck_sim,
+		 size_t file_sz, size_t memlimit, int nthreads)
 {
 	archive_config_t *cfg;
 	int rv;
 	float diff;
 
 	cfg = calloc(1, sizeof (archive_config_t));
-	rv = set_config_s(cfg, algo, ck, ck_sim, chunksize, file_sz, pct_interval);
+	rv = set_config_s(cfg, algo, ck, ck_sim, chunksize, file_sz, user_chunk_sz, pct_interval);
 
 	if (path != NULL) {
 		printf("Disk based index not yet implemented.\n");
@@ -125,7 +120,10 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, int pct_interval
 		index_t *indx;
 
 		// Compute total hashtable entries first
-		intervals = 100 / pct_interval - 1;
+		if (pct_interval == 0)
+			intervals = 1;
+		else
+			intervals = 100 / pct_interval - 1;
 		hash_slots = file_sz / cfg->segment_sz_bytes + 1;
 		hash_slots *= intervals;
 		hash_entry_size = sizeof (hash_entry_t) + cfg->similarity_cksum_sz - 1;
@@ -249,6 +247,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 			htab[htab_entry] = htab[htab_entry]->next;
 		} else {
 			ent = (hash_entry_t *)malloc(indx->hash_entry_size);
+			indx->memused += indx->hash_entry_size;
 		}
 		ent->seg_offset = seg_offset;
 		ent->next = 0;

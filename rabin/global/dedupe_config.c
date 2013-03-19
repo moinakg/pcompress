@@ -42,6 +42,7 @@
 #define	ONE_TB (1099511627776ULL)
 #define	FOUR_MB (4194304ULL)
 #define	EIGHT_MB (8388608ULL)
+#define	EIGHT_GB (8589934592ULL)
 
 static compress_algo_t
 get_compress_level(compress_algo_t algo)
@@ -287,6 +288,7 @@ read_config(char *configfile, archive_config_t *cfg)
 	 */
 	cfg->chunk_sz_bytes = RAB_BLK_AVG_SZ(cfg->chunk_sz);
 	cfg->directory_levels = 2;
+
 	if (cfg->archive_sz < ONE_TB) {
 		segment_sz_bytes = FOUR_MB;
 		cfg->directory_fanout = 128;
@@ -349,8 +351,9 @@ write_config(char *configfile, archive_config_t *cfg)
 
 int
 set_config_s(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, cksum_t ck_sim,
-	     uint32_t chunksize, size_t file_sz, int pct_interval)
+	     uint32_t chunksize, size_t file_sz, uint64_t user_chunk_sz, int pct_interval)
 {
+
 	cfg->algo = algo;
 	cfg->chunk_cksum_type = ck;
 	cfg->similarity_cksum = ck_sim;
@@ -360,9 +363,14 @@ set_config_s(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, cksum_t ck
 	cfg->chunk_sz = chunksize;
 	cfg->chunk_sz_bytes = RAB_BLK_AVG_SZ(cfg->chunk_sz);
 	cfg->pct_interval = pct_interval;
-
 	cfg->archive_sz = file_sz;
-	if (cfg->archive_sz < ONE_TB) {
+	cfg->dedupe_mode = MODE_SIMILARITY;
+
+	if (cfg->archive_sz <= EIGHT_GB) {
+		cfg->dedupe_mode = MODE_SIMPLE;
+		cfg->segment_sz_bytes = user_chunk_sz;
+
+	} else if (cfg->archive_sz < ONE_TB) {
 		cfg->segment_sz_bytes = FOUR_MB;
 
 	} else {
