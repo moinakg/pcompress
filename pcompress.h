@@ -53,7 +53,7 @@ extern "C" {
 #define	CHSIZE_MASK	0x80
 #define	BZIP2_A_NUM	16
 #define	LZMA_A_NUM	32
-#define	CHUNK_FLAG_DEDUP	2
+#define	CHUNK_FLAG_DEDUP		2
 #define	CHUNK_FLAG_PREPROC	4
 #define	COMP_EXTN	".pz"
 
@@ -194,6 +194,8 @@ struct cmp_data {
 	sem_t start_sem;
 	sem_t cmp_done_sem;
 	sem_t write_done_sem;
+	sem_t index_sem;
+	sem_t *index_sem_other;
 	void *data;
 	pthread_t thr;
 	mac_ctx_t chunk_hmac;

@@ -41,6 +41,8 @@
 #include <cpuid.h>
 #include <xxhash.h>
 
+#include <sys/sysinfo.h>
+
 #define _IN_UTILS_
 #include "utils.h"
 
@@ -366,4 +368,17 @@ get_mb_s(uint64_t bytes, double strt, double en)
 
 	bytes_sec = ((double)bytes / (en - strt)) * 1000;
 	return (BYTES_TO_MB(bytes_sec));
+}
+
+void
+get_sysinfo(my_sysinfo *msys_info)
+{
+	struct sysinfo sys_info;
+	sysinfo(&sys_info);
+
+	msys_info->totalram = sys_info.totalram;
+	msys_info->freeram = sys_info.freeram;
+	msys_info->totalswap = sys_info.totalswap;
+	msys_info->freeswap = sys_info.freeswap;
+	msys_info->mem_unit = sys_info.mem_unit;
 }

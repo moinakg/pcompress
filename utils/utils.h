@@ -134,6 +134,28 @@ typedef int32_t bsize_t;
 
 #define	BYTES_TO_MB(x) ((x) / (1024 * 1024))
 
+/*
+ * Public checksum properties. CKSUM_MAX_BYTES must be updated if a
+ * newer larger checksum is added to the list.
+ */
+typedef enum {
+	CKSUM_CRC64 = 0x100,
+	CKSUM_BLAKE256 = 0x200,
+	CKSUM_BLAKE512 = 0x300,
+	CKSUM_SHA256 = 0x400,
+	CKSUM_SHA512 = 0x500,
+	CKSUM_KECCAK256 = 0x600,
+	CKSUM_KECCAK512 = 0x700,
+/*
+ * Backwards compatibility options. SKEIN in release 1.2 was replaced with
+ * Blake2 from 1.3 onwards (for sheer speed of Blake2). We want to be able
+ * to decode archives created with 1.2. New archives do not use SKEIN.
+ */
+	CKSUM_SKEIN256 = 0x800,
+	CKSUM_SKEIN512 = 0x900,
+	CKSUM_INVALID = 0
+} cksum_t;
+
 typedef enum {
 	COMPRESS_NONE = 0,
 	COMPRESS_LZFX,
@@ -155,12 +177,21 @@ typedef struct {
 	int d_max_threads;
 	int delta2_span;
 	int deltac_min_distance;
+	cksum_t cksum;
 } algo_props_t;
 
 typedef enum {
 	COMPRESS_THREADS = 1,
 	DECOMPRESS_THREADS
 } algo_threads_type_t;
+
+typedef struct{
+	int64_t totalram;
+	int64_t freeram;
+	int64_t totalswap;
+	int64_t freeswap;
+	int64_t mem_unit;
+} my_sysinfo;
 
 #ifndef _IN_UTILS_
 extern processor_info_t proc_info;
@@ -179,6 +210,7 @@ extern void set_threadcounts(algo_props_t *props, int *nthreads, int nprocs,
 extern uint64_t get_total_ram();
 extern double get_wtime_millis(void);
 extern double get_mb_s(uint64_t bytes, double strt, double en);
+extern void get_sysinfo(my_sysinfo *msys_info);
 extern void init_algo_props(algo_props_t *props);
 extern void init_pcompress();
 

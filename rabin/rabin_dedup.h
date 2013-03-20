@@ -118,6 +118,10 @@
 #define	GET_SIMILARITY_FLAG SET_SIMILARITY_FLAG
 #define	CLEAR_SIMILARITY_FLAG (0xBFFFFFFFUL)
 
+#define	RABIN_DEDUPE_SEGMENTED	0
+#define	RABIN_DEDUPE_FIXED	1
+#define	RABIN_DEDUPE_FILE_GLOBAL	2
+
 // Mask to extract value from a rabin index entry
 #define	RABIN_INDEX_VALUE (0x3FFFFFFFUL)
 
@@ -171,7 +175,7 @@ typedef struct {
 	uint64_t real_chunksize;
 	short valid;
 	void *lzma_data;
-	int level, delta_flag, fixed_flag, deltac_min_distance;
+	int level, delta_flag, dedupe_flag, deltac_min_distance;
 } dedupe_context_t;
 
 extern dedupe_context_t *create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, 

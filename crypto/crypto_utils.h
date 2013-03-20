@@ -30,6 +30,8 @@
 #include <sys/types.h>
 #include <stdint.h>
 
+#include <utils.h>
+
 #ifdef	__cplusplus
 extern "C" {
 #endif
@@ -58,27 +60,6 @@ extern "C" {
 #define	MAX_NONCE		32
 
 #define	KECCAK_MAX_SEG	(2305843009213693950ULL)
-/*
- * Public checksum properties. CKSUM_MAX_BYTES must be updated if a
- * newer larger checksum is added to the list.
- */
-typedef enum {
-	CKSUM_CRC64 = 0x100,
-	CKSUM_BLAKE256 = 0x200,
-	CKSUM_BLAKE512 = 0x300,
-	CKSUM_SHA256 = 0x400,
-	CKSUM_SHA512 = 0x500,
-	CKSUM_KECCAK256 = 0x600,
-	CKSUM_KECCAK512 = 0x700,
-/*
- * Backwards compatibility options. SKEIN in release 1.2 was replaced with
- * Blake2 from 1.3 onwards (for sheer speed of Blake2). We want to be able
- * to decode archives created with 1.2. New archives do not use SKEIN.
- */
-	CKSUM_SKEIN256 = 0x800,
-	CKSUM_SKEIN512 = 0x900,
-	CKSUM_INVALID = 0
-} cksum_t;
 
 typedef struct {
 	void *crypto_ctx;

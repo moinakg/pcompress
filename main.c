@@ -87,6 +87,7 @@ static int nthreads = 0;
 static int hide_mem_stats = 1;
 static int hide_cmp_stats = 1;
 static int enable_rabin_scan = 0;
+static int enable_rabin_global = 0;
 static int enable_delta_encode = 0;
 static int enable_delta2_encode = 0;
 static int enable_rabin_split = 1;
@@ -770,6 +771,15 @@ start_decompress(const char *filename, const char *to_filename)
 	if (flags & FLAG_DEDUP) {
 		enable_rabin_scan = 1;
 
+		if (flags & FLAG_DEDUP_FIXED) {
+			if (version > 7) {
+				enable_rabin_global = 1;
+			} else {
+				fprintf(stderr, "Invalid file deduplication flags.\n");
+				err = 1;
+				goto uncomp_done;
+			}
+		}
 	} else if (flags & FLAG_DEDUP_FIXED) {
 		enable_fixed_scan = 1;
 	}
@@ -1577,8 +1587,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	short version, flags;
 	struct stat sbuf;
 	int compfd = -1, uncompfd = -1, err;
-	int i, thread, bail, single_chunk;
-	int nprocs, np, p;
+	int thread, bail, single_chunk;
+	uint32_t i, nprocs, np, p;
 	struct cmp_data **dary = NULL, *tdat;
 	pthread_t writer_thr;
 	uchar_t *cread_buf, *pos;
@@ -1599,6 +1609,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 */
 	compressed_chunksize = chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
 	init_algo_props(&props);
+	props.cksum = cksum;
 	cread_buf = NULL;
 
 	if (_props_func) {
@@ -1610,8 +1621,10 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	}
 
 	flags = 0;
-	if (enable_rabin_scan || enable_fixed_scan) {
-		if (enable_rabin_scan)
+	if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
+		if (enable_rabin_global)
+			flags |= (FLAG_DEDUP | FLAG_DEDUP_FIXED);
+		else if (enable_rabin_scan)
 			flags |= FLAG_DEDUP;
 		else
 			flags |= FLAG_DEDUP_FIXED;
@@ -1801,6 +1814,10 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		sem_init(&(tdat->start_sem), 0, 0);
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
+		sem_init(&(tdat->index_sem), 0, 0);
+
+		// i is unsigned so this wraps around backwards for i == 0
+		tdat->index_sem_other = &(dary[(i - 1) % nprocs]->index_sem);
 		if (_init_func) {
 			if (_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize, VERSION, COMPRESS) != 0) {
 				COMP_BAIL;
@@ -1829,6 +1846,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		}
 	}
 	thread = 1;
+
+	// When doing global dedupe first thread does not wait to access the index.
+	sem_post(&(dary[0]->index_sem));
 
 	w.dary = dary;
 	w.wfd = compfd;

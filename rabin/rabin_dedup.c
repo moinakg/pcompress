@@ -128,7 +128,7 @@ dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta
  */
 dedupe_context_t *
 create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz,
-    const char *algo, const algo_props_t *props, int delta_flag, int fixed_flag,
+    const char *algo, const algo_props_t *props, int delta_flag, int dedupe_flag,
     int file_version, compress_op_t op) {
 	dedupe_context_t *ctx;
 	uint32_t i;
@@ -136,7 +136,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	if (rab_blk_sz < 1 || rab_blk_sz > 5)
 		rab_blk_sz = RAB_BLK_DEFAULT;
 
-	if (fixed_flag) {
+	if (dedupe_flag == RABIN_DEDUPE_FIXED || dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL) {
 		delta_flag = 0;
 		inited = 1;
 	}
@@ -196,7 +196,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx->rabin_poly_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
 
 	ctx->current_window_data = NULL;
-	ctx->fixed_flag = fixed_flag;
+	ctx->dedupe_flag = dedupe_flag;
 	ctx->rabin_break_patt = 0;
 	ctx->rabin_poly_avg_block_size = RAB_BLK_AVG_SZ(rab_blk_sz);
 	ctx->rabin_avg_block_mask = RAB_BLK_MASK;
@@ -220,7 +220,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		ctx->delta_flag = 2;
 	}
 
-	if (!fixed_flag)
+	if (dedupe_flag != RABIN_DEDUPE_FIXED)
 		ctx->blknum = chunksize / ctx->rabin_poly_min_block_size;
 	else
 		ctx->blknum = chunksize / ctx->rabin_poly_avg_block_size;
@@ -330,7 +330,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	if (*size < ctx->rabin_poly_avg_block_size) return (0);
 	DEBUG_STAT_EN(strt = get_wtime_millis());
 
-	if (ctx->fixed_flag) {
+	if (ctx->dedupe_flag == RABIN_DEDUPE_FIXED) {
 		blknum = *size / ctx->rabin_poly_avg_block_size;
 		j = *size % ctx->rabin_poly_avg_block_size;
 		if (j)

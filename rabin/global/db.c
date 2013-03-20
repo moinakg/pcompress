@@ -42,7 +42,8 @@
  * Hashtable structures for in-memory index.
  */
 typedef struct _hash_entry {
-	uint64_t seg_offset;
+	uint64_t item_offset;
+	uint32_t item_size;
 	struct _hash_entry *next;
 	uchar_t cksum[1];
 } hash_entry_t;
@@ -53,7 +54,6 @@ typedef struct {
 
 typedef struct {
 	htab_t *list;
-	pthread_mutex_t *mlist;
 	uint64_t memlimit;
 	uint64_t memused;
 	int hash_entry_size, intervals, hash_slots;
@@ -91,8 +91,6 @@ static cleanup_indx(index_t *indx)
 			}
 			free(indx->list);
 		}
-		if (indx->mlist)
-			free(indx->mlist);
 		free(indx);
 	}
 }
@@ -153,7 +151,6 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 
 		indx->memlimit = memlimit;
 		indx->list = (htab_t *)calloc(intervals, sizeof (htab_t));
-		indx->mlist = (pthread_mutex_t *)malloc(intervals * sizeof (pthread_mutex_t));
 		indx->hash_entry_size = hash_entry_size;
 		indx->intervals = intervals;
 		indx->hash_slots = hash_slots / intervals;
@@ -167,23 +164,24 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 				return (NULL);
 			}
 			indx->memused += ((hash_slots / intervals) * (sizeof (hash_entry_t *)));
-			pthread_mutex_init(&(indx->mlist[i]), NULL);
 		}
 
-		strcpy(cfg->rootdir, tmppath);
-		strcat(cfg->rootdir, "/.segXXXXXX");
-		cfg->seg_fd_w = mkstemp(cfg->rootdir);
-		cfg->seg_fd_r = (int *)malloc(sizeof (int) * nthreads);
-		if (cfg->seg_fd_w == -1 || cfg->seg_fd_r == NULL) {
-			cleanup_indx(indx);
-			if (cfg->seg_fd_r)
-				free(cfg->seg_fd_r);
-			free(cfg);
-			return (NULL);
-		}
+		if (pct_interval > 0) {
+			strcpy(cfg->rootdir, tmppath);
+			strcat(cfg->rootdir, "/.segXXXXXX");
+			cfg->seg_fd_w = mkstemp(cfg->rootdir);
+			cfg->seg_fd_r = (int *)malloc(sizeof (int) * nthreads);
+			if (cfg->seg_fd_w == -1 || cfg->seg_fd_r == NULL) {
+				cleanup_indx(indx);
+				if (cfg->seg_fd_r)
+					free(cfg->seg_fd_r);
+				free(cfg);
+				return (NULL);
+			}
 
-		for (i = 0; i < nthreads; i++) {
-			cfg->seg_fd_r[i] = open(cfg->rootdir, O_RDONLY);
+			for (i = 0; i < nthreads; i++) {
+				cfg->seg_fd_r[i] = open(cfg->rootdir, O_RDONLY);
+			}
 		}
 		cfg->dbdata = indx;
 	}
@@ -213,9 +211,12 @@ mycmp(uchar_t *a, uchar_t *b, int sz)
 	return (0);
 }
 
+/*
+ * Lookup and insert item if indicated. Not thread-safe by design.
+ */
 uint64_t
 db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
-		   uint64_t seg_offset, int do_insert)
+		   uint64_t item_offset, uint32_t item_size, int do_insert)
 {
 	uint32_t htab_entry;
 	index_t *indx = (index_t *)(cfg->dbdata);
@@ -228,17 +229,24 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 	htab = indx->list[interval].tab;
 
 	pent = &(htab[htab_entry]);
-	pthread_mutex_lock(&(indx->mlist[interval]));
 	ent = htab[htab_entry];
-	while (ent) {
-		if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0) {
-			uint64_t off;
-			off = ent->seg_offset;
-			pthread_mutex_unlock(&(indx->mlist[interval]));
-			return (off+1);
+	if (cfg->pct_interval == 0) { // Single file global dedupe case
+		while (ent) {
+			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0 &&
+			    ent->item_size == item_size) {
+				return (ent->item_offset);
+			}
+			pent = &(ent->next);
+			ent = ent->next;
 		}
-		pent = &(ent->next);
-		ent = ent->next;
+	} else {
+		while (ent) {
+			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0) {
+				return (ent->item_offset);
+			}
+			pent = &(ent->next);
+			ent = ent->next;
+		}
 	}
 	if (do_insert) {
 		if (indx->memused + indx->hash_entry_size >= indx->memlimit - (indx->hash_entry_size << 2)) {
@@ -249,11 +257,11 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 			ent = (hash_entry_t *)malloc(indx->hash_entry_size);
 			indx->memused += indx->hash_entry_size;
 		}
-		ent->seg_offset = seg_offset;
+		ent->item_offset = item_offset;
+		ent->item_size = item_size;
 		ent->next = 0;
 		memcpy(ent->cksum, sim_cksum, cfg->similarity_cksum_sz);
 		*pent = ent;
 	}
-	pthread_mutex_unlock(&(indx->mlist[interval]));
 	return (0);
 }

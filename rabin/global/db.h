@@ -37,7 +37,7 @@ archive_config_t *init_global_db_s(char *path, char *tmppath, uint32_t chunksize
 			cksum_t ck, cksum_t ck_sim, size_t file_sz, size_t memlimit,
 			int nthreads);
 uint64_t db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
-		   uint64_t seg_offset, int do_insert);
+		   uint64_t item_offset, uint32_t item_size, int do_insert);
 
 #ifdef	__cplusplus
 }
