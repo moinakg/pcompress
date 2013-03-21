@@ -64,6 +64,7 @@
 #define _RABIN_POLY_H_
 
 #include "utils.h"
+#include <db.h>
 
 //List of constants, mostly constraints and defaults for various parameters
 //to the Rabin Fingerprinting algorithm
@@ -121,6 +122,7 @@
 #define	RABIN_DEDUPE_SEGMENTED	0
 #define	RABIN_DEDUPE_FIXED	1
 #define	RABIN_DEDUPE_FILE_GLOBAL	2
+#define	DEFAULT_PCT_INTERVAL	2
 
 // Mask to extract value from a rabin index entry
 #define	RABIN_INDEX_VALUE (0x3FFFFFFFUL)
@@ -176,11 +178,12 @@ typedef struct {
 	short valid;
 	void *lzma_data;
 	int level, delta_flag, dedupe_flag, deltac_min_distance;
+	archive_config_t *arc;
 } dedupe_context_t;
 
 extern dedupe_context_t *create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, 
 	int rab_blk_sz, const char *algo, const algo_props_t *props, int delta_flag, int fixed_flag,
-	int file_version, compress_op_t op);
+	int file_version, compress_op_t op, uint64_t file_size, char *tmppath);
 extern void destroy_dedupe_context(dedupe_context_t *ctx);
 extern unsigned int dedupe_compress(dedupe_context_t *ctx, unsigned char *buf, 
 	uint64_t *size, uint64_t offset, uint64_t *rabin_pos, int mt);

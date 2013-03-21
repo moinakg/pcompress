@@ -31,12 +31,22 @@
 extern "C" {
 #endif
 
+/*
+ * Publically visible In-memory hashtable entry.
+ */
+typedef struct _hash_entry {
+	uint64_t item_offset;
+	uint32_t item_size;
+	struct _hash_entry *next;
+	uchar_t cksum[1];
+} hash_entry_t;
+
 archive_config_t *init_global_db(char *configfile);
 archive_config_t *init_global_db_s(char *path, char *tmppath, uint32_t chunksize,
-			uint64_t user_chunk_sz, int pct_interval, compress_algo_t algo,
+			uint64_t user_chunk_sz, int pct_interval, const char *algo,
 			cksum_t ck, cksum_t ck_sim, size_t file_sz, size_t memlimit,
 			int nthreads);
-uint64_t db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
+hash_entry_t *db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		   uint64_t item_offset, uint32_t item_size, int do_insert);
 
 #ifdef	__cplusplus

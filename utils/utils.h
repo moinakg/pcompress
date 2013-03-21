@@ -48,6 +48,13 @@ extern "C" {
 #define	EIGHTM		(8UL * 1024UL * 1024UL)
 #define	FOURM		(4UL * 1024UL * 1024UL)
 
+#define	ONE_PB (1125899906842624ULL)
+#define	ONE_TB (1099511627776ULL)
+#define	FOUR_MB FOURM
+#define	EIGHT_MB EIGHTM
+#define	EIGHT_GB (8589934592ULL)
+#define	SIXTEEN_GB (EIGHT_GB * 2)
+
 #if !defined(sun) && !defined(__sun)
 #define uchar_t u_char
 #endif

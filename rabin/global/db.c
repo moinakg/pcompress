@@ -41,13 +41,6 @@
 /*
  * Hashtable structures for in-memory index.
  */
-typedef struct _hash_entry {
-	uint64_t item_offset;
-	uint32_t item_size;
-	struct _hash_entry *next;
-	uchar_t cksum[1];
-} hash_entry_t;
-
 typedef struct {
 	hash_entry_t **tab;
 } htab_t;
@@ -97,7 +90,7 @@ static cleanup_indx(index_t *indx)
 
 archive_config_t *
 init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_chunk_sz,
-		 int pct_interval, compress_algo_t algo, cksum_t ck, cksum_t ck_sim,
+		 int pct_interval, const char *algo, cksum_t ck, cksum_t ck_sim,
 		 size_t file_sz, size_t memlimit, int nthreads)
 {
 	archive_config_t *cfg;
@@ -106,6 +99,10 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 
 	cfg = calloc(1, sizeof (archive_config_t));
 	rv = set_config_s(cfg, algo, ck, ck_sim, chunksize, file_sz, user_chunk_sz, pct_interval);
+
+	if (cfg->dedupe_mode == MODE_SIMPLE) {
+		pct_interval = 0;
+	}
 
 	if (path != NULL) {
 		printf("Disk based index not yet implemented.\n");
@@ -118,12 +115,14 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 		index_t *indx;
 
 		// Compute total hashtable entries first
-		if (pct_interval == 0)
+		if (pct_interval == 0) {
 			intervals = 1;
-		else
+			hash_slots = file_sz / cfg->chunk_sz_bytes + 1;
+		} else {
 			intervals = 100 / pct_interval - 1;
-		hash_slots = file_sz / cfg->segment_sz_bytes + 1;
-		hash_slots *= intervals;
+			hash_slots = file_sz / cfg->segment_sz_bytes + 1;
+			hash_slots *= intervals;
+		}
 		hash_entry_size = sizeof (hash_entry_t) + cfg->similarity_cksum_sz - 1;
 
 		// Compute memory required to hold all hash entries assuming worst case 50%
@@ -214,7 +213,7 @@ mycmp(uchar_t *a, uchar_t *b, int sz)
 /*
  * Lookup and insert item if indicated. Not thread-safe by design.
  */
-uint64_t
+hash_entry_t *
 db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		   uint64_t item_offset, uint32_t item_size, int do_insert)
 {
@@ -234,7 +233,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		while (ent) {
 			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0 &&
 			    ent->item_size == item_size) {
-				return (ent->item_offset);
+				return (ent);
 			}
 			pent = &(ent->next);
 			ent = ent->next;
@@ -242,7 +241,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 	} else {
 		while (ent) {
 			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0) {
-				return (ent->item_offset);
+				return (ent);
 			}
 			pent = &(ent->next);
 			ent = ent->next;
@@ -263,5 +262,5 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		memcpy(ent->cksum, sim_cksum, cfg->similarity_cksum_sz);
 		*pent = ent;
 	}
-	return (0);
+	return (NULL);
 }

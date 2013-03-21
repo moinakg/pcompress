@@ -38,12 +38,6 @@
 #include "dedupe_config.h"
 #include "db.h"
 
-#define	ONE_PB (1125899906842624ULL)
-#define	ONE_TB (1099511627776ULL)
-#define	FOUR_MB (4194304ULL)
-#define	EIGHT_MB (8388608ULL)
-#define	EIGHT_GB (8589934592ULL)
-
 static compress_algo_t
 get_compress_level(compress_algo_t algo)
 {
@@ -64,7 +58,7 @@ get_compress_level(compress_algo_t algo)
 }
 
 static int
-get_compress_algo(char *algo_name)
+get_compress_algo(const char *algo_name)
 {
 	if (strcmp(algo_name, "none") == 0) {
 		return (COMPRESS_NONE);
@@ -350,11 +344,11 @@ write_config(char *configfile, archive_config_t *cfg)
 }
 
 int
-set_config_s(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, cksum_t ck_sim,
+set_config_s(archive_config_t *cfg, const char *algo, cksum_t ck, cksum_t ck_sim,
 	     uint32_t chunksize, size_t file_sz, uint64_t user_chunk_sz, int pct_interval)
 {
 
-	cfg->algo = algo;
+	cfg->algo = get_compress_algo(algo);
 	cfg->chunk_cksum_type = ck;
 	cfg->similarity_cksum = ck_sim;
 	cfg->compress_level = get_compress_level(cfg->algo);
@@ -366,7 +360,7 @@ set_config_s(archive_config_t *cfg, compress_algo_t algo, cksum_t ck, cksum_t ck
 	cfg->archive_sz = file_sz;
 	cfg->dedupe_mode = MODE_SIMILARITY;
 
-	if (cfg->archive_sz <= EIGHT_GB) {
+	if (cfg->archive_sz <= SIXTEEN_GB) {
 		cfg->dedupe_mode = MODE_SIMPLE;
 		cfg->segment_sz_bytes = user_chunk_sz;
 

@@ -1076,7 +1076,8 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 		if (enable_rabin_scan || enable_fixed_scan) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
-			    algo, &props, enable_delta_encode, enable_fixed_scan, version, DECOMPRESS);
+			    algo, &props, enable_delta_encode, enable_fixed_scan, version, DECOMPRESS, 0,
+			    NULL);
 			if (tdat->rctx == NULL) {
 				UNCOMP_BAIL;
 			}
@@ -1580,7 +1581,7 @@ static int
 start_compress(const char *filename, uint64_t chunksize, int level)
 {
 	struct wdata w;
-	char tmpfile1[MAXPATHLEN];
+	char tmpfile1[MAXPATHLEN], tmpdir[MAXPATHLEN];
 	char to_filename[MAXPATHLEN];
 	uint64_t compressed_chunksize, n_chunksize;
 	int64_t rbytes, rabin_count;
@@ -1588,7 +1589,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	struct stat sbuf;
 	int compfd = -1, uncompfd = -1, err;
 	int thread, bail, single_chunk;
-	uint32_t i, nprocs, np, p;
+	uint32_t i, nprocs, np, p, dedupe_flag;
 	struct cmp_data **dary = NULL, *tdat;
 	pthread_t writer_thr;
 	uchar_t *cread_buf, *pos;
@@ -1621,13 +1622,21 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	}
 
 	flags = 0;
+	dedupe_flag = RABIN_DEDUPE_SEGMENTED; // Silence the compiler
 	if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
-		if (enable_rabin_global)
+		if (enable_rabin_global) {
 			flags |= (FLAG_DEDUP | FLAG_DEDUP_FIXED);
-		else if (enable_rabin_scan)
+			dedupe_flag = RABIN_DEDUPE_FILE_GLOBAL;
+			if (pipe_mode) {
+				sbuf.st_size = SIXTEEN_GB;
+			}
+		} else if (enable_rabin_scan) {
 			flags |= FLAG_DEDUP;
-		else
+			dedupe_flag = RABIN_DEDUPE_SEGMENTED;
+		} else {
 			flags |= FLAG_DEDUP_FIXED;
+			dedupe_flag = RABIN_DEDUPE_FIXED;
+		}
 		/* Additional scratch space for dedup arrays. */
 		if (chunksize + dedupe_buf_extra(chunksize, 0, algo, enable_delta_encode)
 		    > compressed_chunksize) {
@@ -1747,6 +1756,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		 */
 		strcpy(tmpfile1, filename);
 		strcpy(tmpfile1, dirname(tmpfile1));
+		strcpy(tmpdir, tmpfile1);
 		strcat(tmpfile1, "/.pcompXXXXXX");
 		snprintf(to_filename, sizeof (to_filename), "%s" COMP_EXTN, filename);
 		if ((compfd = mkstemp(tmpfile1)) == -1) {
@@ -1757,6 +1767,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		signal(SIGINT, Int_Handler);
 		signal(SIGTERM, Int_Handler);
 	} else {
+		char *tmp;
+		struct stat st;
+
 		/*
 		 * Use stdin/stdout for pipe mode.
 		 */
@@ -1770,6 +1783,34 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			perror("fileno ");
 			COMP_BAIL;
 		}
+
+		/*
+		 * Get a workable temporary dir. Required if global dedupe is enabled.
+		 */
+		tmp = getenv("TMPDIR");
+		if (tmp == NULL) {
+			tmp = getenv("HOME");
+			if (tmp == NULL) {
+				if (getcwd(tmpdir, MAXPATHLEN) == NULL) {
+					tmp = "/tmp";
+				} else {
+					tmp = tmpdir;
+				}
+			}
+		}
+		if (stat(tmp, &st) == -1) {
+			fprintf(stderr, "Unable to find writable temporary dir.\n");
+			COMP_BAIL;
+		}
+		if (!S_ISDIR(st.st_mode)) {
+			if (strcmp(tmp, "/tmp") != 0) {
+			tmp = "/tmp";
+			} else {
+				fprintf(stderr, "Unable to find writable temporary dir.\n");
+				COMP_BAIL;
+			}
+		}
+		strcpy(tmpdir, tmp);
 	}
 
 	if (encrypt_type)
@@ -1819,13 +1860,15 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		// i is unsigned so this wraps around backwards for i == 0
 		tdat->index_sem_other = &(dary[(i - 1) % nprocs]->index_sem);
 		if (_init_func) {
-			if (_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize, VERSION, COMPRESS) != 0) {
+			if (_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize,
+			    VERSION, COMPRESS) != 0) {
 				COMP_BAIL;
 			}
 		}
 		if (enable_rabin_scan || enable_fixed_scan) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
-			    algo, &props, enable_delta_encode, enable_fixed_scan, VERSION, COMPRESS);
+			    algo, &props, enable_delta_encode, dedupe_flag, VERSION, COMPRESS, sbuf.st_size,
+			    tmpdir);
 			if (tdat->rctx == NULL) {
 				COMP_BAIL;
 			}
@@ -1959,7 +2002,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	 */
 	if (enable_rabin_split) {
 		rctx = create_dedupe_context(chunksize, 0, 0, algo, &props, enable_delta_encode,
-		    enable_fixed_scan, VERSION, COMPRESS);
+		    enable_fixed_scan, VERSION, COMPRESS, 0, NULL);
 		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 	} else {
 		rbytes = Read(uncompfd, cread_buf, chunksize);

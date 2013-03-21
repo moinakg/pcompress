@@ -104,6 +104,7 @@ extern int bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf
 static pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
 uint64_t ir[256], out[256];
 static int inited = 0;
+archive_config_t *arc = NULL;
 
 static uint32_t
 dedupe_min_blksz(int rab_blk_sz)
@@ -129,9 +130,10 @@ dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta
 dedupe_context_t *
 create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz,
     const char *algo, const algo_props_t *props, int delta_flag, int dedupe_flag,
-    int file_version, compress_op_t op) {
+    int file_version, compress_op_t op, uint64_t file_size, char *tmppath) {
 	dedupe_context_t *ctx;
 	uint32_t i;
+	archive_config_t *arc;
 
 	if (rab_blk_sz < 1 || rab_blk_sz > 5)
 		rab_blk_sz = RAB_BLK_DEFAULT;
@@ -140,6 +142,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		delta_flag = 0;
 		inited = 1;
 	}
+	arc = NULL;
 
 	/*
 	 * Pre-compute a table of irreducible polynomial evaluations for each
@@ -169,6 +172,19 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 			}
 			ir[j] = val;
 		}
+
+		if (dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL && op == COMPRESS && rab_blk_sz > 0) {
+			my_sysinfo msys_info;
+
+			get_sysinfo(&msys_info);
+			arc = init_global_db_s(NULL, NULL, rab_blk_sz, chunksize, DEFAULT_PCT_INTERVAL,
+					      algo, props->cksum, props->cksum, file_size,
+					      msys_info.freeram, props->nthreads);
+			if (arc == NULL) {
+				pthread_mutex_unlock(&init_lock);
+				return (NULL);
+			}
+		}
 		inited = 1;
 	}
 	pthread_mutex_unlock(&init_lock);
@@ -194,6 +210,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	 */
 	ctx = (dedupe_context_t *)slab_alloc(NULL, sizeof (dedupe_context_t));
 	ctx->rabin_poly_max_block_size = RAB_POLYNOMIAL_MAX_BLOCK_SIZE;
+	ctx->arc = arc;
 
 	ctx->current_window_data = NULL;
 	ctx->dedupe_flag = dedupe_flag;

@@ -374,8 +374,13 @@ void
 get_sysinfo(my_sysinfo *msys_info)
 {
 	struct sysinfo sys_info;
-	sysinfo(&sys_info);
+	int rv;
 
+	rv = sysinfo(&sys_info);
+
+	if (rv == -1) {
+		sys_info.freeram = 100 * 1024 * 1024; // 100M arbitrary
+	}
 	msys_info->totalram = sys_info.totalram;
 	msys_info->freeram = sys_info.freeram;
 	msys_info->totalswap = sys_info.totalswap;
