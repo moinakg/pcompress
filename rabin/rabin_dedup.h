@@ -65,6 +65,9 @@
 
 #include "utils.h"
 #include <db.h>
+#include <crypto_utils.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 //List of constants, mostly constraints and defaults for various parameters
 //to the Rabin Fingerprinting algorithm
@@ -118,6 +121,8 @@
 #define	SET_SIMILARITY_FLAG (0x40000000UL)
 #define	GET_SIMILARITY_FLAG SET_SIMILARITY_FLAG
 #define	CLEAR_SIMILARITY_FLAG (0xBFFFFFFFUL)
+#define	GLOBAL_FLAG RABIN_INDEX_FLAG
+#define	CLEAR_GLOBAL_FLAG (0x7fffffffUL)
 
 #define	RABIN_DEDUPE_SEGMENTED	0
 #define	RABIN_DEDUPE_FIXED	1
@@ -160,13 +165,15 @@ typedef struct rab_blockentry {
 } rabin_blockentry_t;
 
 typedef struct global_blockentry {
-	uint64_t offset;
 	uint32_t length;
+	uint64_t offset;
+	uchar_t cksum[CKSUM_MAX_BYTES];
 } global_blockentry_t;
 
 typedef struct {
 	unsigned char *current_window_data;
 	rabin_blockentry_t **blocks;
+	global_blockentry_t *g_blocks;
 	uint32_t blknum;
 	unsigned char *cbuf;
 	uint32_t rabin_poly_max_block_size;
@@ -178,11 +185,17 @@ typedef struct {
 	short valid;
 	void *lzma_data;
 	int level, delta_flag, dedupe_flag, deltac_min_distance;
+	uint64_t file_offset; // For global dedupe
 	archive_config_t *arc;
+	sem_t *index_sem;
+	sem_t *index_sem_next;
+	uint32_t pagesize;
+	int out_fd;
+	int id;
 } dedupe_context_t;
 
 extern dedupe_context_t *create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, 
-	int rab_blk_sz, const char *algo, const algo_props_t *props, int delta_flag, int fixed_flag,
+	int rab_blk_sz, const char *algo, const algo_props_t *props, int delta_flag, int dedupe_flag,
 	int file_version, compress_op_t op, uint64_t file_size, char *tmppath);
 extern void destroy_dedupe_context(dedupe_context_t *ctx);
 extern unsigned int dedupe_compress(dedupe_context_t *ctx, unsigned char *buf, 

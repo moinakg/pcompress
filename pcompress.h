@@ -40,7 +40,7 @@ extern "C" {
 #define	CHUNK_FLAG_SZ	1
 #define	ALGO_SZ		8
 #define	MIN_CHUNK	2048
-#define	VERSION		7
+#define	VERSION		8
 #define	FLAG_DEDUP	1
 #define	FLAG_DEDUP_FIXED	2
 #define	FLAG_SINGLE_CHUNK	4
@@ -195,11 +195,11 @@ struct cmp_data {
 	sem_t cmp_done_sem;
 	sem_t write_done_sem;
 	sem_t index_sem;
-	sem_t *index_sem_other;
 	void *data;
 	pthread_t thr;
 	mac_ctx_t chunk_hmac;
 	algo_props_t *props;
+	int decompressing;
 };
 
 #ifdef	__cplusplus

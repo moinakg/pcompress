@@ -105,7 +105,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	}
 
 	if (path != NULL) {
-		printf("Disk based index not yet implemented.\n");
+		fprintf(stderr, "Disk based index not yet implemented.\n");
 		free(cfg);
 		return (NULL);
 	} else {
@@ -148,7 +148,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 			return (NULL);
 		}
 
-		indx->memlimit = memlimit;
+		indx->memlimit = memlimit - (hash_entry_size << 2);
 		indx->list = (htab_t *)calloc(intervals, sizeof (htab_t));
 		indx->hash_entry_size = hash_entry_size;
 		indx->intervals = intervals;
@@ -198,7 +198,7 @@ mycmp(uchar_t *a, uchar_t *b, int sz)
 	len = 0;
 	do {
 		val1 = *((size_t *)v1);
-		val2 = *((size_t *)v1);
+		val2 = *((size_t *)v2);
 		if (val1 != val2) {
 			return (1);
 		}
@@ -211,7 +211,8 @@ mycmp(uchar_t *a, uchar_t *b, int sz)
 }
 
 /*
- * Lookup and insert item if indicated. Not thread-safe by design.
+ * Lookup and insert item if indicated. Not thread-safe by design. Caller needs to
+ * ensure thread-safety.
  */
 hash_entry_t *
 db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
@@ -221,7 +222,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 	index_t *indx = (index_t *)(cfg->dbdata);
 	hash_entry_t **htab, *ent, **pent;
 
-	assert(cfg->similarity_cksum_sz && (sizeof (size_t) - 1) == 0);
+	assert((cfg->similarity_cksum_sz & (sizeof (size_t) - 1)) == 0);
 	htab_entry = XXH32(sim_cksum, cfg->similarity_cksum_sz, 0);
 	htab_entry ^= (htab_entry / cfg->similarity_cksum_sz);
 	htab_entry = htab_entry % indx->hash_slots;
@@ -248,9 +249,8 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		}
 	}
 	if (do_insert) {
-		if (indx->memused + indx->hash_entry_size >= indx->memlimit - (indx->hash_entry_size << 2)) {
+		if (indx->memused + indx->hash_entry_size >= indx->memlimit) {
 			ent = htab[htab_entry];
-			pent = &(htab[htab_entry]);
 			htab[htab_entry] = htab[htab_entry]->next;
 		} else {
 			ent = (hash_entry_t *)malloc(indx->hash_entry_size);

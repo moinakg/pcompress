@@ -492,9 +492,9 @@ redo:
 		deserialize_checksum(tdat->checksum, tdat->compressed_chunk, cksum_bytes);
 	}
 
-	if ((enable_rabin_scan || enable_fixed_scan) && (HDR & CHUNK_FLAG_DEDUP)) {
+	if ((enable_rabin_scan || enable_fixed_scan || enable_rabin_global) &&
+	    (HDR & CHUNK_FLAG_DEDUP)) {
 		uchar_t *cmpbuf, *ubuf;
-
 		/* Extract various sizes from dedupe header. */
 		parse_dedupe_hdr(cseg, &blknum, &dedupe_index_sz, &dedupe_data_sz,
 				&dedupe_index_sz_cmp, &dedupe_data_sz_cmp, &_chunksize);
@@ -519,8 +519,8 @@ redo:
 				rv = tdat->decompress(cmpbuf, dedupe_data_sz_cmp, ubuf, &_chunksize,
 				    tdat->level, HDR, tdat->data);
 				DEBUG_STAT_EN(en = get_wtime_millis());
-				DEBUG_STAT_EN(fprintf(stderr, "Chunk decompression speed %.3f MB/s\n",
-						      get_mb_s(_chunksize, strt, en)));
+				DEBUG_STAT_EN(fprintf(stderr, "Chunk %d decompression speed %.3f MB/s\n",
+						      tdat->id, get_mb_s(_chunksize, strt, en)));
 			}
 			if (rv == -1) {
 				tdat->len_cmp = 0;
@@ -551,6 +551,13 @@ redo:
 		memcpy(ubuf, cmpbuf, dedupe_index_sz);
 
 	} else {
+		/*
+		 * This chunk was not deduplicated, however we still need to down the
+		 * semaphore in order to maintain proper thread coordination.
+		 */
+		if (enable_rabin_global) {
+			sem_wait(tdat->rctx->index_sem);
+		}
 		if (HDR & COMPRESSED) {
 			if (HDR & CHUNK_FLAG_PREPROC) {
 				rv = preproc_decompress(tdat->decompress, cseg, tdat->len_cmp,
@@ -607,7 +614,7 @@ redo:
 		 * If it does not match we set length of chunk to 0 to indicate
 		 * exit to the writer thread.
 		 */
-		compute_checksum(checksum, cksum, tdat->uncompressed_chunk, _chunksize, tdat->cksum_mt);
+		compute_checksum(checksum, cksum, tdat->uncompressed_chunk, _chunksize, tdat->cksum_mt, 1);
 		if (memcmp(checksum, tdat->checksum, cksum_bytes) != 0) {
 			tdat->len_cmp = 0;
 			fprintf(stderr, "ERROR: Chunk %d, checksums do not match.\n", tdat->id);
@@ -663,9 +670,10 @@ start_decompress(const char *filename, const char *to_filename)
 	char algorithm[ALGO_SZ];
 	struct stat sbuf;
 	struct wdata w;
-	int compfd = -1, i, p;
+	int compfd = -1, p, dedupe_flag;
 	int uncompfd = -1, err, np, bail;
 	int nprocs = 1, thread = 0, level;
+	unsigned int i;
 	short version, flags;
 	int64_t chunksize, compressed_chunksize;
 	struct cmp_data **dary, *tdat;
@@ -690,7 +698,7 @@ start_decompress(const char *filename, const char *to_filename)
 		if (sbuf.st_size == 0)
 			return (1);
 
-		if ((uncompfd = open(to_filename, O_WRONLY|O_CREAT|O_TRUNC, 0)) == -1) {
+		if ((uncompfd = open(to_filename, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR | S_IWUSR)) == -1) {
 			close(compfd);
 			err_exit(1, "Cannot open: %s", to_filename);
 		}
@@ -768,12 +776,20 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 	}
 
+	dedupe_flag = RABIN_DEDUPE_SEGMENTED; // Silence the compiler
 	if (flags & FLAG_DEDUP) {
 		enable_rabin_scan = 1;
+		dedupe_flag = RABIN_DEDUPE_SEGMENTED;
 
 		if (flags & FLAG_DEDUP_FIXED) {
 			if (version > 7) {
+				if (pipe_mode) {
+					fprintf(stderr, "Global Deduplication is not supported with pipe mode.\n");
+					err = 1;
+					goto uncomp_done;
+				}
 				enable_rabin_global = 1;
+				dedupe_flag = RABIN_DEDUPE_FILE_GLOBAL;
 			} else {
 				fprintf(stderr, "Invalid file deduplication flags.\n");
 				err = 1;
@@ -782,6 +798,7 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 	} else if (flags & FLAG_DEDUP_FIXED) {
 		enable_fixed_scan = 1;
+		dedupe_flag = RABIN_DEDUPE_FIXED;
 	}
 
 	if (flags & FLAG_SINGLE_CHUNK) {
@@ -1054,6 +1071,7 @@ start_decompress(const char *filename, const char *to_filename)
 		tdat->compress = _compress_func;
 		tdat->decompress = _decompress_func;
 		tdat->cancel = 0;
+		tdat->decompressing = 1;
 		if (props.is_single_chunk) {
 			tdat->cksum_mt = 1;
 			if (version == 6) {
@@ -1068,19 +1086,28 @@ start_decompress(const char *filename, const char *to_filename)
 		sem_init(&(tdat->start_sem), 0, 0);
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
 		sem_init(&(tdat->write_done_sem), 0, 1);
+		sem_init(&(tdat->index_sem), 0, 0);
+
 		if (_init_func) {
 			if (_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize,
 			    version, DECOMPRESS) != 0) {
 				UNCOMP_BAIL;
 			}
 		}
-		if (enable_rabin_scan || enable_fixed_scan) {
+		if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
-			    algo, &props, enable_delta_encode, enable_fixed_scan, version, DECOMPRESS, 0,
+			    algo, &props, enable_delta_encode, dedupe_flag, version, DECOMPRESS, 0,
 			    NULL);
 			if (tdat->rctx == NULL) {
 				UNCOMP_BAIL;
 			}
+			if (enable_rabin_global) {
+				if ((tdat->rctx->out_fd = open(to_filename, O_RDONLY, 0)) == -1) {
+					perror("Unable to get new read handle to output file");
+					UNCOMP_BAIL;
+				}
+			}
+			tdat->rctx->index_sem = &(tdat->index_sem);
 		} else {
 			tdat->rctx = NULL;
 		}
@@ -1098,6 +1125,15 @@ start_decompress(const char *filename, const char *to_filename)
 		}
 	}
 	thread = 1;
+
+	if (enable_rabin_global) {
+		for (i = 0; i < nprocs; i++) {
+			tdat = dary[i];
+			tdat->rctx->index_sem_next = &(dary[(i + 1) % nprocs]->index_sem);
+		}
+	}
+	// When doing global dedupe first thread does not wait to start dedupe recovery.
+	sem_post(&(dary[0]->index_sem));
 
 	if (encrypt_type) {
 		/* Erase encryption key bytes stored as a plain array. No longer reqd. */
@@ -1132,6 +1168,7 @@ start_decompress(const char *filename, const char *to_filename)
 			sem_wait(&tdat->write_done_sem);
 			if (main_cancel) break;
 			tdat->id = chunk_num;
+			if (tdat->rctx) tdat->rctx->id = tdat->id;
 
 			/*
 			 * First read length of compressed chunk.
@@ -1301,7 +1338,7 @@ redo:
 		 */
 		if (!encrypt_type)
 			compute_checksum(tdat->checksum, cksum, tdat->cmp_seg, tdat->rbytes,
-					 tdat->cksum_mt);
+					 tdat->cksum_mt, 1);
 
 		rctx = tdat->rctx;
 		reset_dedupe_context(tdat->rctx);
@@ -1318,7 +1355,7 @@ redo:
 		 */
 		if (!encrypt_type)
 			compute_checksum(tdat->checksum, cksum, tdat->uncompressed_chunk,
-					 tdat->rbytes, tdat->cksum_mt);
+					 tdat->rbytes, tdat->cksum_mt, 1);
 	}
 
 	/*
@@ -1562,8 +1599,13 @@ do_cancel:
 			main_cancel = 1;
 			tdat->cancel = 1;
 			sem_post(&tdat->start_sem);
+			if (tdat->rctx && enable_rabin_global)
+				sem_post(tdat->rctx->index_sem_next);
 			sem_post(&tdat->write_done_sem);
 			return (0);
+		}
+		if (tdat->decompressing && tdat->rctx && enable_rabin_global) {
+			sem_post(tdat->rctx->index_sem_next);
 		}
 		sem_post(&tdat->write_done_sem);
 	}
@@ -1583,7 +1625,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	struct wdata w;
 	char tmpfile1[MAXPATHLEN], tmpdir[MAXPATHLEN];
 	char to_filename[MAXPATHLEN];
-	uint64_t compressed_chunksize, n_chunksize;
+	uint64_t compressed_chunksize, n_chunksize, file_offset;
 	int64_t rbytes, rabin_count;
 	short version, flags;
 	struct stat sbuf;
@@ -1628,7 +1670,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			flags |= (FLAG_DEDUP | FLAG_DEDUP_FIXED);
 			dedupe_flag = RABIN_DEDUPE_FILE_GLOBAL;
 			if (pipe_mode) {
-				sbuf.st_size = SIXTEEN_GB;
+				return (1);
 			}
 		} else if (enable_rabin_scan) {
 			flags |= FLAG_DEDUP;
@@ -1845,6 +1887,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		tdat->decompress = _decompress_func;
 		tdat->uncompressed_chunk = (uchar_t *)1;
 		tdat->cancel = 0;
+		tdat->decompressing = 0;
 		if (single_chunk)
 			tdat->cksum_mt = 1;
 		else
@@ -1857,21 +1900,21 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		sem_init(&(tdat->write_done_sem), 0, 1);
 		sem_init(&(tdat->index_sem), 0, 0);
 
-		// i is unsigned so this wraps around backwards for i == 0
-		tdat->index_sem_other = &(dary[(i - 1) % nprocs]->index_sem);
 		if (_init_func) {
 			if (_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize,
 			    VERSION, COMPRESS) != 0) {
 				COMP_BAIL;
 			}
 		}
-		if (enable_rabin_scan || enable_fixed_scan) {
+		if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
 			    algo, &props, enable_delta_encode, dedupe_flag, VERSION, COMPRESS, sbuf.st_size,
 			    tmpdir);
 			if (tdat->rctx == NULL) {
 				COMP_BAIL;
 			}
+
+			tdat->rctx->index_sem = &(tdat->index_sem);
 		} else {
 			tdat->rctx = NULL;
 		}
@@ -1890,6 +1933,12 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	}
 	thread = 1;
 
+	if (enable_rabin_global) {
+		for (i = 0; i < nprocs; i++) {
+			tdat = dary[i];
+			tdat->rctx->index_sem_next = &(dary[(i + 1) % nprocs]->index_sem);
+		}
+	}
 	// When doing global dedupe first thread does not wait to access the index.
 	sem_post(&(dary[0]->index_sem));
 
@@ -2000,6 +2049,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	/*
 	 * Read the first chunk into a spare buffer (a simple double-buffering).
 	 */
+	file_offset = 0;
 	if (enable_rabin_split) {
 		rctx = create_dedupe_context(chunksize, 0, 0, algo, &props, enable_delta_encode,
 		    enable_fixed_scan, VERSION, COMPRESS, 0, NULL);
@@ -2064,12 +2114,13 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			 */
 			tdat->id = chunk_num;
 			tdat->rbytes = rbytes;
-			if ((enable_rabin_scan || enable_fixed_scan)) {
+			if ((enable_rabin_scan || enable_fixed_scan || enable_rabin_global)) {
 				tmp = tdat->cmp_seg;
 				tdat->cmp_seg = cread_buf;
 				cread_buf = tmp;
 				tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ +
 				    cksum_bytes + mac_bytes;
+				if (tdat->rctx) tdat->rctx->file_offset = file_offset;
 
 				/*
 				 * If there is data after the last rabin boundary in the chunk, then
@@ -2087,6 +2138,8 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 				tdat->uncompressed_chunk = cread_buf;
 				cread_buf = tmp;
 			}
+			file_offset += tdat->rbytes;
+
 			if (rbytes < chunksize) {
 				if (rbytes < 0) {
 					bail = 1;
@@ -2344,7 +2397,7 @@ main(int argc, char *argv[])
 	slab_init();
 	init_pcompress();
 
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDEe:w:rLPS:B:Fk:")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:rLPS:B:Fk:")) != -1) {
 		int ovr;
 
 		switch (opt) {
@@ -2407,6 +2460,10 @@ main(int argc, char *argv[])
 
 		    case 'D':
 			enable_rabin_scan = 1;
+			break;
+
+		    case 'G':
+			enable_rabin_global = 1;
 			break;
 
 		    case 'E':
@@ -2500,6 +2557,20 @@ main(int argc, char *argv[])
 
 	} else if (pipe_mode && encrypt_type && !pwd_file) {
 		fprintf(stderr, "Pipe mode requires password to be provided in a file.\n");
+		exit(1);
+	}
+
+	/*
+	 * Global Deduplication can use Rabin or Fixed chunking. Default, if not specified,
+	 * is to use Rabin.
+	 */
+	if (enable_rabin_global && !enable_rabin_scan && !enable_fixed_scan) {
+		enable_rabin_scan = 1;
+		enable_rabin_split = 1;
+	}
+
+	if (enable_rabin_global && pipe_mode) {
+		fprintf(stderr, "Global Deduplication is not supported in pipe mode.\n");
 		exit(1);
 	}
 

@@ -203,7 +203,7 @@ get_crypto_alg(char *name)
  * need or want another level of parallelism to cause contention.
  */
 int
-compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, int mt)
+compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, int mt, int verbose)
 {
 	DEBUG_STAT_EN(double strt, en);
 
@@ -213,7 +213,7 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, in
 	assert(mt == 0 || mt == 1);
 #endif
 
-	DEBUG_STAT_EN(strt = get_wtime_millis());
+	DEBUG_STAT_EN(if (verbose) strt = get_wtime_millis());
 	if (cksum == CKSUM_CRC64) {
 		uint64_t *ck = (uint64_t *)cksum_buf;
 		*ck = lzma_crc64(buf, bytes, 0);
@@ -321,8 +321,8 @@ compute_checksum(uchar_t *cksum_buf, int cksum, uchar_t *buf, uint64_t bytes, in
 	} else {
 		return (-1);
 	}
-	DEBUG_STAT_EN(en = get_wtime_millis());
-	DEBUG_STAT_EN(fprintf(stderr, "Checksum computed at %.3f MB/s\n", get_mb_s(bytes, strt, en)));
+	DEBUG_STAT_EN(if (verbose) en = get_wtime_millis());
+	DEBUG_STAT_EN(if (verbose) fprintf(stderr, "Checksum computed at %.3f MB/s\n", get_mb_s(bytes, strt, en)));
 	return (0);
 }
 
@@ -789,10 +789,10 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 					b += 4;
 					*((uint32_t *)&sb[b]) = getpid();
 					b += 4;
-					compute_checksum(&sb[b], CKSUM_SHA256, sb, b, 0);
+					compute_checksum(&sb[b], CKSUM_SHA256, sb, b, 0, 0);
 					b = 8 + 4;
 					*((uint32_t *)&sb[b]) = rand();
-					compute_checksum(salt, CKSUM_SHA256, &sb[b], 32 + 4, 0);
+					compute_checksum(salt, CKSUM_SHA256, &sb[b], 32 + 4, 0, 0);
 				}
 			}
 
