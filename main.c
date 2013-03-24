@@ -2574,6 +2574,11 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 
+	if (enable_rabin_global && enable_delta_encode) {
+		fprintf(stderr, "Global Deduplication does not support Delta Compression yet.\n");
+		exit(1);
+	}
+
 	if (num_rem == 0 && !pipe_mode) {
 		usage(); /* At least 1 filename needed. */
 		exit(1);
