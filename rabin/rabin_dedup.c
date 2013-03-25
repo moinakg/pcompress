@@ -320,6 +320,16 @@ destroy_dedupe_context(dedupe_context_t *ctx)
 #ifndef SSE_MODE
 		if (ctx->current_window_data) slab_free(NULL, ctx->current_window_data);
 #endif
+
+		pthread_mutex_lock(&init_lock);
+		if (arc) {
+			if (arc->dedupe_mode == MODE_SIMPLE) {
+				destroy_global_db_s(arc);
+			}
+		}
+		arc = NULL;
+		pthread_mutex_unlock(&init_lock);
+
 		if (ctx->blocks) {
 			for (i=0; i<ctx->blknum && ctx->blocks[i] != NULL; i++) {
 				slab_free(NULL, ctx->blocks[i]);
@@ -768,6 +778,10 @@ process_blocks:
 		}
 
 		/*
+		 * Subsequent processing below is for per-segment Deduplication.
+		 */
+
+		/*
 		 * Compute hash signature for each block. We do this in a separate loop to 
 		 * have a fast linear scan through the buffer.
 		 */
@@ -1120,6 +1134,11 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size)
 		return;
 	}
 
+	/*
+	 * Handling for per-segment Deduplication.
+	 * First pass re-create the rabin block array from the index metadata.
+	 * Second pass copy over blocks to the target buffer to re-create the original segment.
+	 */
 	slab_cache_add(sizeof (rabin_blockentry_t));
 	for (blk = 0; blk < blknum; blk++) {
 		if (ctx->blocks[blk] == 0)

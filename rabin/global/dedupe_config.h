@@ -73,8 +73,10 @@ typedef struct {
 	int directory_fanout; // Number of subdirectories in a directory
 	int directory_levels; // Levels of nested directories
 	int num_containers; // Number of containers in a directory
-	int seg_fd_w;
-	int *seg_fd_r;
+	int nthreads; // Number of threads processing data segments in parallel
+	int seg_fd_w; 
+	int *seg_fd_r; // One read-only fd per thread for mapping in portions of the
+		       // segment metadata cache.
 	void *dbdata;
 } archive_config_t;
 

@@ -551,13 +551,6 @@ redo:
 		memcpy(ubuf, cmpbuf, dedupe_index_sz);
 
 	} else {
-		/*
-		 * This chunk was not deduplicated, however we still need to down the
-		 * semaphore in order to maintain proper thread coordination.
-		 */
-		if (enable_rabin_global) {
-			sem_wait(tdat->rctx->index_sem);
-		}
 		if (HDR & COMPRESSED) {
 			if (HDR & CHUNK_FLAG_PREPROC) {
 				rv = preproc_decompress(tdat->decompress, cseg, tdat->len_cmp,
@@ -606,6 +599,16 @@ redo:
 		tdat->uncompressed_chunk = tdat->compressed_chunk;
 		tdat->compressed_chunk = tmp;
 		tdat->cmp_seg = tdat->uncompressed_chunk;
+	} else {
+		/*
+		 * This chunk was not deduplicated, however we still need to down the
+		 * semaphore in order to maintain proper thread coordination. We do this after
+		 * decompression to achieve better concurrency. Decompression does not need
+		 * to wait for the previous thread's dedupe recovery to complete.
+		 */
+		if (enable_rabin_global) {
+			sem_wait(tdat->rctx->index_sem);
+		}
 	}
 
 	if (!encrypt_type) {
@@ -2575,7 +2578,7 @@ main(int argc, char *argv[])
 	}
 
 	if (enable_rabin_global && enable_delta_encode) {
-		fprintf(stderr, "Global Deduplication does not support Delta Compression yet.\n");
+		fprintf(stderr, "Global Deduplication does not support Delta Compression.\n");
 		exit(1);
 	}
 

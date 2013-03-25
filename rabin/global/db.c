@@ -102,6 +102,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 
 	if (cfg->dedupe_mode == MODE_SIMPLE) {
 		pct_interval = 0;
+		cfg->pct_interval = 0;
 	}
 
 	if (path != NULL) {
@@ -153,6 +154,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 		indx->hash_entry_size = hash_entry_size;
 		indx->intervals = intervals;
 		indx->hash_slots = hash_slots / intervals;
+		cfg->nthreads = nthreads;
 
 		for (i = 0; i < intervals; i++) {
 			indx->list[i].tab = (hash_entry_t **)calloc(hash_slots / intervals,
@@ -264,3 +266,21 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 	}
 	return (NULL);
 }
+
+void
+destroy_global_db_s(archive_config_t *cfg)
+{
+	int i;
+	index_t *indx = (index_t *)(cfg->dbdata);
+
+	cleanup_indx(indx);
+	if (cfg->pct_interval > 0) {
+		for (i = 0; i < cfg->nthreads; i++) {
+			close(cfg->seg_fd_r[i]);
+		}
+		free(cfg->seg_fd_r);
+		close(cfg->seg_fd_w);
+		unlink(cfg->rootdir);
+	}
+}
+

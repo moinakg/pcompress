@@ -48,6 +48,7 @@ archive_config_t *init_global_db_s(char *path, char *tmppath, uint32_t chunksize
 			int nthreads);
 hash_entry_t *db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		   uint64_t item_offset, uint32_t item_size, int do_insert);
+void destroy_global_db_s(archive_config_t *cfg);
 
 #ifdef	__cplusplus
 }
