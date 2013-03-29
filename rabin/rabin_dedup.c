@@ -188,9 +188,9 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 			get_sysinfo(&msys_info);
 
 			/*
-			 * Use a maximum of approx 62% of free RAM for the index.
+			 * Use a maximum of approx 75% of free RAM for the index.
 			 */
-			msys_info.freeram = (msys_info.freeram >> 1) + (msys_info.freeram >> 3);
+			msys_info.freeram = (msys_info.freeram >> 1) + (msys_info.freeram >> 2);
 			arc = init_global_db_s(NULL, NULL, rab_blk_sz, chunksize, 0,
 					      algo, props->cksum, props->cksum, file_size,
 					      msys_info.freeram, props->nthreads);
@@ -1107,7 +1107,7 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size)
 				 * RAM. Just mem-copy it.
 				 * Otherwise it will be in the current output file. We mmap() the relevant
 				 * region and copy it. The way deduplication is done it is guaranteed that
-				 * all duplicate reference will be backward references so this approach works.
+				 * all duplicate references will be backward references so this approach works.
 				 * 
 				 * However this approach precludes pipe-mode streamed decompression since
 				 * it requires random access to the output file.

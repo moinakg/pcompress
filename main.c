@@ -693,13 +693,22 @@ start_decompress(const char *filename, const char *to_filename)
 	 * Open files and do sanity checks.
 	 */
 	if (!pipe_mode) {
-		if ((compfd = open(filename, O_RDONLY, 0)) == -1)
-			err_exit(1, "Cannot open: %s", filename);
+		if (filename == NULL) {
+			compfd = fileno(stdin);
+			if (compfd == -1) {
+				perror("fileno ");
+				UNCOMP_BAIL;
+			}
+			sbuf.st_size = 0;
+		} else {
+			if ((compfd = open(filename, O_RDONLY, 0)) == -1)
+				err_exit(1, "Cannot open: %s", filename);
 
-		if (fstat(compfd, &sbuf) == -1)
-			err_exit(1, "Cannot stat: %s", filename);
-		if (sbuf.st_size == 0)
-			return (1);
+			if (fstat(compfd, &sbuf) == -1)
+				err_exit(1, "Cannot stat: %s", filename);
+			if (sbuf.st_size == 0)
+				return (1);
+		}
 
 		if ((uncompfd = open(to_filename, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR | S_IWUSR)) == -1) {
 			close(compfd);
@@ -726,7 +735,10 @@ start_decompress(const char *filename, const char *to_filename)
 		UNCOMP_BAIL;
 	}
 	if (init_algo(algorithm, 0) != 0) {
-		fprintf(stderr, "%s is not a pcompressed file.\n", filename);
+		if (pipe_mode || filename == NULL)
+			fprintf(stderr, "Input stream is not pcompressed.\n");
+		else
+			fprintf(stderr, "%s is not a pcompressed file.\n", filename);
 		UNCOMP_BAIL;
 	}
 	algo = algorithm;
@@ -1279,9 +1291,11 @@ uncomp_done:
 	/*
 	 * Ownership and mode of target should be same as original.
 	 */
-	fchmod(uncompfd, sbuf.st_mode);
-	if (fchown(uncompfd, sbuf.st_uid, sbuf.st_gid) == -1)
-		perror("Chown ");
+	if (filename != NULL) {
+		fchmod(uncompfd, sbuf.st_mode);
+		if (fchown(uncompfd, sbuf.st_uid, sbuf.st_gid) == -1)
+			perror("Chown ");
+	}
 	if (dary != NULL) {
 		for (i = 0; i < nprocs; i++) {
 			if (!dary[i]) continue;
@@ -1299,7 +1313,7 @@ uncomp_done:
 		slab_free(NULL, dary);
 	}
 	if (!pipe_mode) {
-		if (compfd != -1) close(compfd);
+		if (filename && compfd != -1) close(compfd);
 		if (uncompfd != -1) close(uncompfd);
 	}
 
@@ -1667,14 +1681,12 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	}
 
 	flags = 0;
+	sbuf.st_size = 0;
 	dedupe_flag = RABIN_DEDUPE_SEGMENTED; // Silence the compiler
 	if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
 		if (enable_rabin_global) {
 			flags |= (FLAG_DEDUP | FLAG_DEDUP_FIXED);
 			dedupe_flag = RABIN_DEDUPE_FILE_GLOBAL;
-			if (pipe_mode) {
-				return (1);
-			}
 		} else if (enable_rabin_scan) {
 			flags |= FLAG_DEDUP;
 			dedupe_flag = RABIN_DEDUPE_SEGMENTED;
@@ -2572,11 +2584,6 @@ main(int argc, char *argv[])
 		enable_rabin_split = 1;
 	}
 
-	if (enable_rabin_global && pipe_mode) {
-		fprintf(stderr, "Global Deduplication is not supported in pipe mode.\n");
-		exit(1);
-	}
-
 	if (enable_rabin_global && enable_delta_encode) {
 		fprintf(stderr, "Global Deduplication does not support Delta Compression.\n");
 		exit(1);
@@ -2605,8 +2612,15 @@ main(int argc, char *argv[])
 		}
 	} else if (num_rem == 2) {
 		if (do_uncompress) {
-			if ((filename = realpath(argv[optind], NULL)) == NULL)
-				err_exit(1, "%s", argv[optind]);
+			/*
+			 * While decompressing, input can be stdin and output a physical file.
+			 */
+			if (*(argv[optind]) == '-') {
+				filename = NULL;
+			} else {
+				if ((filename = realpath(argv[optind], NULL)) == NULL)
+					err_exit(1, "%s", argv[optind]);
+			}
 			optind++;
 			if ((to_filename = realpath(argv[optind], NULL)) != NULL) {
 				free(filename);

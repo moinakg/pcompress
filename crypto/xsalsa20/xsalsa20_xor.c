@@ -130,7 +130,7 @@ salsa20_init(salsa20_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int p
 		n = (uint64_t *)IV;
 		n1 = (uint64_t *)(ctx->nonce);
 		for (i = 0; i < XSALSA20_CRYPTO_NONCEBYTES/8; i++) {
-			*n1 = ntohll(*n);
+			*n1 = LE64(*n);
 			n++;
 			n1++;
 		}

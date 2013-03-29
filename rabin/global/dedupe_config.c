@@ -360,7 +360,7 @@ set_config_s(archive_config_t *cfg, const char *algo, cksum_t ck, cksum_t ck_sim
 	cfg->archive_sz = file_sz;
 	cfg->dedupe_mode = MODE_SIMILARITY;
 
-	if (cfg->archive_sz <= SIXTEEN_GB || pct_interval == 0) {
+	if (cfg->archive_sz <= SIXTEEN_GB || pct_interval == 0 || pct_interval == 100) {
 		cfg->dedupe_mode = MODE_SIMPLE;
 		cfg->segment_sz_bytes = user_chunk_sz;
 

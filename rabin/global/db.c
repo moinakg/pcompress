@@ -88,6 +88,9 @@ static cleanup_indx(index_t *indx)
 	}
 }
 
+#define	MEM_PER_UNIT ( (hash_entry_size + sizeof (hash_entry_t *) + \
+		(sizeof (hash_entry_t *)) / 2) + sizeof (hash_entry_t **) )
+
 archive_config_t *
 init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_chunk_sz,
 		 int pct_interval, const char *algo, cksum_t ck, cksum_t ck_sim,
@@ -97,11 +100,26 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	int rv;
 	float diff;
 
+	/*
+	 * file_sz = 0 and pct_interval = 0 means we are in pipe mode and want a simple
+	 * index. Set pct_interval to 100 to indicate that we need to use all of memlimit
+	 * for the simple index.
+	 * 
+	 * If file_sz != 0 but pct_interval = 0 then we need to create a simple index
+	 * sized for the given file.
+	 * 
+	 * If file_sz = 0 and pct_interval = 100 then we are in pipe mode and want a segmented
+	 * index. This is typically for WAN deduplication of large data transfers.
+	 */
+	if (file_sz == 0 && pct_interval == 0)
+		pct_interval = 100;
+
 	cfg = calloc(1, sizeof (archive_config_t));
 	rv = set_config_s(cfg, algo, ck, ck_sim, chunksize, file_sz, user_chunk_sz, pct_interval);
 
 	if (cfg->dedupe_mode == MODE_SIMPLE) {
-		pct_interval = 0;
+		if (pct_interval != 100)
+			pct_interval = 0;
 		cfg->pct_interval = 0;
 	}
 
@@ -115,30 +133,36 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 		int hash_entry_size;
 		index_t *indx;
 
+		hash_entry_size = sizeof (hash_entry_t) + cfg->similarity_cksum_sz - 1;
+
 		// Compute total hashtable entries first
 		if (pct_interval == 0) {
 			intervals = 1;
 			hash_slots = file_sz / cfg->chunk_sz_bytes + 1;
+
+		} else if (pct_interval == 100) {
+			intervals = 1;
+			hash_slots = memlimit / MEM_PER_UNIT - 5;
+			pct_interval = 0;
 		} else {
 			intervals = 100 / pct_interval - 1;
 			hash_slots = file_sz / cfg->segment_sz_bytes + 1;
 			hash_slots *= intervals;
 		}
-		hash_entry_size = sizeof (hash_entry_t) + cfg->similarity_cksum_sz - 1;
 
 		// Compute memory required to hold all hash entries assuming worst case 50%
 		// occupancy.
-		memreqd = hash_slots * (hash_entry_size + sizeof (hash_entry_t *) +
-			(sizeof (hash_entry_t *)) / 2);
-		memreqd += hash_slots * sizeof (hash_entry_t **);
+		memreqd = hash_slots * MEM_PER_UNIT;
 		diff = (float)pct_interval / 100.0;
 
 		// Reduce hash_slots to remain within memlimit
 		while (memreqd > memlimit) {
-			hash_slots -= (hash_slots * diff);
-			memreqd = hash_slots * (hash_entry_size + sizeof (hash_entry_t *) + 
-					(sizeof (hash_entry_t *)) / 2);
-			memreqd += hash_slots * sizeof (hash_entry_t **);
+			if (pct_interval == 0) {
+				hash_slots--;
+			} else {
+				hash_slots -= (hash_slots * diff);
+			}
+			memreqd = hash_slots * MEM_PER_UNIT;
 		}
 
 		// Now create as many hash tables as there are similarity match intervals
@@ -251,7 +275,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		}
 	}
 	if (do_insert) {
-		if (indx->memused + indx->hash_entry_size >= indx->memlimit) {
+		if (indx->memused + indx->hash_entry_size >= indx->memlimit && htab[htab_entry] != NULL) {
 			ent = htab[htab_entry];
 			htab[htab_entry] = htab[htab_entry]->next;
 		} else {
