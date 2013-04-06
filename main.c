@@ -677,7 +677,7 @@ start_decompress(const char *filename, const char *to_filename)
 	int uncompfd = -1, err, np, bail;
 	int nprocs = 1, thread = 0, level;
 	unsigned int i;
-	short version, flags;
+	unsigned short version, flags;
 	int64_t chunksize, compressed_chunksize;
 	struct cmp_data **dary, *tdat;
 	pthread_t writer_thr;
@@ -1644,7 +1644,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	char to_filename[MAXPATHLEN];
 	uint64_t compressed_chunksize, n_chunksize, file_offset;
 	int64_t rbytes, rabin_count;
-	short version, flags;
+	unsigned short version, flags;
 	struct stat sbuf;
 	int compfd = -1, uncompfd = -1, err;
 	int thread, bail, single_chunk;
@@ -1655,21 +1655,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	dedupe_context_t *rctx;
 	algo_props_t props;
 
-	/*
-	 * Compressed buffer size must include zlib/dedup scratch space and
-	 * chunk header space.
-	 * See http://www.zlib.net/manual.html#compress2
-	 * 
-	 * We do this unconditionally whether user mentioned zlib or not
-	 * to keep it simple. While zlib scratch space is only needed at
-	 * runtime, chunk header is stored in the file.
-	 *
-	 * See start_decompress() routine for details of chunk header.
-	 * We also keep extra 8-byte space for the last chunk's size.
-	 */
-	compressed_chunksize = chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
 	init_algo_props(&props);
 	props.cksum = cksum;
+	props.buf_extra = 0;
 	cread_buf = NULL;
 
 	if (_props_func) {
@@ -1757,9 +1745,6 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	thread = 0;
 	single_chunk = 0;
 	rctx = NULL;
-	slab_cache_add(chunksize);
-	slab_cache_add(compressed_chunksize);
-	slab_cache_add(sizeof (struct cmp_data));
 
 	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
 	if (nthreads > 0 && nthreads < nprocs)
@@ -1798,6 +1783,18 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			single_chunk = 1;
 			props.is_single_chunk = 1;
 			flags |= FLAG_SINGLE_CHUNK;
+
+			/*
+			 * Switch to simple Deduplication if global is enabled.
+			 */
+			if (enable_rabin_global) {
+				unsigned short flg;
+				enable_rabin_scan = 1;
+				enable_rabin_global = 0;
+				dedupe_flag = RABIN_DEDUPE_SEGMENTED;
+				flg = FLAG_DEDUP_FIXED;
+				flags &= ~flg;
+			}
 		} else {
 			if (nthreads == 0 || nthreads > sbuf.st_size / chunksize) {
 				nthreads = sbuf.st_size / chunksize;
@@ -1869,6 +1866,38 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		}
 		strcpy(tmpdir, tmp);
 	}
+
+	/*
+	 * Compressed buffer size must include zlib/dedup scratch space and
+	 * chunk header space.
+	 * See http://www.zlib.net/manual.html#compress2
+	 * 
+	 * We do this unconditionally whether user mentioned zlib or not
+	 * to keep it simple. While zlib scratch space is only needed at
+	 * runtime, chunk header is stored in the file.
+	 *
+	 * See start_decompress() routine for details of chunk header.
+	 * We also keep extra 8-byte space for the last chunk's size.
+	 */
+	compressed_chunksize = chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
+	if (chunksize + props.buf_extra > compressed_chunksize) {
+		compressed_chunksize += (chunksize + props.buf_extra - 
+		    compressed_chunksize);
+	}
+
+	if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
+		/* Additional scratch space for dedup arrays. */
+		if (chunksize + dedupe_buf_extra(chunksize, 0, algo, enable_delta_encode)
+		    > compressed_chunksize) {
+			compressed_chunksize += (chunksize +
+			    dedupe_buf_extra(chunksize, 0, algo, enable_delta_encode)) -
+			    compressed_chunksize;
+		}
+	}
+
+	slab_cache_add(chunksize);
+	slab_cache_add(compressed_chunksize);
+	slab_cache_add(sizeof (struct cmp_data));
 
 	if (encrypt_type)
 		flags |= encrypt_type;

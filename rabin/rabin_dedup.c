@@ -127,6 +127,27 @@ dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta
 }
 
 /*
+ * Helper function to let caller size the the user specific compression chunk/segment
+ * to align with deduplication requirements.
+ */
+int
+global_dedupe_chkmem(uint32_t chunksize, uint64_t *user_chunk_sz, int pct_interval,
+		 const char *algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
+		 size_t memlimit, int nthreads)
+{
+	uint64_t memreqd;
+	archive_config_t cfg;
+	int rv, pct_i, hash_entry_size;
+	uint32_t intervals, hash_slots;
+
+	rv = 0;
+	pct_i = pct_interval;
+	rv = setup_db_config_s(&cfg, chunksize, user_chunk_sz, &pct_i, algo, ck, ck_sim,
+		 file_sz, &hash_slots, &hash_entry_size, &intervals, &memreqd, memlimit);
+	return (rv);
+}
+
+/*
  * Initialize the algorithm with the default params.
  */
 dedupe_context_t *
@@ -181,11 +202,25 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		 */
 		if (dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL && op == COMPRESS && rab_blk_sz > 0) {
 			my_sysinfo msys_info;
+			char *val;
 
 			/*
 			 * Get available free memory.
 			 */
 			get_sysinfo(&msys_info);
+
+			if ((val = getenv("PCOMPRESS_INDEX_MEM")) != NULL) {
+				uint64_t mem;
+
+				/*
+				 * Externally specified index limit in MB.
+				 */
+				mem = strtoull(val, NULL, 0);
+				mem *= (1024 * 1024);
+				if (mem > (1024 * 1024) && mem < msys_info.freeram) {
+					msys_info.freeram = mem;
+				}
+			}
 
 			/*
 			 * Use a maximum of approx 75% of free RAM for the index.
@@ -773,6 +808,12 @@ process_blocks:
 				}
 				pos1 = tgt - ctx->cbuf;
 				blknum |= GLOBAL_FLAG;
+
+			} else {
+				/*
+				 * Segmented similarity based Dedupe.
+				 */
+				
 			}
 			goto dedupe_done;
 		}

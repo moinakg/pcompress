@@ -127,7 +127,6 @@
 #define	RABIN_DEDUPE_SEGMENTED	0
 #define	RABIN_DEDUPE_FIXED	1
 #define	RABIN_DEDUPE_FILE_GLOBAL	2
-#define	DEFAULT_PCT_INTERVAL	2
 
 // Mask to extract value from a rabin index entry
 #define	RABIN_INDEX_VALUE (0x3FFFFFFFUL)
@@ -202,12 +201,15 @@ extern unsigned int dedupe_compress(dedupe_context_t *ctx, unsigned char *buf,
 	uint64_t *size, uint64_t offset, uint64_t *rabin_pos, int mt);
 extern void dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size);
 extern void parse_dedupe_hdr(uchar_t *buf, unsigned int *blknum, uint64_t *dedupe_index_sz,
-		uint64_t *dedupe_data_sz, uint64_t *rabin_index_sz_cmp,
-		uint64_t *dedupe_data_sz_cmp, uint64_t *deduped_size);
+	uint64_t *dedupe_data_sz, uint64_t *rabin_index_sz_cmp,
+	uint64_t *dedupe_data_sz_cmp, uint64_t *deduped_size);
 extern void update_dedupe_hdr(uchar_t *buf, uint64_t dedupe_index_sz_cmp,
-			     uint64_t dedupe_data_sz_cmp);
+	uint64_t dedupe_data_sz_cmp);
 extern void reset_dedupe_context(dedupe_context_t *ctx);
 extern uint32_t dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo,
 	int delta_flag);
+extern int global_dedupe_chkmem(uint32_t chunksize, uint64_t *user_chunk_sz, int pct_interval,
+	const char *algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
+	size_t memlimit, int nthreads);
 
 #endif /* _RABIN_POLY_H_ */

@@ -88,17 +88,18 @@ static cleanup_indx(index_t *indx)
 	}
 }
 
-#define	MEM_PER_UNIT ( (hash_entry_size + sizeof (hash_entry_t *) + \
+#define	MEM_PER_UNIT(ent_sz) ( (ent_sz + sizeof (hash_entry_t *) + \
 		(sizeof (hash_entry_t *)) / 2) + sizeof (hash_entry_t **) )
+#define	MEM_REQD(hslots, ent_sz) (hslots * MEM_PER_UNIT(ent_sz))
+#define	SLOTS_FOR_MEM(memlimit, ent_sz) (memlimit / MEM_PER_UNIT(ent_sz) - 5)
 
-archive_config_t *
-init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_chunk_sz,
-		 int pct_interval, const char *algo, cksum_t ck, cksum_t ck_sim,
-		 size_t file_sz, size_t memlimit, int nthreads)
+int
+setup_db_config_s(archive_config_t *cfg, uint32_t chunksize, uint64_t *user_chunk_sz,
+		 int *pct_interval, const char *algo, cksum_t ck, cksum_t ck_sim,
+		 size_t file_sz, uint32_t *hash_slots, int *hash_entry_size,
+		 uint32_t *intervals, uint64_t *memreqd, size_t memlimit)
 {
-	archive_config_t *cfg;
-	int rv;
-	float diff;
+	int rv, set_user;
 
 	/*
 	 * file_sz = 0 and pct_interval = 0 means we are in pipe mode and want a simple
@@ -106,110 +107,146 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	 * for the simple index.
 	 * 
 	 * If file_sz != 0 but pct_interval = 0 then we need to create a simple index
-	 * sized for the given file.
+	 * sized for the given file. If the available memory is not sufficient for a full
+	 * index and required index size is 1.25x of availble mem then switch to a
+	 * segmented index.
 	 * 
-	 * If file_sz = 0 and pct_interval = 100 then we are in pipe mode and want a segmented
+	 * If file_sz != 0 and pct_interval != 0 then we explicitly want to create a segmented
+	 * index. This option is auto-selected to support the previous behavior.
+	 * 
+	 * If file_sz = 0 and pct_interval != 0 then we are in pipe mode and want a segmented
 	 * index. This is typically for WAN deduplication of large data transfers.
 	 */
-	if (file_sz == 0 && pct_interval == 0)
-		pct_interval = 100;
+	if (file_sz == 0 && *pct_interval == 0)
+		*pct_interval = 100;
+	set_user = 0;
 
-	cfg = calloc(1, sizeof (archive_config_t));
-	rv = set_config_s(cfg, algo, ck, ck_sim, chunksize, file_sz, user_chunk_sz, pct_interval);
+set_cfg:
+	rv = set_config_s(cfg, algo, ck, ck_sim, chunksize, file_sz, *user_chunk_sz, *pct_interval);
 
 	if (cfg->dedupe_mode == MODE_SIMPLE) {
-		if (pct_interval != 100)
-			pct_interval = 0;
+		if (*pct_interval != 100)
+			*pct_interval = 0;
 		cfg->pct_interval = 0;
 	}
 
+	/*
+	 * Adjust user_chunk_sz if this is the second try.
+	 */
+	if (set_user) {
+		if (*user_chunk_sz < cfg->segment_sz_bytes) {
+			*user_chunk_sz = cfg->segment_sz_bytes;
+		} else {
+			*user_chunk_sz = (*user_chunk_sz / cfg->segment_sz_bytes) * cfg->segment_sz_bytes;
+		}
+	}
+
+	// Compute total hashtable entries first
+	*hash_entry_size = sizeof (hash_entry_t) + cfg->similarity_cksum_sz - 1;
+	if (*pct_interval == 0) {
+		*intervals = 1;
+		*hash_slots = file_sz / cfg->chunk_sz_bytes + 1;
+
+	} else if (*pct_interval == 100) {
+		*intervals = 1;
+		*hash_slots = SLOTS_FOR_MEM(memlimit, *hash_entry_size);
+		*pct_interval = 0;
+	} else {
+		*intervals = 100 / *pct_interval - 1;
+		*hash_slots = file_sz / cfg->segment_sz_bytes + 1;
+		*hash_slots *= *intervals;
+	}
+
+	// Compute memory required to hold all hash entries assuming worst case 50%
+	// occupancy.
+	*memreqd = MEM_REQD(*hash_slots, *hash_entry_size);
+
+	if (*memreqd > (memlimit + (memlimit >> 2)) && cfg->dedupe_mode == MODE_SIMPLE &&
+	    *pct_interval == 0) {
+		*pct_interval = DEFAULT_PCT_INTERVAL;
+		set_user = 1;
+		goto set_cfg;
+	}
+	return (rv);
+}
+
+archive_config_t *
+init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_chunk_sz,
+		 int pct_interval, const char *algo, cksum_t ck, cksum_t ck_sim,
+		 size_t file_sz, size_t memlimit, int nthreads)
+{
+	archive_config_t *cfg;
+	int rv, orig_pct;
+	float diff;
+	uint32_t hash_slots, intervals, i;
+	uint64_t memreqd;
+	int hash_entry_size;
+	index_t *indx;
+
 	if (path != NULL) {
 		fprintf(stderr, "Disk based index not yet implemented.\n");
+		return (NULL);
+	}
+	orig_pct = pct_interval;
+	cfg = calloc(1, sizeof (archive_config_t));
+	
+	diff = (float)pct_interval / 100.0;
+	rv = setup_db_config_s(cfg, chunksize, &user_chunk_sz, &pct_interval, algo, ck, ck_sim,
+		 file_sz, &hash_slots, &hash_entry_size, &intervals, &memreqd, memlimit);
+
+	// Reduce hash_slots to remain within memlimit
+	while (memreqd > memlimit) {
+		if (pct_interval == 0) {
+			hash_slots--;
+		} else {
+			hash_slots -= (hash_slots * diff);
+		}
+		memreqd = hash_slots * MEM_PER_UNIT(hash_entry_size);
+	}
+
+	// Now create as many hash tables as there are similarity match intervals
+	// each having hash_slots / intervals slots.
+	indx = calloc(1, sizeof (index_t));
+	if (!indx) {
 		free(cfg);
 		return (NULL);
-	} else {
-		uint32_t hash_slots, intervals, i;
-		uint64_t memreqd;
-		int hash_entry_size;
-		index_t *indx;
+	}
 
-		hash_entry_size = sizeof (hash_entry_t) + cfg->similarity_cksum_sz - 1;
+	indx->memlimit = memlimit - (hash_entry_size << 2);
+	indx->list = (htab_t *)calloc(intervals, sizeof (htab_t));
+	indx->hash_entry_size = hash_entry_size;
+	indx->intervals = intervals;
+	indx->hash_slots = hash_slots / intervals;
+	cfg->nthreads = nthreads;
 
-		// Compute total hashtable entries first
-		if (pct_interval == 0) {
-			intervals = 1;
-			hash_slots = file_sz / cfg->chunk_sz_bytes + 1;
-
-		} else if (pct_interval == 100) {
-			intervals = 1;
-			hash_slots = memlimit / MEM_PER_UNIT - 5;
-			pct_interval = 0;
-		} else {
-			intervals = 100 / pct_interval - 1;
-			hash_slots = file_sz / cfg->segment_sz_bytes + 1;
-			hash_slots *= intervals;
-		}
-
-		// Compute memory required to hold all hash entries assuming worst case 50%
-		// occupancy.
-		memreqd = hash_slots * MEM_PER_UNIT;
-		diff = (float)pct_interval / 100.0;
-
-		// Reduce hash_slots to remain within memlimit
-		while (memreqd > memlimit) {
-			if (pct_interval == 0) {
-				hash_slots--;
-			} else {
-				hash_slots -= (hash_slots * diff);
-			}
-			memreqd = hash_slots * MEM_PER_UNIT;
-		}
-
-		// Now create as many hash tables as there are similarity match intervals
-		// each having hash_slots / intervals slots.
-		indx = calloc(1, sizeof (index_t));
-		if (!indx) {
+	for (i = 0; i < intervals; i++) {
+		indx->list[i].tab = (hash_entry_t **)calloc(hash_slots / intervals,
+						sizeof (hash_entry_t *));
+		if (!(indx->list[i].tab)) {
+			cleanup_indx(indx);
 			free(cfg);
 			return (NULL);
 		}
-
-		indx->memlimit = memlimit - (hash_entry_size << 2);
-		indx->list = (htab_t *)calloc(intervals, sizeof (htab_t));
-		indx->hash_entry_size = hash_entry_size;
-		indx->intervals = intervals;
-		indx->hash_slots = hash_slots / intervals;
-		cfg->nthreads = nthreads;
-
-		for (i = 0; i < intervals; i++) {
-			indx->list[i].tab = (hash_entry_t **)calloc(hash_slots / intervals,
-							sizeof (hash_entry_t *));
-			if (!(indx->list[i].tab)) {
-				cleanup_indx(indx);
-				free(cfg);
-				return (NULL);
-			}
-			indx->memused += ((hash_slots / intervals) * (sizeof (hash_entry_t *)));
-		}
-
-		if (pct_interval > 0) {
-			strcpy(cfg->rootdir, tmppath);
-			strcat(cfg->rootdir, "/.segXXXXXX");
-			cfg->seg_fd_w = mkstemp(cfg->rootdir);
-			cfg->seg_fd_r = (int *)malloc(sizeof (int) * nthreads);
-			if (cfg->seg_fd_w == -1 || cfg->seg_fd_r == NULL) {
-				cleanup_indx(indx);
-				if (cfg->seg_fd_r)
-					free(cfg->seg_fd_r);
-				free(cfg);
-				return (NULL);
-			}
-
-			for (i = 0; i < nthreads; i++) {
-				cfg->seg_fd_r[i] = open(cfg->rootdir, O_RDONLY);
-			}
-		}
-		cfg->dbdata = indx;
+		indx->memused += ((hash_slots / intervals) * (sizeof (hash_entry_t *)));
 	}
+
+	if (pct_interval > 0) {
+		strcpy(cfg->rootdir, tmppath);
+		strcat(cfg->rootdir, "/.segXXXXXX");
+		cfg->seg_fd_w = mkstemp(cfg->rootdir);
+		cfg->seg_fd_r = (int *)malloc(sizeof (int) * nthreads);
+		if (cfg->seg_fd_w == -1 || cfg->seg_fd_r == NULL) {
+			cleanup_indx(indx);
+			if (cfg->seg_fd_r)
+				free(cfg->seg_fd_r);
+			free(cfg);
+			return (NULL);
+		}
+			for (i = 0; i < nthreads; i++) {
+			cfg->seg_fd_r[i] = open(cfg->rootdir, O_RDONLY);
+		}
+	}
+	cfg->dbdata = indx;
 	return (cfg);
 }
 

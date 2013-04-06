@@ -37,6 +37,7 @@ extern "C" {
 #define	DEFAULT_CHUNK_CKSUM	CKSUM_SHA256
 #define	DEFAULT_SIMILARITY_CKSUM	CKSUM_BLAKE256
 #define	DEFAULT_COMPRESS		COMPRESS_LZ4
+#define	DEFAULT_PCT_INTERVAL	2
 #define	CONTAINER_ITEMS		2048
 #define	MIN_CK 1
 #define	MAX_CK 5
@@ -77,6 +78,7 @@ typedef struct {
 	int seg_fd_w; 
 	int *seg_fd_r; // One read-only fd per thread for mapping in portions of the
 		       // segment metadata cache.
+	int valid;
 	void *dbdata;
 } archive_config_t;
 
