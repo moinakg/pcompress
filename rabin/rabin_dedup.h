@@ -64,7 +64,7 @@
 #define _RABIN_POLY_H_
 
 #include "utils.h"
-#include <db.h>
+#include <index.h>
 #include <crypto_utils.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -188,6 +188,8 @@ typedef struct {
 	archive_config_t *arc;
 	sem_t *index_sem;
 	sem_t *index_sem_next;
+	uchar_t *similarity_cksums;
+	int similarity_count;
 	uint32_t pagesize;
 	int out_fd;
 	int id;
@@ -208,8 +210,8 @@ extern void update_dedupe_hdr(uchar_t *buf, uint64_t dedupe_index_sz_cmp,
 extern void reset_dedupe_context(dedupe_context_t *ctx);
 extern uint32_t dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo,
 	int delta_flag);
-extern int global_dedupe_chkmem(uint32_t chunksize, uint64_t *user_chunk_sz, int pct_interval,
-	const char *algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
-	size_t memlimit, int nthreads);
+extern int global_dedupe_bufadjust(uint32_t chunksize, uint64_t *user_chunk_sz, int pct_interval,
+		 const char *algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
+		 size_t memlimit, int nthreads);
 
 #endif /* _RABIN_POLY_H_ */

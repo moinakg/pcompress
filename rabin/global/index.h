@@ -22,8 +22,8 @@
  * moinakg@belenix.org, http://moinakg.wordpress.com/
  */
 
-#ifndef	_DB_H
-#define	_DB_H
+#ifndef	_INDEX_H
+#define	_INDEX_H
 
 #include <dedupe_config.h>
 

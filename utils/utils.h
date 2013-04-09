@@ -217,7 +217,7 @@ extern void set_threadcounts(algo_props_t *props, int *nthreads, int nprocs,
 extern uint64_t get_total_ram();
 extern double get_wtime_millis(void);
 extern double get_mb_s(uint64_t bytes, double strt, double en);
-extern void get_sysinfo(my_sysinfo *msys_info);
+extern void get_sys_limits(my_sysinfo *msys_info);
 extern void init_algo_props(algo_props_t *props);
 extern void init_pcompress();
 

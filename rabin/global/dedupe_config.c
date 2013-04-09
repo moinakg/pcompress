@@ -36,7 +36,7 @@
 #include <rabin_dedup.h>
 
 #include "dedupe_config.h"
-#include "db.h"
+#include "index.h"
 
 static compress_algo_t
 get_compress_level(compress_algo_t algo)

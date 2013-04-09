@@ -36,7 +36,7 @@
 #include <pthread.h>
 #include <xxhash.h>
 
-#include "db.h"
+#include "index.h"
 
 /*
  * Hashtable structures for in-memory index.
@@ -117,9 +117,12 @@ setup_db_config_s(archive_config_t *cfg, uint32_t chunksize, uint64_t *user_chun
 	 * If file_sz = 0 and pct_interval != 0 then we are in pipe mode and want a segmented
 	 * index. This is typically for WAN deduplication of large data transfers.
 	 */
+	if (pct_interval != 0)
+		set_user = 0;
+	else
+		set_user = 1;
 	if (file_sz == 0 && *pct_interval == 0)
 		*pct_interval = 100;
-	set_user = 0;
 
 set_cfg:
 	rv = set_config_s(cfg, algo, ck, ck_sim, chunksize, file_sz, *user_chunk_sz, *pct_interval);
@@ -131,11 +134,11 @@ set_cfg:
 	}
 
 	/*
-	 * Adjust user_chunk_sz if this is the second try.
+	 * Adjust user_chunk_sz if indicated.
 	 */
 	if (set_user) {
 		if (*user_chunk_sz < cfg->segment_sz_bytes) {
-			*user_chunk_sz = cfg->segment_sz_bytes;
+			*user_chunk_sz = cfg->segment_sz_bytes + (cfg->segment_sz_bytes >> 1);
 		} else {
 			*user_chunk_sz = (*user_chunk_sz / cfg->segment_sz_bytes) * cfg->segment_sz_bytes;
 		}

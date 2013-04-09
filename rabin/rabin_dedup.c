@@ -131,7 +131,7 @@ dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta
  * to align with deduplication requirements.
  */
 int
-global_dedupe_chkmem(uint32_t chunksize, uint64_t *user_chunk_sz, int pct_interval,
+global_dedupe_bufadjust(uint32_t chunksize, uint64_t *user_chunk_sz, int pct_interval,
 		 const char *algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
 		 size_t memlimit, int nthreads)
 {
@@ -202,30 +202,12 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		 */
 		if (dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL && op == COMPRESS && rab_blk_sz > 0) {
 			my_sysinfo msys_info;
-			char *val;
 
 			/*
-			 * Get available free memory.
+			 * Get amount of memory to use. The freeram got here is adjusted amount.
 			 */
-			get_sysinfo(&msys_info);
+			get_sys_limits(&msys_info);
 
-			if ((val = getenv("PCOMPRESS_INDEX_MEM")) != NULL) {
-				uint64_t mem;
-
-				/*
-				 * Externally specified index limit in MB.
-				 */
-				mem = strtoull(val, NULL, 0);
-				mem *= (1024 * 1024);
-				if (mem > (1024 * 1024) && mem < msys_info.freeram) {
-					msys_info.freeram = mem;
-				}
-			}
-
-			/*
-			 * Use a maximum of approx 75% of free RAM for the index.
-			 */
-			msys_info.freeram = (msys_info.freeram >> 1) + (msys_info.freeram >> 2);
 			arc = init_global_db_s(NULL, NULL, rab_blk_sz, chunksize, 0,
 					      algo, props->cksum, props->cksum, file_size,
 					      msys_info.freeram, props->nthreads);
@@ -270,6 +252,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx->delta_flag = 0;
 	ctx->deltac_min_distance = props->deltac_min_distance;
 	ctx->pagesize = sysconf(_SC_PAGE_SIZE);
+	ctx->similarity_cksums = NULL;
 
 	/*
 	 * Scale down similarity percentage based on avg block size unless user specified
@@ -316,6 +299,17 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		    "Could not allocate rabin polynomial context, out of memory\n");
 		destroy_dedupe_context(ctx);
 		return (NULL);
+	}
+
+	if (arc && dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL) {
+		ctx->similarity_cksums = (uchar_t *)slab_calloc(NULL, 90 / arc->pct_interval, 32);
+		if (!ctx->similarity_cksums) {
+			fprintf(stderr,
+			    "Could not allocate dedupe context, out of memory\n");
+			destroy_dedupe_context(ctx);
+			return (NULL);
+		}
+		ctx->similarity_count = 90 / arc->pct_interval;
 	}
 
 	ctx->lzma_data = NULL;
@@ -371,6 +365,7 @@ destroy_dedupe_context(dedupe_context_t *ctx)
 			}
 			slab_free(NULL, ctx->blocks);
 		}
+		if (ctx->similarity_cksums) slab_free(NULL, ctx->similarity_cksums);
 		if (ctx->lzma_data) lzma_deinit(&(ctx->lzma_data));
 		slab_free(NULL, ctx);
 	}
@@ -670,36 +665,39 @@ process_blocks:
 		 * If global dedupe is enabled then process it here.
 		 */
 		if (ctx->arc) {
-			if (ctx->arc->dedupe_mode == MODE_SIMPLE) {
-				uchar_t *g_dedupe_idx, *tgt, *src;
-				/*
-				 * First compute all the rabin chunk/block cryptographic hashes.
-				 */
+			uchar_t *g_dedupe_idx, *tgt, *src;
+
+			/*
+			 * First compute all the rabin chunk/block cryptographic hashes.
+			 */
 #if defined(_OPENMP)
 #	pragma omp parallel for if (mt)
 #endif
-				for (i=0; i<blknum; i++) {
-					compute_checksum(ctx->g_blocks[i].cksum,
-						ctx->arc->chunk_cksum_type, buf1+ctx->g_blocks[i].offset,
-						ctx->g_blocks[i].length, 0, 0);
-				}
+			for (i=0; i<blknum; i++) {
+				compute_checksum(ctx->g_blocks[i].cksum,
+					ctx->arc->chunk_cksum_type, buf1+ctx->g_blocks[i].offset,
+					ctx->g_blocks[i].length, 0, 0);
+			}
 
+			/*
+			 * Index table within this segment.
+			 */
+			g_dedupe_idx = ctx->cbuf + RABIN_HDR_SIZE;
+			dedupe_index_sz = 0;
+
+			/*
+			 * First entry in table is the original file offset where this
+			 * data segment begins.
+			 */
+			*((uint64_t *)g_dedupe_idx) = LE64(ctx->file_offset);
+			g_dedupe_idx += (RABIN_ENTRY_SIZE * 2);
+			dedupe_index_sz += 2;
+			matchlen = 0;
+
+			if (ctx->arc->dedupe_mode == MODE_SIMPLE) {
 				/*
-				 * Index table within this segment.
+				 * This code block implements Global Dedupe with simple in-memory index.
 				 */
-				g_dedupe_idx = ctx->cbuf + RABIN_HDR_SIZE;
-				dedupe_index_sz = 0;
-
-				/*
-				 * First entry in table in the original file offset where this
-				 * data segment begins.
-				 */
-				*((uint64_t *)g_dedupe_idx) = LE64(ctx->file_offset);
-				g_dedupe_idx += (RABIN_ENTRY_SIZE * 2);
-				dedupe_index_sz += 2;
-				length = 0;
-				matchlen = 0;
-
 				/*
 				 * Now lookup blocks in index. First wait for our semaphore to be
 				 * signaled. If the previous thread in sequence is using the index
@@ -707,6 +705,7 @@ process_blocks:
 				 * predictable serialization of index access in a sequence of
 				 * threads without locking.
 				 */
+				length = 0;
 				sem_wait(ctx->index_sem);
 				for (i=0; i<blknum; i++) {
 					hash_entry_t *he;
@@ -774,47 +773,79 @@ process_blocks:
 				src = buf1;
 				g_dedupe_idx += (RABIN_ENTRY_SIZE * 2);
 
-				/*
-				 * Deduplication reduction should at least be greater than block list metadata.
-				 */
-				if (matchlen < dedupe_index_sz) {
-					DEBUG_STAT_EN(en = get_wtime_millis());
-					DEBUG_STAT_EN(fprintf(stderr, "Chunking speed %.3f MB/s, Overall Dedupe speed %.3f MB/s\n", 
-						get_mb_s(*size, strt, en_1), get_mb_s(*size, strt, en)));
-					DEBUG_STAT_EN(fprintf(stderr, "No Dedupe possible.\n"));
-					ctx->valid = 0;
-					return (0);
-				}
+			} else {
+				uchar_t *seg_heap, *sim_ck;
+				archive_config_t *cfg;
+				uint32_t increment, len;
 
 				/*
-				 * Now copy the block data;
+				 * This code block implements Segmented similarity based Dedupe with
+				 * in-memory index.
 				 */
-				for (i=0; i<blknum-2;) {
-					length = LE32(*((uint32_t *)g_dedupe_idx));
-					g_dedupe_idx += RABIN_ENTRY_SIZE;
-					++i;
+				cfg = ctx->arc;
+				seg_heap = (uchar_t *)ctx->g_blocks - cfg->segment_sz_bytes;
+				for (i=0; i<blknum; i += cfg->segment_sz) {
+					length = 0;
 
-					j = length & RABIN_INDEX_FLAG;
-					length = length & RABIN_INDEX_VALUE;
-					if (!j) {
-						memcpy(tgt, src, length);
-						tgt += length;
-						src += length;
-					} else {
-						src += length;
-						g_dedupe_idx += (RABIN_ENTRY_SIZE * 2);
-						i += 2;
+					/*
+					 * Compute length of current segment.
+					 */
+					for (j=i; j<blknum && j<cfg->segment_sz; j++)
+						length += ctx->g_blocks[i].length;
+
+					/*
+					 * Compute the cumulative similarity minhashes.
+					 */
+					sim_ck = ctx->similarity_cksums;
+					increment = length / ctx->similarity_count;
+					len = increment;
+					src = buf1 + ctx->g_blocks[i].offset;
+					tgt = seg_heap;
+					memcpy(tgt, src, length);
+					for (j=0; j<ctx->similarity_count; j++) {
+						reset_heap(&heap, len/8);
+						ksmallest((int64_t *)seg_heap, length, &heap);
+						compute_checksum(sim_ck, CKSUM_BLAKE256, seg_heap, len, 0, 0);
+						len += increment;
+						sim_ck += 32;
 					}
 				}
-				pos1 = tgt - ctx->cbuf;
-				blknum |= GLOBAL_FLAG;
-
-			} else {
-				/*
-				 * Segmented similarity based Dedupe.
-				 */
-				
 			}
+
+			/*
+			 * Deduplication reduction should at least be greater than block list metadata.
+			 */
+			if (matchlen < dedupe_index_sz) {
+				DEBUG_STAT_EN(en = get_wtime_millis());
+				DEBUG_STAT_EN(fprintf(stderr, "Chunking speed %.3f MB/s, Overall Dedupe speed %.3f MB/s\n", 
+					get_mb_s(*size, strt, en_1), get_mb_s(*size, strt, en)));
+				DEBUG_STAT_EN(fprintf(stderr, "No Dedupe possible.\n"));
+				ctx->valid = 0;
+				return (0);
+			}
+
+			/*
+			 * Now copy the block data;
+			 */
+			for (i=0; i<blknum-2;) {
+				length = LE32(*((uint32_t *)g_dedupe_idx));
+				g_dedupe_idx += RABIN_ENTRY_SIZE;
+				++i;
+
+				j = length & RABIN_INDEX_FLAG;
+				length = length & RABIN_INDEX_VALUE;
+				if (!j) {
+					memcpy(tgt, src, length);
+					tgt += length;
+					src += length;
+				} else {
+					src += length;
+					g_dedupe_idx += (RABIN_ENTRY_SIZE * 2);
+					i += 2;
+				}
+			}
+			pos1 = tgt - ctx->cbuf;
+			blknum |= GLOBAL_FLAG;
 			goto dedupe_done;
 		}
 

@@ -371,10 +371,11 @@ get_mb_s(uint64_t bytes, double strt, double en)
 }
 
 void
-get_sysinfo(my_sysinfo *msys_info)
+get_sys_limits(my_sysinfo *msys_info)
 {
 	struct sysinfo sys_info;
 	int rv;
+	char *val;
 
 	rv = sysinfo(&sys_info);
 
@@ -386,4 +387,22 @@ get_sysinfo(my_sysinfo *msys_info)
 	msys_info->totalswap = sys_info.totalswap;
 	msys_info->freeswap = sys_info.freeswap;
 	msys_info->mem_unit = sys_info.mem_unit;
+
+	if ((val = getenv("PCOMPRESS_INDEX_MEM")) != NULL) {
+		uint64_t mem;
+
+		/*
+		 * Externally specified index limit in MB.
+		 */
+		mem = strtoull(val, NULL, 0);
+		mem *= (1024 * 1024);
+		if (mem > (1024 * 1024) && mem < msys_info->freeram) {
+			msys_info->freeram = mem;
+		}
+	}
+
+	/*
+	 * Use a maximum of approx 75% of free RAM for the index.
+	 */
+	msys_info->freeram = (msys_info->freeram >> 1) + (msys_info->freeram >> 2);
 }

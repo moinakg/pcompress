@@ -1908,6 +1908,14 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	nprocs = nthreads;
 	fprintf(stderr, "\n");
 
+	if (enable_rabin_global && !pipe_mode) {
+		my_sysinfo msys_info;
+
+		get_sys_limits(&msys_info);
+		global_dedupe_bufadjust(rab_blk_size, &chunksize, 0, algo, cksum,
+				CKSUM_BLAKE256, sbuf.st_size, msys_info.freeram, nthreads);
+	}
+
 	dary = (struct cmp_data **)slab_calloc(NULL, nprocs, sizeof (struct cmp_data *));
 	if ((enable_rabin_scan || enable_fixed_scan))
 		cread_buf = (uchar_t *)slab_alloc(NULL, compressed_chunksize);
