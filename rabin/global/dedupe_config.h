@@ -51,6 +51,12 @@ typedef enum {
 	MODE_ARCHIVE
 } dedupe_mode_t;
 
+struct seg_map_fd {
+	int fd;
+	void *mapping;
+	uint32_t len;
+};
+
 typedef struct {
 	char rootdir[PATH_MAX+1];
 	uint32_t chunk_sz; // Numeric ID: 1 - 4k ... 5 - 64k
@@ -65,6 +71,7 @@ typedef struct {
 	int pct_interval; // Similarity based match intervals in %age.
 			// The items below are computed given the above
 			// components.
+	int intervals;
 	dedupe_mode_t dedupe_mode;
 
 	uint32_t chunk_sz_bytes; // Average chunk size
@@ -76,7 +83,8 @@ typedef struct {
 	int num_containers; // Number of containers in a directory
 	int nthreads; // Number of threads processing data segments in parallel
 	int seg_fd_w; 
-	int *seg_fd_r; // One read-only fd per thread for mapping in portions of the
+	uint32_t pagesize;
+	struct seg_map_fd *seg_fd_r; // One read-only fd per thread for mapping in portions of the
 		       // segment metadata cache.
 	int valid;
 	void *dbdata;

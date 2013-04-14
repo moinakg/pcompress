@@ -75,6 +75,7 @@
 #include <pthread.h>
 #include <heapq.h>
 #include <xxhash.h>
+#include <blake2_digest.h>
 
 #include "rabin_dedup.h"
 #if defined(__USE_SSE_INTRIN__) && defined(__SSE4_1__) && RAB_POLYNOMIAL_WIN_SIZE == 16
@@ -107,6 +108,7 @@ static pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
 uint64_t ir[256], out[256];
 static int inited = 0;
 archive_config_t *arc = NULL;
+static struct blake2_dispatch bdsp;
 
 static uint32_t
 dedupe_min_blksz(int rab_blk_sz)
@@ -215,6 +217,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 				pthread_mutex_unlock(&init_lock);
 				return (NULL);
 			}
+			blake2_module_init(&bdsp, &proc_info);
 		}
 		inited = 1;
 	}
@@ -253,6 +256,8 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx->deltac_min_distance = props->deltac_min_distance;
 	ctx->pagesize = sysconf(_SC_PAGE_SIZE);
 	ctx->similarity_cksums = NULL;
+	if (arc)
+		arc->pagesize = ctx->pagesize;
 
 	/*
 	 * Scale down similarity percentage based on avg block size unless user specified
@@ -302,14 +307,13 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	}
 
 	if (arc && dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL) {
-		ctx->similarity_cksums = (uchar_t *)slab_calloc(NULL, 90 / arc->pct_interval, 32);
+		ctx->similarity_cksums = (uchar_t *)slab_calloc(NULL, arc->intervals, 32);
 		if (!ctx->similarity_cksums) {
 			fprintf(stderr,
 			    "Could not allocate dedupe context, out of memory\n");
 			destroy_dedupe_context(ctx);
 			return (NULL);
 		}
-		ctx->similarity_count = 90 / arc->pct_interval;
 	}
 
 	ctx->lzma_data = NULL;
@@ -776,7 +780,11 @@ process_blocks:
 			} else {
 				uchar_t *seg_heap, *sim_ck;
 				archive_config_t *cfg;
-				uint32_t increment, len;
+				uint32_t increment, len, mapped_blks;
+				global_blockentry_t *seg_blocks;
+				uint64_t seg_offset, offset;
+				int written;
+				global_blockentry_t **htab;
 
 				/*
 				 * This code block implements Segmented similarity based Dedupe with
@@ -784,7 +792,10 @@ process_blocks:
 				 */
 				cfg = ctx->arc;
 				seg_heap = (uchar_t *)ctx->g_blocks - cfg->segment_sz_bytes;
+				ary_sz = cfg->segment_sz * sizeof (global_blockentry_t **);
+				htab = (global_blockentry_t **)(seg_heap - ary_sz);
 				for (i=0; i<blknum; i += cfg->segment_sz) {
+					blake2b_state S1, S2;
 					length = 0;
 
 					/*
@@ -797,19 +808,71 @@ process_blocks:
 					 * Compute the cumulative similarity minhashes.
 					 */
 					sim_ck = ctx->similarity_cksums;
-					increment = length / ctx->similarity_count;
+					increment = length / cfg->intervals;
 					len = increment;
 					src = buf1 + ctx->g_blocks[i].offset;
 					tgt = seg_heap;
 					memcpy(tgt, src, length);
-					for (j=0; j<ctx->similarity_count; j++) {
+					bdsp.blake2b_init(&S1, 32);
+					for (j=0; j<cfg->intervals; j++) {
 						reset_heap(&heap, len/8);
 						ksmallest((int64_t *)seg_heap, length, &heap);
-						compute_checksum(sim_ck, CKSUM_BLAKE256, seg_heap, len, 0, 0);
+						bdsp.blake2b_update(&S1, seg_heap + len - increment, increment);
+						memcpy(&S2, &S1, sizeof (S1));
+						bdsp.blake2b_final(&S2, sim_ck, 32);
 						len += increment;
 						sim_ck += 32;
 					}
+
+					/*
+					 * Now lookup the similarity minhashes starting at the highest
+					 * significance level.
+					 */
+					sim_ck -= 32;
+					written = 0;
+					increment = cfg->intervals * cfg->pct_interval;
+					sem_wait(ctx->index_sem);
+					seg_offset = db_segcache_pos(cfg, ctx->id);
+					for (j=cfg->intervals; j > 0; j--) {
+						hash_entry_t *he;
+
+						he = db_lookup_insert_s(cfg, sim_ck, j-1, seg_offset, 0, 1);
+						if (he) {
+							/*
+							 * Match found. Load segment metadata from disk and perform
+							 * identity deduplication with the segment chunks.
+							 */
+							memset(htab, 0, ary_sz);
+							offset = he->item_offset;
+							if (db_segcache_map(cfg, ctx->id, &mapped_blks, &offset,
+							    (uchar_t **)&seg_blocks) == -1) {
+								fprintf(stderr, "Segment cache mmap failed.\n");
+								ctx->valid = 0;
+								return (0);
+							}
+							
+							if (increment > 70) {
+								j = cfg->intervals - j;
+							}
+						} else if (!written) {
+							if (blknum - i >= cfg->segment_sz) {
+								db_segcache_write(cfg, ctx->id, src, len, cfg->segment_sz,
+								    ctx->file_offset);
+							} else {
+								db_segcache_write(cfg, ctx->id, src, len, blknum-i,
+								    ctx->file_offset);
+							}
+							written = 1;
+						}
+						increment -= cfg->pct_interval;
+						sim_ck -= 32;
+					}
 				}
+
+				/*
+				 * Signal the next thread in sequence to access the index.
+				 */
+				sem_post(ctx->index_sem_next);
 			}
 
 			/*

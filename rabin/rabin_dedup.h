@@ -163,11 +163,14 @@ typedef struct rab_blockentry {
 	struct rab_blockentry *next;
 } rabin_blockentry_t;
 
+#pragma pack(1)
 typedef struct global_blockentry {
 	uint32_t length;
 	uint64_t offset;
+	struct global_blockentry *next; // Reqd when part of a hashtable
 	uchar_t cksum[CKSUM_MAX_BYTES];
 } global_blockentry_t;
+#pragma pack()
 
 typedef struct {
 	unsigned char *current_window_data;
@@ -189,7 +192,6 @@ typedef struct {
 	sem_t *index_sem;
 	sem_t *index_sem_next;
 	uchar_t *similarity_cksums;
-	int similarity_count;
 	uint32_t pagesize;
 	int out_fd;
 	int id;

@@ -54,6 +54,11 @@ hash_entry_t *db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int 
 		   uint64_t item_offset, uint32_t item_size, int do_insert);
 void destroy_global_db_s(archive_config_t *cfg);
 
+int db_segcache_write(archive_config_t *cfg, int tid, uchar_t *buf, uint32_t len, uint32_t blknum, uint64_t file_offset);
+int db_segcache_pos(archive_config_t *cfg, int tid);
+int db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offset, uchar_t **blocks);
+int db_segcache_unmap(archive_config_t *cfg, int tid);
+
 #ifdef	__cplusplus
 }
 #endif

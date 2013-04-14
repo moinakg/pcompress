@@ -35,6 +35,7 @@
 #include <allocator.h>
 #include <pthread.h>
 #include <xxhash.h>
+#include <sys/mman.h>
 
 #include "index.h"
 
@@ -74,13 +75,23 @@ init_global_db(char *configfile)
 void
 static cleanup_indx(index_t *indx)
 {
-	int i;
+	int i, j;
 
 	if (indx) {
 		if (indx->list) {
 			for (i = 0; i < indx->intervals; i++) {
-				if (indx->list[i].tab)
+				if (indx->list[i].tab) {
+					for (j=0; j<indx->hash_slots; j++) {
+						hash_entry_t *he, *nxt;
+						he = indx->list[i].tab[j];
+						while (he) {
+							nxt = he->next;
+							free(he);
+							he = nxt;
+						}
+					}
 					free(indx->list[i].tab);
+				}
 			}
 			free(indx->list);
 		}
@@ -155,7 +166,7 @@ set_cfg:
 		*hash_slots = SLOTS_FOR_MEM(memlimit, *hash_entry_size);
 		*pct_interval = 0;
 	} else {
-		*intervals = 100 / *pct_interval - 1;
+		*intervals = 90 / *pct_interval - 1;
 		*hash_slots = file_sz / cfg->segment_sz_bytes + 1;
 		*hash_slots *= *intervals;
 	}
@@ -164,7 +175,7 @@ set_cfg:
 	// occupancy.
 	*memreqd = MEM_REQD(*hash_slots, *hash_entry_size);
 
-	if (*memreqd > (memlimit + (memlimit >> 2)) && cfg->dedupe_mode == MODE_SIMPLE &&
+	if (*memreqd > (memlimit + (memlimit >> 1)) && cfg->dedupe_mode == MODE_SIMPLE &&
 	    *pct_interval == 0) {
 		*pct_interval = DEFAULT_PCT_INTERVAL;
 		set_user = 1;
@@ -192,8 +203,8 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	}
 	orig_pct = pct_interval;
 	cfg = calloc(1, sizeof (archive_config_t));
-	
-	diff = (float)pct_interval / 100.0;
+
+	diff = (float)pct_interval / 90.0;
 	rv = setup_db_config_s(cfg, chunksize, &user_chunk_sz, &pct_interval, algo, ck, ck_sim,
 		 file_sz, &hash_slots, &hash_entry_size, &intervals, &memreqd, memlimit);
 
@@ -207,8 +218,10 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 		memreqd = hash_slots * MEM_PER_UNIT(hash_entry_size);
 	}
 
-	// Now create as many hash tables as there are similarity match intervals
-	// each having hash_slots / intervals slots.
+	/*
+	 * Now create as many hash tables as there are similarity match intervals
+	 * each having hash_slots / intervals slots.
+	 */
 	indx = calloc(1, sizeof (index_t));
 	if (!indx) {
 		free(cfg);
@@ -221,6 +234,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	indx->intervals = intervals;
 	indx->hash_slots = hash_slots / intervals;
 	cfg->nthreads = nthreads;
+	cfg->intervals = intervals;
 
 	for (i = 0; i < intervals; i++) {
 		indx->list[i].tab = (hash_entry_t **)calloc(hash_slots / intervals,
@@ -237,7 +251,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 		strcpy(cfg->rootdir, tmppath);
 		strcat(cfg->rootdir, "/.segXXXXXX");
 		cfg->seg_fd_w = mkstemp(cfg->rootdir);
-		cfg->seg_fd_r = (int *)malloc(sizeof (int) * nthreads);
+		cfg->seg_fd_r = (struct seg_map_fd *)malloc(sizeof (struct seg_map_fd) * nthreads);
 		if (cfg->seg_fd_w == -1 || cfg->seg_fd_r == NULL) {
 			cleanup_indx(indx);
 			if (cfg->seg_fd_r)
@@ -245,12 +259,108 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 			free(cfg);
 			return (NULL);
 		}
-			for (i = 0; i < nthreads; i++) {
-			cfg->seg_fd_r[i] = open(cfg->rootdir, O_RDONLY);
+		for (i = 0; i < nthreads; i++) {
+			cfg->seg_fd_r[i].fd = open(cfg->rootdir, O_RDONLY);
+			cfg->seg_fd_r[i].mapping = NULL;
 		}
 	}
 	cfg->dbdata = indx;
 	return (cfg);
+}
+
+/*
+ * Functions to handle segment metadata cache for segmented similarity based deduplication.
+ * These functions are not thread-safe by design. The caller must ensure thread safety.
+ */
+
+/*
+ * Add new segment block list array into the metadata cache. Once added the entry is
+ * not removed till the program exits.
+ */
+int
+db_segcache_write(archive_config_t *cfg, int tid, uchar_t *buf, uint32_t len, uint32_t blknum,
+		  uint64_t file_offset)
+{
+	int64_t w;
+	uchar_t *hdr[16];
+
+	*((uint32_t *)hdr) = len;
+	*((uint32_t *)(hdr + 4)) = blknum;
+	*((uint32_t *)(hdr + 8)) = file_offset;
+
+	w = Write(cfg->seg_fd_w, hdr, sizeof (hdr));
+	if (w < sizeof (hdr))
+		return (-1);
+	w = Write(cfg->seg_fd_w, buf, len);
+	if (w < len)
+		return (-1);
+	return (0);
+}
+
+/*
+ * Get the current file pointer position of the metadata file. This indicates the
+ * position where the next entry will be added.
+ */
+int
+db_segcache_pos(archive_config_t *cfg, int tid)
+{
+	return (lseek(cfg->seg_fd_w, 0, SEEK_CUR));
+}
+
+/*
+ * Mmap the requested segment metadata array.
+ */
+int
+db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offset, uchar_t **blocks)
+{
+	uchar_t *mapbuf;
+	uchar_t *hdr[16];
+	int64_t r;
+	int fd;
+	uint32_t len, adj;
+
+	/*
+	 * Ensure previous mapping is removed.
+	 */
+	db_segcache_unmap(cfg, tid);
+	fd = cfg->seg_fd_r[tid].fd;
+	if (lseek(fd, *offset, SEEK_SET) != *offset)
+		return (-1);
+
+	/*
+	 * Read header first so that we know how much to map.
+	 */
+	r = Read(fd, hdr, sizeof (hdr));
+	if (r < sizeof (hdr))
+		return (-1);
+
+	*offset += sizeof (hdr);
+	len = *((uint32_t *)hdr);
+	adj = *offset % cfg->pagesize;
+	*blknum = *((uint32_t *)(hdr + 4));
+	mapbuf = mmap(NULL, len + adj, PROT_READ, MAP_SHARED, fd, *offset - adj);
+
+	if (mapbuf == MAP_FAILED)
+		return (-1);
+	*offset = *((uint32_t *)(hdr + 8));
+	*blocks = mapbuf + adj;
+	cfg->seg_fd_r[tid].mapping = mapbuf;
+	cfg->seg_fd_r[tid].len = len + adj;
+
+	return (0);
+}
+
+/*
+ * Remove the metadata mapping.
+ */
+int
+db_segcache_unmap(archive_config_t *cfg, int tid)
+{
+	if (cfg->seg_fd_r[tid].mapping) {
+		munmap(cfg->seg_fd_r[tid].mapping, cfg->seg_fd_r[tid].len);
+		cfg->seg_fd_r[tid].mapping = NULL;
+	}
+	return (0);
 }
 
 static inline int
@@ -296,7 +406,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 
 	pent = &(htab[htab_entry]);
 	ent = htab[htab_entry];
-	if (cfg->pct_interval == 0) { // Single file global dedupe case
+	if (cfg->pct_interval == 0) { // Global dedupe with simple index
 		while (ent) {
 			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0 &&
 			    ent->item_size == item_size) {
@@ -340,7 +450,7 @@ destroy_global_db_s(archive_config_t *cfg)
 	cleanup_indx(indx);
 	if (cfg->pct_interval > 0) {
 		for (i = 0; i < cfg->nthreads; i++) {
-			close(cfg->seg_fd_r[i]);
+			close(cfg->seg_fd_r[i].fd);
 		}
 		free(cfg->seg_fd_r);
 		close(cfg->seg_fd_w);
