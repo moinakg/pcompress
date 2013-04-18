@@ -45,7 +45,7 @@ archive_config_t *init_global_db(char *configfile);
 int setup_db_config_s(archive_config_t *cfg, uint32_t chunksize, uint64_t *user_chunk_sz,
 		 int *pct_interval, const char *algo, cksum_t ck, cksum_t ck_sim,
 		 size_t file_sz, uint32_t *hash_slots, int *hash_entry_size,
-		 uint32_t *intervals, uint64_t *memreqd, size_t memlimit);
+		 uint64_t *memreqd, size_t memlimit);
 archive_config_t *init_global_db_s(char *path, char *tmppath, uint32_t chunksize,
 			uint64_t user_chunk_sz, int pct_interval, const char *algo,
 			cksum_t ck, cksum_t ck_sim, size_t file_sz, size_t memlimit,
@@ -56,7 +56,7 @@ void destroy_global_db_s(archive_config_t *cfg);
 
 int db_segcache_write(archive_config_t *cfg, int tid, uchar_t *buf, uint32_t len, uint32_t blknum, uint64_t file_offset);
 int db_segcache_pos(archive_config_t *cfg, int tid);
-int db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offset, uchar_t **blocks);
+int db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offset, uchar_t *blocks);
 int db_segcache_unmap(archive_config_t *cfg, int tid);
 
 #ifdef	__cplusplus

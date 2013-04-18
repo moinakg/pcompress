@@ -108,7 +108,10 @@ get_compress_str(compress_algo_t algo)
 static cksum_t
 get_cksum_type(char *cksum_name)
 {
-	if (strcmp(cksum_name, "SHA256") == 0) {
+	if (strcmp(cksum_name, "CRC64") == 0) {
+		return (CKSUM_CRC64);
+
+	} else if (strcmp(cksum_name, "SHA256") == 0) {
 		return (CKSUM_SHA256);
 
 	} else if (strcmp(cksum_name, "SHA512") == 0) {
@@ -132,7 +135,10 @@ get_cksum_type(char *cksum_name)
 static char *
 get_cksum_str(cksum_t ck)
 {
-	if (ck == CKSUM_SHA256) {
+	if (ck == CKSUM_CRC64) {
+		return ("CRC64");
+
+	} else if (ck == CKSUM_SHA256) {
 		return ("SHA256");
 
 	} else if (ck == CKSUM_SHA512) {
@@ -156,7 +162,10 @@ get_cksum_str(cksum_t ck)
 static int
 get_cksum_sz(cksum_t ck)
 {
-	if (ck == CKSUM_SHA256 || ck == CKSUM_BLAKE256 || ck == CKSUM_KECCAK256) {
+	if (ck == CKSUM_CRC64) {
+		return (8);
+
+	} else if (ck == CKSUM_SHA256 || ck == CKSUM_BLAKE256 || ck == CKSUM_KECCAK256) {
 		return (32);
 
 	} else if (ck == CKSUM_SHA512 || ck == CKSUM_BLAKE512 || ck == CKSUM_KECCAK512) {
@@ -360,9 +369,10 @@ set_config_s(archive_config_t *cfg, const char *algo, cksum_t ck, cksum_t ck_sim
 	cfg->archive_sz = file_sz;
 	cfg->dedupe_mode = MODE_SIMILARITY;
 
-	if (cfg->archive_sz <= SIXTEEN_GB || pct_interval == 0 || pct_interval == 100) {
+	if (cfg->archive_sz <= SIXTEEN_GB && (pct_interval == 0 || pct_interval == 100)) {
 		cfg->dedupe_mode = MODE_SIMPLE;
 		cfg->segment_sz_bytes = user_chunk_sz;
+		cfg->similarity_cksum_sz = cfg->chunk_cksum_sz;
 
 	} else if (cfg->archive_sz < ONE_TB) {
 		cfg->segment_sz_bytes = FOUR_MB;

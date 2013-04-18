@@ -396,13 +396,13 @@ get_sys_limits(my_sysinfo *msys_info)
 		 */
 		mem = strtoull(val, NULL, 0);
 		mem *= (1024 * 1024);
-		if (mem > (1024 * 1024) && mem < msys_info->freeram) {
+		if (mem >= (1024 * 1024) && mem < msys_info->freeram) {
 			msys_info->freeram = mem;
 		}
+	} else {
+		/*
+		 * Use a maximum of approx 75% of free RAM for the index(if limit was not specified).
+		 */
+		msys_info->freeram = (msys_info->freeram >> 1) + (msys_info->freeram >> 2);
 	}
-
-	/*
-	 * Use a maximum of approx 75% of free RAM for the index.
-	 */
-	msys_info->freeram = (msys_info->freeram >> 1) + (msys_info->freeram >> 2);
 }

@@ -1659,37 +1659,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	props.cksum = cksum;
 	props.buf_extra = 0;
 	cread_buf = NULL;
-
-	if (_props_func) {
-		_props_func(&props, level, chunksize);
-		if (chunksize + props.buf_extra > compressed_chunksize) {
-			compressed_chunksize += (chunksize + props.buf_extra - 
-			    compressed_chunksize);
-		}
-	}
-
 	flags = 0;
 	sbuf.st_size = 0;
 	dedupe_flag = RABIN_DEDUPE_SEGMENTED; // Silence the compiler
-	if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
-		if (enable_rabin_global) {
-			flags |= (FLAG_DEDUP | FLAG_DEDUP_FIXED);
-			dedupe_flag = RABIN_DEDUPE_FILE_GLOBAL;
-		} else if (enable_rabin_scan) {
-			flags |= FLAG_DEDUP;
-			dedupe_flag = RABIN_DEDUPE_SEGMENTED;
-		} else {
-			flags |= FLAG_DEDUP_FIXED;
-			dedupe_flag = RABIN_DEDUPE_FIXED;
-		}
-		/* Additional scratch space for dedup arrays. */
-		if (chunksize + dedupe_buf_extra(chunksize, 0, algo, enable_delta_encode)
-		    > compressed_chunksize) {
-			compressed_chunksize += (chunksize +
-			    dedupe_buf_extra(chunksize, 0, algo, enable_delta_encode)) -
-			    compressed_chunksize;
-		}
-	}
 
 	if (encrypt_type) {
 		uchar_t pw[MAX_PW_LEN];
@@ -1867,6 +1839,14 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		strcpy(tmpdir, tmp);
 	}
 
+	if (enable_rabin_global && !pipe_mode) {
+		my_sysinfo msys_info;
+
+		get_sys_limits(&msys_info);
+		global_dedupe_bufadjust(rab_blk_size, &chunksize, 0, algo, cksum,
+				CKSUM_BLAKE256, sbuf.st_size, msys_info.freeram, nthreads);
+	}
+
 	/*
 	 * Compressed buffer size must include zlib/dedup scratch space and
 	 * chunk header space.
@@ -1885,7 +1865,25 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		    compressed_chunksize);
 	}
 
+	if (_props_func) {
+		_props_func(&props, level, chunksize);
+		if (chunksize + props.buf_extra > compressed_chunksize) {
+			compressed_chunksize += (chunksize + props.buf_extra - 
+			    compressed_chunksize);
+		}
+	}
+
 	if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
+		if (enable_rabin_global) {
+			flags |= (FLAG_DEDUP | FLAG_DEDUP_FIXED);
+			dedupe_flag = RABIN_DEDUPE_FILE_GLOBAL;
+		} else if (enable_rabin_scan) {
+			flags |= FLAG_DEDUP;
+			dedupe_flag = RABIN_DEDUPE_SEGMENTED;
+		} else {
+			flags |= FLAG_DEDUP_FIXED;
+			dedupe_flag = RABIN_DEDUPE_FIXED;
+		}
 		/* Additional scratch space for dedup arrays. */
 		if (chunksize + dedupe_buf_extra(chunksize, 0, algo, enable_delta_encode)
 		    > compressed_chunksize) {
@@ -1907,14 +1905,6 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	if (nthreads * props.nthreads > 1) fprintf(stderr, "s");
 	nprocs = nthreads;
 	fprintf(stderr, "\n");
-
-	if (enable_rabin_global && !pipe_mode) {
-		my_sysinfo msys_info;
-
-		get_sys_limits(&msys_info);
-		global_dedupe_bufadjust(rab_blk_size, &chunksize, 0, algo, cksum,
-				CKSUM_BLAKE256, sbuf.st_size, msys_info.freeram, nthreads);
-	}
 
 	dary = (struct cmp_data **)slab_calloc(NULL, nprocs, sizeof (struct cmp_data *));
 	if ((enable_rabin_scan || enable_fixed_scan))

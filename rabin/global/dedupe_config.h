@@ -37,7 +37,7 @@ extern "C" {
 #define	DEFAULT_CHUNK_CKSUM	CKSUM_SHA256
 #define	DEFAULT_SIMILARITY_CKSUM	CKSUM_BLAKE256
 #define	DEFAULT_COMPRESS		COMPRESS_LZ4
-#define	DEFAULT_PCT_INTERVAL	2
+#define	DEFAULT_PCT_INTERVAL	5
 #define	CONTAINER_ITEMS		2048
 #define	MIN_CK 1
 #define	MAX_CK 5
@@ -71,7 +71,7 @@ typedef struct {
 	int pct_interval; // Similarity based match intervals in %age.
 			// The items below are computed given the above
 			// components.
-	int intervals;
+	int intervals, sub_intervals;
 	dedupe_mode_t dedupe_mode;
 
 	uint32_t chunk_sz_bytes; // Average chunk size
@@ -83,6 +83,7 @@ typedef struct {
 	int num_containers; // Number of containers in a directory
 	int nthreads; // Number of threads processing data segments in parallel
 	int seg_fd_w; 
+	uint64_t segcache_pos;
 	uint32_t pagesize;
 	struct seg_map_fd *seg_fd_r; // One read-only fd per thread for mapping in portions of the
 		       // segment metadata cache.
@@ -90,11 +91,14 @@ typedef struct {
 	void *dbdata;
 } archive_config_t;
 
-typedef struct _segment_entry {
-	uint64_t chunk_offset;
-	uint32_t chunk_length;
-	uchar_t *chunk_cksum;
-} segment_entry_t;
+#pragma pack(1)
+typedef struct global_blockentry {
+	uint32_t length;
+	uint64_t offset;
+	struct global_blockentry *next; // Reqd when part of a hashtable
+	uchar_t cksum[CKSUM_MAX_BYTES];
+} global_blockentry_t;
+#pragma pack()
 
 int read_config(char *configfile, archive_config_t *cfg);
 int write_config(char *configfile, archive_config_t *cfg);

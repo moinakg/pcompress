@@ -108,7 +108,7 @@ int
 setup_db_config_s(archive_config_t *cfg, uint32_t chunksize, uint64_t *user_chunk_sz,
 		 int *pct_interval, const char *algo, cksum_t ck, cksum_t ck_sim,
 		 size_t file_sz, uint32_t *hash_slots, int *hash_entry_size,
-		 uint32_t *intervals, uint64_t *memreqd, size_t memlimit)
+		 uint64_t *memreqd, size_t memlimit)
 {
 	int rv, set_user;
 
@@ -158,17 +158,20 @@ set_cfg:
 	// Compute total hashtable entries first
 	*hash_entry_size = sizeof (hash_entry_t) + cfg->similarity_cksum_sz - 1;
 	if (*pct_interval == 0) {
-		*intervals = 1;
+		cfg->intervals = 1;
+		cfg->sub_intervals = 0;
 		*hash_slots = file_sz / cfg->chunk_sz_bytes + 1;
 
 	} else if (*pct_interval == 100) {
-		*intervals = 1;
+		cfg->intervals = 1;
+		cfg->sub_intervals = 0;
 		*hash_slots = SLOTS_FOR_MEM(memlimit, *hash_entry_size);
 		*pct_interval = 0;
 	} else {
-		*intervals = 90 / *pct_interval - 1;
+		cfg->intervals = 100 / *pct_interval;
+		cfg->sub_intervals = cfg->segment_sz / cfg->intervals;
 		*hash_slots = file_sz / cfg->segment_sz_bytes + 1;
-		*hash_slots *= *intervals;
+		*hash_slots *= (cfg->intervals + cfg->sub_intervals);
 	}
 
 	// Compute memory required to hold all hash entries assuming worst case 50%
@@ -191,7 +194,6 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 {
 	archive_config_t *cfg;
 	int rv, orig_pct;
-	float diff;
 	uint32_t hash_slots, intervals, i;
 	uint64_t memreqd;
 	int hash_entry_size;
@@ -204,17 +206,12 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	orig_pct = pct_interval;
 	cfg = calloc(1, sizeof (archive_config_t));
 
-	diff = (float)pct_interval / 90.0;
 	rv = setup_db_config_s(cfg, chunksize, &user_chunk_sz, &pct_interval, algo, ck, ck_sim,
-		 file_sz, &hash_slots, &hash_entry_size, &intervals, &memreqd, memlimit);
+		 file_sz, &hash_slots, &hash_entry_size, &memreqd, memlimit);
 
 	// Reduce hash_slots to remain within memlimit
 	while (memreqd > memlimit) {
-		if (pct_interval == 0) {
-			hash_slots--;
-		} else {
-			hash_slots -= (hash_slots * diff);
-		}
+		hash_slots--;
 		memreqd = hash_slots * MEM_PER_UNIT(hash_entry_size);
 	}
 
@@ -228,23 +225,22 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 		return (NULL);
 	}
 
+	cfg->nthreads = nthreads;
+	intervals = cfg->intervals + cfg->sub_intervals;
 	indx->memlimit = memlimit - (hash_entry_size << 2);
 	indx->list = (htab_t *)calloc(intervals, sizeof (htab_t));
 	indx->hash_entry_size = hash_entry_size;
 	indx->intervals = intervals;
 	indx->hash_slots = hash_slots / intervals;
-	cfg->nthreads = nthreads;
-	cfg->intervals = intervals;
 
 	for (i = 0; i < intervals; i++) {
-		indx->list[i].tab = (hash_entry_t **)calloc(hash_slots / intervals,
-						sizeof (hash_entry_t *));
+		indx->list[i].tab = (hash_entry_t **)calloc(indx->hash_slots, sizeof (hash_entry_t *));
 		if (!(indx->list[i].tab)) {
 			cleanup_indx(indx);
 			free(cfg);
 			return (NULL);
 		}
-		indx->memused += ((hash_slots / intervals) * (sizeof (hash_entry_t *)));
+		indx->memused += ((indx->hash_slots) * (sizeof (hash_entry_t *)));
 	}
 
 	if (pct_interval > 0) {
@@ -264,6 +260,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 			cfg->seg_fd_r[i].mapping = NULL;
 		}
 	}
+	cfg->segcache_pos = 0;
 	cfg->dbdata = indx;
 	return (cfg);
 }
@@ -277,23 +274,25 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
  * Add new segment block list array into the metadata cache. Once added the entry is
  * not removed till the program exits.
  */
+#define SEGCACHE_HDR_SZ	12
 int
 db_segcache_write(archive_config_t *cfg, int tid, uchar_t *buf, uint32_t len, uint32_t blknum,
 		  uint64_t file_offset)
 {
 	int64_t w;
-	uchar_t *hdr[16];
+	uchar_t hdr[SEGCACHE_HDR_SZ];
 
-	*((uint32_t *)hdr) = len;
-	*((uint32_t *)(hdr + 4)) = blknum;
-	*((uint32_t *)(hdr + 8)) = file_offset;
+	*((uint32_t *)(hdr)) = blknum;
+	*((uint64_t *)(hdr + 4)) = file_offset;
 
 	w = Write(cfg->seg_fd_w, hdr, sizeof (hdr));
 	if (w < sizeof (hdr))
 		return (-1);
+	cfg->segcache_pos += w;
 	w = Write(cfg->seg_fd_w, buf, len);
 	if (w < len)
 		return (-1);
+	cfg->segcache_pos += w;
 	return (0);
 }
 
@@ -304,20 +303,19 @@ db_segcache_write(archive_config_t *cfg, int tid, uchar_t *buf, uint32_t len, ui
 int
 db_segcache_pos(archive_config_t *cfg, int tid)
 {
-	return (lseek(cfg->seg_fd_w, 0, SEEK_CUR));
+	return (cfg->segcache_pos);
 }
 
 /*
  * Mmap the requested segment metadata array.
  */
 int
-db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offset, uchar_t **blocks)
+db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offset, uchar_t *blocks)
 {
-	uchar_t *mapbuf;
-	uchar_t *hdr[16];
-	int64_t r;
+	uchar_t *mapbuf, *hdr;
 	int fd;
 	uint32_t len, adj;
+	uint64_t pos;
 
 	/*
 	 * Ensure previous mapping is removed.
@@ -328,22 +326,25 @@ db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offs
 		return (-1);
 
 	/*
-	 * Read header first so that we know how much to map.
+	 * Mmap hdr and blocks. We assume max # of rabin block entries and mmap (unless remaining
+	 * file length is less). The header contains actual number of block entries so mmap-ing
+	 * extra has no consequence other than address space usage.
 	 */
-	r = Read(fd, hdr, sizeof (hdr));
-	if (r < sizeof (hdr))
-		return (-1);
+	len = cfg->segment_sz * sizeof (global_blockentry_t) + SEGCACHE_HDR_SZ;
+	pos = cfg->segcache_pos;
+	if (pos - *offset < len)
+		len = pos - *offset;
 
-	*offset += sizeof (hdr);
-	len = *((uint32_t *)hdr);
 	adj = *offset % cfg->pagesize;
-	*blknum = *((uint32_t *)(hdr + 4));
 	mapbuf = mmap(NULL, len + adj, PROT_READ, MAP_SHARED, fd, *offset - adj);
-
 	if (mapbuf == MAP_FAILED)
 		return (-1);
-	*offset = *((uint32_t *)(hdr + 8));
-	*blocks = mapbuf + adj;
+
+	hdr = mapbuf + adj;
+	*blknum = *((uint32_t *)(hdr));
+	*offset = *((uint64_t *)(hdr + 4));
+	memcpy(blocks, hdr + SEGCACHE_HDR_SZ, *blknum * sizeof (global_blockentry_t));
+
 	cfg->seg_fd_r[tid].mapping = mapbuf;
 	cfg->seg_fd_r[tid].len = len + adj;
 

@@ -163,15 +163,6 @@ typedef struct rab_blockentry {
 	struct rab_blockentry *next;
 } rabin_blockentry_t;
 
-#pragma pack(1)
-typedef struct global_blockentry {
-	uint32_t length;
-	uint64_t offset;
-	struct global_blockentry *next; // Reqd when part of a hashtable
-	uchar_t cksum[CKSUM_MAX_BYTES];
-} global_blockentry_t;
-#pragma pack()
-
 typedef struct {
 	unsigned char *current_window_data;
 	rabin_blockentry_t **blocks;
@@ -212,7 +203,7 @@ extern void update_dedupe_hdr(uchar_t *buf, uint64_t dedupe_index_sz_cmp,
 extern void reset_dedupe_context(dedupe_context_t *ctx);
 extern uint32_t dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo,
 	int delta_flag);
-extern int global_dedupe_bufadjust(uint32_t chunksize, uint64_t *user_chunk_sz, int pct_interval,
+extern int global_dedupe_bufadjust(uint32_t rab_blk_sz, uint64_t *user_chunk_sz, int pct_interval,
 		 const char *algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
 		 size_t memlimit, int nthreads);
 
