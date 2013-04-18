@@ -358,9 +358,7 @@ destroy_dedupe_context(dedupe_context_t *ctx)
 
 		pthread_mutex_lock(&init_lock);
 		if (arc) {
-			if (arc->dedupe_mode == MODE_SIMPLE) {
-				destroy_global_db_s(arc);
-			}
+			destroy_global_db_s(arc);
 		}
 		arc = NULL;
 		pthread_mutex_unlock(&init_lock);
