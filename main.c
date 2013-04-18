@@ -150,11 +150,14 @@ usage(void)
 	    "4) Attempt Rabin fingerprinting based deduplication on chunks:\n"
 	    "   %s -D ...\n"
 	    "   %s -D -r ... - Do NOT split chunks at a rabin boundary. Default is to split.\n\n"
-	    "5) Perform Delta Encoding in addition to Identical Dedup:\n"
+	    "5) Perform Deduplication across the entire dataset (Global Dedupe):\n"
+	    "   %s -G <-D|-F> - This option requires one of '-D' or '-F' to be specified\n"
+	    "             to identify the block splitting method.\n"
+	    "6) Perform Delta Encoding in addition to Identical Dedupe:\n"
 	    "   %s -E ... - This also implies '-D'. This checks for at least 60%% similarity.\n"
 	    "   The flag can be repeated as in '-EE' to indicate at least 40%% similarity.\n\n"
-	    "6) Number of threads can optionally be specified: -t <1 - 256 count>\n"
-	    "7) Other flags:\n"
+	    "7) Number of threads can optionally be specified: -t <1 - 256 count>\n"
+	    "8) Other flags:\n"
 	    "   '-L'    - Enable LZP pre-compression. This improves compression ratio of all\n"
 	    "             algorithms with some extra CPU and very low RAM overhead.\n"
 	    "   '-P'    - Enable Adaptive Delta Encoding. It can improve compresion ratio for\n"
@@ -164,11 +167,12 @@ usage(void)
 	    "             datasets.\n"
 	    "   '-S' <cksum>\n"
 	    "           - Specify chunk checksum to use:\n\n",
-	    UTILITY_VERSION, exec_name, exec_name, exec_name, exec_name, exec_name, exec_name);
+	    UTILITY_VERSION, exec_name, exec_name, exec_name, exec_name, exec_name, exec_name,
+	    exec_name);
 	list_checksums(stderr, "             ");
 	fprintf(stderr, "\n"
-	    "   '-F'    - Perform Fixed-Block Deduplication. Faster than '-D' in some cases\n"
-	    "             but with lower deduplication ratio.\n"
+	    "   '-F'    - Perform Fixed-Block Deduplication. Faster than '-D' but with lower\n"
+	    "             deduplication ratio.\n"
 	    "   '-B' <1..5>\n"
 	    "           - Specify an average Dedupe block size. 1 - 4K, 2 - 8K ... 5 - 64K.\n"
 	    "   '-M'    - Display memory allocator statistics\n"
@@ -2668,6 +2672,11 @@ main(int argc, char *argv[])
 
 	if (cksum == 0)
 		get_checksum_props(DEFAULT_CKSUM, &cksum, &cksum_bytes, &mac_bytes, 0);
+
+	if ((enable_rabin_scan || enable_fixed_scan) && cksum == CKSUM_CRC64) {
+		fprintf(stderr, "CRC64 checksum is not suitable for Deduplication.\n");
+		exit(1);
+	}
 
 	if (!encrypt_type) {
 		/*

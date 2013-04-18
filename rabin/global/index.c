@@ -169,16 +169,22 @@ set_cfg:
 		*pct_interval = 0;
 	} else {
 		cfg->intervals = 100 / *pct_interval;
-		cfg->sub_intervals = cfg->segment_sz / cfg->intervals;
+		cfg->sub_intervals = (cfg->segment_sz + 1) / cfg->intervals;
 		*hash_slots = file_sz / cfg->segment_sz_bytes + 1;
 		*hash_slots *= (cfg->intervals + cfg->sub_intervals);
 	}
 
-	// Compute memory required to hold all hash entries assuming worst case 50%
-	// occupancy.
+	/*
+	 * Compute memory required to hold all hash entries assuming worst case 50%
+	 * occupancy.
+	 */
 	*memreqd = MEM_REQD(*hash_slots, *hash_entry_size);
 
-	if (*memreqd > (memlimit + (memlimit >> 1)) && cfg->dedupe_mode == MODE_SIMPLE &&
+	/*
+	 * If memory required is more than twice the indicated memory limit then
+	 * we switch to Segmented Cumulative Similarity based dedupe.
+	 */
+	if (*memreqd > (memlimit * 2) && cfg->dedupe_mode == MODE_SIMPLE &&
 	    *pct_interval == 0) {
 		*pct_interval = DEFAULT_PCT_INTERVAL;
 		set_user = 1;
