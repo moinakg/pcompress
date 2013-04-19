@@ -316,7 +316,7 @@ db_segcache_pos(archive_config_t *cfg, int tid)
  * Mmap the requested segment metadata array.
  */
 int
-db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offset, uchar_t *blocks)
+db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offset, uchar_t **blocks)
 {
 	uchar_t *mapbuf, *hdr;
 	int fd;
@@ -349,7 +349,7 @@ db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offs
 	hdr = mapbuf + adj;
 	*blknum = *((uint32_t *)(hdr));
 	*offset = *((uint64_t *)(hdr + 4));
-	memcpy(blocks, hdr + SEGCACHE_HDR_SZ, *blknum * sizeof (global_blockentry_t));
+	*blocks = hdr + SEGCACHE_HDR_SZ;
 
 	cfg->seg_fd_r[tid].mapping = mapbuf;
 	cfg->seg_fd_r[tid].len = len + adj;

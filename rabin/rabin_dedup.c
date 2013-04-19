@@ -212,7 +212,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 			get_sys_limits(&msys_info);
 
 			arc = init_global_db_s(NULL, "/tmp", rab_blk_sz, chunksize, 0,
-					      algo, props->cksum, CKSUM_CRC64, file_size,
+					      algo, props->cksum, GLOBAL_SIM_CKSUM, file_size,
 					      msys_info.freeram, props->nthreads);
 			if (arc == NULL) {
 				pthread_mutex_unlock(&init_lock);
@@ -662,6 +662,7 @@ process_blocks:
 		uint64_t dedupe_index_sz = 0;
 		rabin_blockentry_t *be;
 		DEBUG_STAT_EN(uint32_t delta_calls, delta_fails, merge_count, hash_collisions);
+		DEBUG_STAT_EN(double w1, w2);
 		DEBUG_STAT_EN(delta_calls = 0);
 		DEBUG_STAT_EN(delta_fails = 0);
 		DEBUG_STAT_EN(hash_collisions = 0);
@@ -712,7 +713,9 @@ process_blocks:
 				 * threads without locking.
 				 */
 				length = 0;
+				DEBUG_STAT_EN(w1 = get_wtime_millis());
 				sem_wait(ctx->index_sem);
+				DEBUG_STAT_EN(w2 = get_wtime_millis());
 				for (i=0; i<blknum; i++) {
 					hash_entry_t *he;
 
@@ -793,11 +796,9 @@ process_blocks:
 				 * ======================================================================
 				 */
 				cfg = ctx->arc;
-				seg_heap = (uchar_t *)(ctx->g_blocks) - cfg->segment_sz_bytes;
+				seg_heap = (uchar_t *)(ctx->g_blocks) - cfg->segment_sz * cfg->chunk_cksum_sz;
 				ary_sz = cfg->segment_sz * sizeof (global_blockentry_t **);
 				htab = (global_blockentry_t **)(seg_heap - ary_sz);
-				seg_blocks = (global_blockentry_t *)(seg_heap - ary_sz - \
-						cfg->segment_sz * sizeof (global_blockentry_t));
 				for (i=0; i<blknum;) {
 					uint64_t crc;
 					length = 0;
@@ -808,12 +809,12 @@ process_blocks:
 					blks = cfg->segment_sz;
 					if (blks > blknum-i) blks = blknum-i;
 					len = 0;
+					length = 0;
+					tgt = seg_heap;
 					for (j=0; j<blks; j++) {
-						len += ctx->g_blocks[j+i].length;
-						if (len > cfg->segment_sz_bytes) {
-							break;
-						}
-						length = len;
+						memcpy(tgt, ctx->g_blocks[j+i].cksum, cfg->chunk_cksum_sz);
+						length += cfg->chunk_cksum_sz;
+						tgt += cfg->chunk_cksum_sz;
 					}
 					blks = j+i;
 
@@ -821,13 +822,10 @@ process_blocks:
 					 * Compute the cumulative similarity minhashes.
 					 */
 					sim_ck = ctx->similarity_cksums;
-					src = buf1 + ctx->g_blocks[i].offset;
-					tgt = seg_heap;
-					memcpy(tgt, src, length);
 					crc = 0;
 					increment = (length / cfg->intervals) / cfg->sub_intervals;
 					len = increment;
-					for (j=0; j<cfg->sub_intervals; j++) {
+					for (j = 0; j<cfg->sub_intervals; j++) {
 						reset_heap(&heap, len/8);
 						ksmallest((int64_t *)seg_heap, length/8, &heap);
 						crc = lzma_crc64(seg_heap + len - increment, increment, crc);
@@ -836,7 +834,6 @@ process_blocks:
 						sim_ck += cfg->similarity_cksum_sz;
 					}
 
-					len -= increment;
 					increment = length / cfg->intervals;
 					len = increment * 2;
 					for (j=0; j<cfg->intervals-1; j++) {
@@ -852,13 +849,65 @@ process_blocks:
 					 * Begin shared index access and write segment metadata to cache
 					 * first.
 					 */
-					if (i == 0) sem_wait(ctx->index_sem);
+					if (i == 0) {
+						DEBUG_STAT_EN(w1 = get_wtime_millis());
+						sem_wait(ctx->index_sem);
+						DEBUG_STAT_EN(w2 = get_wtime_millis());
+					}
 					sim_ck -= cfg->similarity_cksum_sz;
 					seg_offset = db_segcache_pos(cfg, ctx->id);
 					src = (uchar_t *)&(ctx->g_blocks[i]);
 					len = blks * sizeof (global_blockentry_t);
 					db_segcache_write(cfg, ctx->id, src, len, blks, 
 							  ctx->file_offset + ctx->g_blocks[i].offset);
+
+					/*
+					 * Insert current segment blocks into local hashtable and do partial
+					 * in-segment deduplication.
+					 */
+					be = NULL;
+					memset(htab, 0, ary_sz);
+					for (k=i; k<blks; k++) {
+						uint32_t hent;
+
+						hent = XXH32(ctx->g_blocks[k].cksum, cfg->chunk_cksum_sz, 0);
+						hent ^= (hent / cfg->chunk_cksum_sz);
+						hent = hent % cfg->segment_sz;
+
+						if (htab[hent] == NULL) {
+							htab[hent] = &(ctx->g_blocks[k]);
+							ctx->g_blocks[k].offset += ctx->file_offset;
+							ctx->g_blocks[k].next = NULL;
+							be = NULL;
+						} else {
+							be = htab[hent];
+							do {
+								if (memcmp(ctx->g_blocks[k].cksum,
+								    be->cksum, cfg->chunk_cksum_sz) == 0 &&
+								    ctx->g_blocks[k].length == be->length) {
+									global_blockentry_t *en;
+
+									/*
+									 * Block match in index was found. Update g_blocks
+									 * array.
+									 */
+									en = &(ctx->g_blocks[k]);
+									en->length = (en->length | RABIN_INDEX_FLAG) &
+										CLEAR_SIMILARITY_FLAG;
+									en->offset = be->offset;
+									break;
+								}
+								if (be->next) {
+									be = be->next;
+								} else {
+									be->next = &(ctx->g_blocks[k]);
+									be->next->offset += ctx->file_offset;
+									be->next->next = NULL;
+									break;
+								}
+							} while(1);
+						}
+					}
 
 					/*
 					 * Now lookup the similarity minhashes starting at the highest
@@ -873,18 +922,18 @@ process_blocks:
 							 * Match found. Load segment metadata from disk and perform
 							 * identity deduplication with the segment chunks.
 							 */
-							memset(htab, 0, ary_sz);
 							offset = he->item_offset;
 							if (db_segcache_map(cfg, ctx->id, &o_blks, &offset,
-							    (uchar_t *)seg_blocks) == -1) {
+							    (uchar_t **)&seg_blocks) == -1) {
 								fprintf(stderr, "Segment cache mmap failed.\n");
 								ctx->valid = 0;
 								return (0);
 							}
 
 							/*
-							 * First insert all the unique blocks from the mapped segment
-							 * blocks(chunks) array into the hashtable.
+							 * Now lookup loaded segment blocks in hashtable. If match is
+							 * found then the hashtable entry is updated to point to the
+							 * loaded segment block.
 							 */
 							for (k=0; k<o_blks; k++) {
 								uint32_t hent;
@@ -892,90 +941,27 @@ process_blocks:
 								hent ^= (hent / cfg->chunk_cksum_sz);
 								hent = hent % cfg->segment_sz;
 
-								if (htab[hent] == NULL) {
-									htab[hent] = &(seg_blocks[k]);
-									seg_blocks[k].offset += offset;
-									seg_blocks[k].next = NULL;
-								} else {
+								if (htab[hent] != NULL) {
 									be = htab[hent];
 									do {
+										if (be->length & RABIN_INDEX_FLAG)
+												goto next_ent;
 										if (memcmp(seg_blocks[k].cksum,
 										    be->cksum, cfg->chunk_cksum_sz) == 0 &&
 										    seg_blocks[k].length == be->length) {
-											be = NULL;
+											be->length = (be->length |
+												RABIN_INDEX_FLAG) &
+												CLEAR_SIMILARITY_FLAG;
+											be->offset = seg_blocks[k].offset +
+												offset;
 											break;
 										}
+next_ent:
 										if (be->next)
 											be = be->next;
 										else
 											break;
 									} while(1);
-
-									/*
-									 * be will be non-NULL if no match was found.
-									 * It will the last bucket in the hash slot.
-									 */
-									if (be) {
-										be->next = &(seg_blocks[k]);
-										seg_blocks[k].offset += offset;
-										seg_blocks[k].next = NULL;
-									}
-								}
-							}
-
-							/*
-							 * Now lookup current segment blocks(chunks) in the hashtable and
-							 * perform the actual deduplication.
-							 */
-							be = NULL;
-							for (k=i; k<blks; k++) {
-								uint32_t hent;
-
-								if (ctx->g_blocks[k].length & RABIN_INDEX_FLAG) continue;
-								hent = XXH32(ctx->g_blocks[k].cksum, cfg->chunk_cksum_sz, 0);
-								hent ^= (hent / cfg->chunk_cksum_sz);
-								hent = hent % cfg->segment_sz;
-
-								if (htab[hent] == NULL) {
-									htab[hent] = &(ctx->g_blocks[k]);
-									ctx->g_blocks[k].offset += ctx->file_offset;
-									ctx->g_blocks[k].next = NULL;
-									be = NULL;
-								} else {
-									be = htab[hent];
-									do {
-										if (memcmp(ctx->g_blocks[k].cksum,
-										    be->cksum, cfg->chunk_cksum_sz) == 0 &&
-										    ctx->g_blocks[k].length == be->length) {
-											break;
-										}
-										if (be->next) {
-											be = be->next;
-										} else {
-											be->next = &(ctx->g_blocks[k]);
-											be->next->offset +=
-													ctx->file_offset;
-											be->next->next = NULL;
-											be = NULL;
-											break;
-										}
-									} while(1);
-								}
-
-								/*
-								 * be will be non-NULL if match was found. It will
-								 * point to the matching bucket.
-								 */
-								if (be) {
-									global_blockentry_t *en;
-									/*
-									 * Block match in index was found. Update g_blocks
-									 * array.
-									 */
-									en = &(ctx->g_blocks[k]);
-									en->length = (en->length | RABIN_INDEX_FLAG) &
-										CLEAR_SIMILARITY_FLAG;
-									en->offset = be->offset;
 								}
 							}
 							break;
@@ -1058,7 +1044,7 @@ process_blocks:
 			if (matchlen < dedupe_index_sz) {
 				DEBUG_STAT_EN(en = get_wtime_millis());
 				DEBUG_STAT_EN(fprintf(stderr, "Chunking speed %.3f MB/s, Overall Dedupe speed %.3f MB/s\n", 
-					get_mb_s(*size, strt, en_1), get_mb_s(*size, strt, en)));
+					get_mb_s(*size, strt, en_1), get_mb_s(*size, strt, en - (w2 - w1))));
 				DEBUG_STAT_EN(fprintf(stderr, "No Dedupe possible.\n"));
 				ctx->valid = 0;
 				return (0);
