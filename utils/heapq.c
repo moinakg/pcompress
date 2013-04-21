@@ -174,38 +174,128 @@ _siftupmax_s(heap_t *h, __TYPE spos)
 int
 ksmallest(__TYPE *ary, __TYPE len, heap_t *heap)
 {
-    __TYPE elem, los;
-    __TYPE i, *hp, n;
-
-    n = heap->tot;
-    heap->ary = ary;
-    hp = ary;
-    heap->len = n;
+	__TYPE elem, los;
+	__TYPE i, *hp, n;
+	__TYPE tmp;
+	
+	n = heap->tot;
+	heap->ary = ary;
+	hp = ary;
+	heap->len = n;
 
 #ifdef ERROR_CHK
-    if(_siftupmax(heap, n/2-1, 0) == -1)
-        return (-1);
+	if(_siftupmax(heap, n/2-1, 0) == -1)
+		return (-1);
 #else
-    _siftupmax(heap, n/2-1, 0);
+		_siftupmax(heap, n/2-1, 0);
 #endif
 
-    los = hp[0];
-    for (i = n; i < len; i++) {
-        elem = ary[i];
-        if (elem >= los) {
-            continue;
-        }
-
-        hp[0] = elem; 
-#ifdef ERROR_CHK
-        if (_siftupmax_s(heap, 0) == -1)
-            return (-1);
-#else
-        _siftupmax_s(heap, 0);
-#endif
-        los = hp[0];
-    }
-
-    return 0;
+		los = hp[0];
+		for (i = n; i < len; i++) {
+			elem = ary[i];
+			if (elem >= los) {
+				continue;
+			}
+			
+			tmp = hp[0];
+			hp[0] = elem;
+			ary[i] = tmp;
+			#ifdef ERROR_CHK
+			if (_siftupmax_s(heap, 0) == -1)
+				return (-1);
+			#else
+				_siftupmax_s(heap, 0);
+				#endif
+				los = hp[0];
+		}
+		
+		return 0;
 }
 
+static int
+_siftdown(heap_t *h, __TYPE startpos, __TYPE pos)
+{
+	__TYPE newitem, parent, *heap;
+	__TYPE parentpos;
+
+	heap = h->ary;
+#ifdef ERROR_CHK
+	if (pos >= h->tot) {
+		fprintf(stderr, "_siftdown: index out of range: %" PRId64 ", len: %" PRId64 "\n", pos, h->len);
+		return -1;
+	}
+#endif
+
+	/* Follow the path to the root, moving parents down until finding
+	   a place newitem fits. */
+	newitem = heap[pos];
+	while (pos > startpos){
+		parentpos = (pos - 1) >> 1;
+		parent = heap[parentpos];
+		if (parent < newitem) {
+			break;
+		}
+		heap[pos] = parent;
+		pos = parentpos;
+	}
+	heap[pos] = newitem;
+	return (0);
+}
+
+static int
+_siftup(heap_t *h, __TYPE pos)
+{
+	__TYPE startpos, endpos, childpos, rightpos;
+	__TYPE newitem, *heap;
+
+	endpos = h->tot;
+	heap = h->ary;
+	startpos = pos;
+#ifdef ERROR_CHK
+	if (pos >= endpos) {
+		fprintf(stderr, "_siftup: index out of range: %" PRId64 ", len: %" PRId64 "\n", pos, endpos);
+		return -1;
+	}
+#endif
+
+	/* Bubble up the smaller child until hitting a leaf. */
+	newitem = heap[pos];
+	childpos = 2*pos + 1;    /* leftmost child position  */
+	while (childpos < endpos) {
+		/* Set childpos to index of smaller child.   */
+		rightpos = childpos + 1;
+		if (rightpos < endpos) {
+			if (heap[rightpos] < heap[childpos])
+				childpos = rightpos;
+		}
+		/* Move the smaller child up. */
+		heap[pos] = heap[childpos];
+		pos = childpos;
+		childpos = 2*pos + 1;
+	}
+
+	/* The leaf at pos is empty now.  Put newitem there, and and bubble
+	   it up to its final resting place (by sifting its parents down). */
+	heap[pos] = newitem;
+	return _siftdown(h, startpos, pos);
+}
+
+void
+heapify(heap_t *h, __TYPE *ary)
+{
+	__TYPE i, n;
+
+	n = h->tot;
+	h->ary = ary;
+
+	/* Transform bottom-up.  The largest index there's any point to
+	   looking at is the largest with a child index in-range, so must
+	   have 2*i + 1 < n, or i < (n-1)/2.  If n is even = 2*j, this is
+	   (2*j-1)/2 = j-1/2 so j-1 is the largest, which is n//2 - 1.  If
+	   n is odd = 2*j+1, this is (2*j+1-1)/2 = j so j-1 is the largest,
+	   and that's again n//2-1.
+	*/
+	for (i=n/2-1 ; i>=0 ; i--)
+		if(_siftup(h, i) == -1)
+			break;
+}

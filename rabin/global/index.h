@@ -45,7 +45,7 @@ archive_config_t *init_global_db(char *configfile);
 int setup_db_config_s(archive_config_t *cfg, uint32_t chunksize, uint64_t *user_chunk_sz,
 		 int *pct_interval, const char *algo, cksum_t ck, cksum_t ck_sim,
 		 size_t file_sz, uint32_t *hash_slots, int *hash_entry_size,
-		 uint64_t *memreqd, size_t memlimit);
+		 uint64_t *memreqd, size_t memlimit, char *tmppath);
 archive_config_t *init_global_db_s(char *path, char *tmppath, uint32_t chunksize,
 			uint64_t user_chunk_sz, int pct_interval, const char *algo,
 			cksum_t ck, cksum_t ck_sim, size_t file_sz, size_t memlimit,

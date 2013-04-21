@@ -108,7 +108,7 @@ int
 setup_db_config_s(archive_config_t *cfg, uint32_t chunksize, uint64_t *user_chunk_sz,
 		 int *pct_interval, const char *algo, cksum_t ck, cksum_t ck_sim,
 		 size_t file_sz, uint32_t *hash_slots, int *hash_entry_size,
-		 uint64_t *memreqd, size_t memlimit)
+		 uint64_t *memreqd, size_t memlimit, char *tmppath)
 {
 	int rv, set_user;
 
@@ -184,8 +184,8 @@ set_cfg:
 	 * If memory required is more than twice the indicated memory limit then
 	 * we switch to Segmented Cumulative Similarity based dedupe.
 	 */
-	if (*memreqd > (memlimit * 2) && cfg->dedupe_mode == MODE_SIMPLE &&
-	    *pct_interval == 0) {
+	if (*memreqd > (memlimit * 3) && cfg->dedupe_mode == MODE_SIMPLE &&
+	    *pct_interval == 0 && tmppath != NULL) {
 		*pct_interval = DEFAULT_PCT_INTERVAL;
 		set_user = 1;
 		goto set_cfg;
@@ -213,7 +213,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	cfg = calloc(1, sizeof (archive_config_t));
 
 	rv = setup_db_config_s(cfg, chunksize, &user_chunk_sz, &pct_interval, algo, ck, ck_sim,
-		 file_sz, &hash_slots, &hash_entry_size, &memreqd, memlimit);
+		 file_sz, &hash_slots, &hash_entry_size, &memreqd, memlimit, tmppath);
 
 	// Reduce hash_slots to remain within memlimit
 	while (memreqd > memlimit) {
@@ -232,7 +232,10 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	}
 
 	cfg->nthreads = nthreads;
-	intervals = cfg->intervals + cfg->sub_intervals;
+	if (cfg->dedupe_mode == MODE_SIMILARITY)
+		intervals = 1;
+	else
+		intervals = cfg->intervals + cfg->sub_intervals;
 	indx->memlimit = memlimit - (hash_entry_size << 2);
 	indx->list = (htab_t *)calloc(intervals, sizeof (htab_t));
 	indx->hash_entry_size = hash_entry_size;

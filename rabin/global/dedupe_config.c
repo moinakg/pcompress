@@ -374,7 +374,7 @@ set_config_s(archive_config_t *cfg, const char *algo, cksum_t ck, cksum_t ck_sim
 		cfg->segment_sz_bytes = user_chunk_sz;
 		cfg->similarity_cksum_sz = cfg->chunk_cksum_sz;
 
-	} else if (cfg->archive_sz < ONE_TB) {
+	} else if (cfg->archive_sz < (ONE_TB * 100)) {
 		cfg->segment_sz_bytes = FOUR_MB;
 
 	} else {

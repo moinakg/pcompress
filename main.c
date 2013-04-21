@@ -1834,7 +1834,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		}
 		if (!S_ISDIR(st.st_mode)) {
 			if (strcmp(tmp, "/tmp") != 0) {
-			tmp = "/tmp";
+				tmp = "/tmp";
 			} else {
 				fprintf(stderr, "Unable to find writable temporary dir.\n");
 				COMP_BAIL;

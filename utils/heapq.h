@@ -32,7 +32,8 @@ typedef struct {
     __TYPE tot;
 } heap_t;
 
-extern int ksmallest(__TYPE *ary, __TYPE len, heap_t *heap);
-extern void reset_heap(heap_t *h, __TYPE tot);
+int ksmallest(__TYPE *ary, __TYPE len, heap_t *heap);
+void reset_heap(heap_t *h, __TYPE tot);
+void heapify(heap_t *h, __TYPE *ary);
 
 #endif

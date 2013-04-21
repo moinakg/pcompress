@@ -137,7 +137,6 @@
 #define	SIMILAR_EXACT 1
 #define	SIMILAR_PARTIAL 2
 #define	SIMILAR_REF 3
-#define	GLOBAL_SIM_CKSUM		CKSUM_CRC64
 
 /*
  * TYpes of delta operations.
