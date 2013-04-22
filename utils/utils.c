@@ -24,6 +24,7 @@
  */
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/param.h>
 #include <sys/time.h>
 #include <fcntl.h>
@@ -405,4 +406,18 @@ get_sys_limits(my_sysinfo *msys_info)
 		 */
 		msys_info->freeram = (msys_info->freeram >> 1) + (msys_info->freeram >> 2);
 	}
+}
+
+int
+chk_dir(char *dir)
+{
+	struct stat st;
+
+	if (stat(dir, &st) == -1) {
+		return (0);
+	}
+	if (!S_ISDIR(st.st_mode)) {
+		return (0);
+	}
+	return (1);
 }

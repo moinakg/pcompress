@@ -382,7 +382,6 @@ set_config_s(archive_config_t *cfg, const char *algo, cksum_t ck, cksum_t ck_sim
 	}
 
 	cfg->segment_sz = cfg->segment_sz_bytes / cfg->chunk_sz_bytes;
-
 	return (0);
 }
 

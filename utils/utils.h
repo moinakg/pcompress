@@ -219,6 +219,7 @@ extern uint64_t get_total_ram();
 extern double get_wtime_millis(void);
 extern double get_mb_s(uint64_t bytes, double strt, double en);
 extern void get_sys_limits(my_sysinfo *msys_info);
+extern int chk_dir(char *dir);
 extern void init_algo_props(algo_props_t *props);
 extern void init_pcompress();
 

@@ -181,8 +181,8 @@ set_cfg:
 	*memreqd = MEM_REQD(*hash_slots, *hash_entry_size);
 
 	/*
-	 * If memory required is more than twice the indicated memory limit then
-	 * we switch to Segmented Cumulative Similarity based dedupe.
+	 * If memory required is more than thrice the indicated memory limit then
+	 * we switch to Segmented Similarity based dedupe.
 	 */
 	if (*memreqd > (memlimit * 3) && cfg->dedupe_mode == MODE_SIMPLE &&
 	    *pct_interval == 0 && tmppath != NULL) {

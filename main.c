@@ -1730,6 +1730,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 
 	/* A host of sanity checks. */
 	if (!pipe_mode) {
+		char *tmp;
 		if ((uncompfd = open(filename, O_RDWR, 0)) == -1)
 			err_exit(1, "Cannot open: %s", filename);
 
@@ -1786,7 +1787,13 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		 */
 		strcpy(tmpfile1, filename);
 		strcpy(tmpfile1, dirname(tmpfile1));
-		strcpy(tmpdir, tmpfile1);
+
+		tmp = getenv("PCOMPRESS_CACHE_DIR");
+		if (tmp == NULL || !chk_dir(tmp)) {
+			strcpy(tmpdir, tmpfile1);
+		} else {
+			strcpy(tmpdir, tmp);
+		}
 		strcat(tmpfile1, "/.pcompXXXXXX");
 		snprintf(to_filename, sizeof (to_filename), "%s" COMP_EXTN, filename);
 		if ((compfd = mkstemp(tmpfile1)) == -1) {
@@ -1798,7 +1805,6 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		signal(SIGTERM, Int_Handler);
 	} else {
 		char *tmp;
-		struct stat st;
 
 		/*
 		 * Use stdin/stdout for pipe mode.
@@ -1817,27 +1823,18 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		/*
 		 * Get a workable temporary dir. Required if global dedupe is enabled.
 		 */
-		tmp = getenv("TMPDIR");
-		if (tmp == NULL) {
-			tmp = getenv("HOME");
-			if (tmp == NULL) {
-				if (getcwd(tmpdir, MAXPATHLEN) == NULL) {
-					tmp = "/tmp";
-				} else {
-					tmp = tmpdir;
+		tmp = getenv("PCOMPRESS_CACHE_DIR");
+		if (tmp == NULL || !chk_dir(tmp)) {
+			tmp = getenv("TMPDIR");
+			if (tmp == NULL || !chk_dir(tmp)) {
+				tmp = getenv("HOME");
+				if (tmp == NULL || !chk_dir(tmp)) {
+					if (getcwd(tmpdir, MAXPATHLEN) == NULL) {
+						tmp = "/tmp";
+					} else {
+						tmp = tmpdir;
+					}
 				}
-			}
-		}
-		if (stat(tmp, &st) == -1) {
-			fprintf(stderr, "Unable to find writable temporary dir.\n");
-			COMP_BAIL;
-		}
-		if (!S_ISDIR(st.st_mode)) {
-			if (strcmp(tmp, "/tmp") != 0) {
-				tmp = "/tmp";
-			} else {
-				fprintf(stderr, "Unable to find writable temporary dir.\n");
-				COMP_BAIL;
 			}
 		}
 		strcpy(tmpdir, tmp);
