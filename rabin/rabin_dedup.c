@@ -858,14 +858,14 @@ process_blocks:
 					qsort(seg_heap, length/8, 8, cmpint);
 
 					/*
-					 * Compute the range similarity minhashes.
+					 * Compute the range similarity hashes.
 					 */
 					sim_ck = ctx->similarity_cksums;
 					crc = 0;
 					sub_i = cfg->sub_intervals;
 					increment = (length / cfg->intervals) / sub_i;
 					tgt = seg_heap;
-					while (increment < cfg->chunk_cksum_sz/4 && sub_i > 0) {
+					while (increment < cfg->chunk_cksum_sz/4 && sub_i > 1) {
 						sub_i--;
 						increment = (length / cfg->intervals) / sub_i;
 					}
@@ -880,7 +880,7 @@ process_blocks:
 
 					increment = length / cfg->intervals;
 					for (j=0; j<cfg->intervals-1; j++) {
-						crc = lzma_crc64(tgt, increment/2, 0);
+						crc = lzma_crc64(tgt, increment/8, 0);
 						*((uint64_t *)sim_ck) = crc;
 						tgt += increment;
 						len -= increment;
@@ -958,11 +958,7 @@ process_blocks:
 						hash_entry_t *he;
 
 						he = db_lookup_insert_s(cfg, sim_ck, 0, seg_offset, 0, 1);
-
-						/*
-						 * If match found also check that match is not with self!
-						 */
-						if (he && he->item_offset != seg_offset) {
+						if (he) {
 							/*
 							 * Match found. Load segment metadata from disk and perform
 							 * identity deduplication with the segment chunks.

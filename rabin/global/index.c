@@ -432,7 +432,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 	if (cfg->pct_interval == 0) { // Global dedupe with simple index
 		while (ent) {
 			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0 &&
-			    ent->item_size == item_size) {
+			    ent->item_size == item_size && ent->item_offset != item_offset) {
 				return (ent);
 			}
 			pent = &(ent->next);
@@ -440,7 +440,8 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		}
 	} else {
 		while (ent) {
-			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0) {
+			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0 &&
+			    ent->item_offset != item_offset) {
 				return (ent);
 			}
 			pent = &(ent->next);
