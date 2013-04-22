@@ -327,6 +327,19 @@ db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offs
 	uint64_t pos;
 
 	/*
+	 * If same mapping is re-attempted just return the pointer into the
+	 * existing mapping.
+	 */
+	adj = *offset % cfg->pagesize;
+	if (*offset == cfg->seg_fd_r[tid].cache_offset && cfg->seg_fd_r[tid].mapping) {
+		hdr = (uchar_t *)(cfg->seg_fd_r[tid].mapping) + adj;
+		*blknum = *((uint32_t *)(hdr));
+		*offset = *((uint64_t *)(hdr + 4));
+		*blocks = hdr + SEGCACHE_HDR_SZ;
+		return (0);
+	}
+
+	/*
 	 * Ensure previous mapping is removed.
 	 */
 	db_segcache_unmap(cfg, tid);
@@ -344,11 +357,11 @@ db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offs
 	if (pos - *offset < len)
 		len = pos - *offset;
 
-	adj = *offset % cfg->pagesize;
 	mapbuf = mmap(NULL, len + adj, PROT_READ, MAP_SHARED, fd, *offset - adj);
 	if (mapbuf == MAP_FAILED)
 		return (-1);
 
+	cfg->seg_fd_r[tid].cache_offset = *offset;
 	hdr = mapbuf + adj;
 	*blknum = *((uint32_t *)(hdr));
 	*offset = *((uint64_t *)(hdr + 4));

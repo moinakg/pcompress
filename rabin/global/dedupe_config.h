@@ -37,7 +37,7 @@ extern "C" {
 #define	DEFAULT_CHUNK_CKSUM	CKSUM_SHA256
 #define	DEFAULT_SIMILARITY_CKSUM	CKSUM_BLAKE256
 #define	DEFAULT_COMPRESS		COMPRESS_LZ4
-#define	DEFAULT_PCT_INTERVAL	8
+#define	DEFAULT_PCT_INTERVAL	10
 #define	CONTAINER_ITEMS		2048
 #define	MIN_CK 1
 #define	MAX_CK 5
@@ -55,6 +55,7 @@ typedef enum {
 struct seg_map_fd {
 	int fd;
 	void *mapping;
+	uint64_t cache_offset;
 	uint32_t len;
 };
 

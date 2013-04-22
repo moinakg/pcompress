@@ -309,8 +309,9 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	}
 
 	if (arc && dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL) {
-		ctx->similarity_cksums = (uchar_t *)slab_calloc(NULL, arc->intervals + arc->sub_intervals,
-								arc->similarity_cksum_sz);
+		ctx->similarity_cksums = (uchar_t *)slab_calloc(NULL,
+					arc->intervals + arc->sub_intervals,
+					arc->similarity_cksum_sz);
 		if (!ctx->similarity_cksums) {
 			fprintf(stderr,
 			    "Could not allocate dedupe context, out of memory\n");
@@ -388,6 +389,26 @@ cmpint(const void *a, const void *b)
 		return (0);
 	else
 		return (1);
+}
+
+static inline int
+ckcmp(uchar_t *a, uchar_t *b, int sz)
+{
+	size_t *v1 = (size_t *)a;
+	size_t *v2 = (size_t *)b;
+	int len;
+
+	len = 0;
+	do {
+		if (*v1 != *v2) {
+			return (1);
+		}
+		++v1;
+		++v2;
+		len += sizeof (size_t);
+	} while (len < sz);
+
+	return (0);
 }
 
 /**
@@ -859,7 +880,7 @@ process_blocks:
 
 					increment = length / cfg->intervals;
 					for (j=0; j<cfg->intervals-1; j++) {
-						crc = lzma_crc64(tgt, increment, 0);
+						crc = lzma_crc64(tgt, increment/2, 0);
 						*((uint64_t *)sim_ck) = crc;
 						tgt += increment;
 						len -= increment;
@@ -880,8 +901,7 @@ process_blocks:
 					seg_offset = db_segcache_pos(cfg, ctx->id);
 					src = (uchar_t *)&(ctx->g_blocks[i]);
 					len = blks * sizeof (global_blockentry_t);
-					db_segcache_write(cfg, ctx->id, src, len, blks-i, 
-							  ctx->file_offset);
+					db_segcache_write(cfg, ctx->id, src, len, blks-i, ctx->file_offset);
 
 					/*
 					 * Insert current segment blocks into local hashtable and do partial
@@ -903,7 +923,7 @@ process_blocks:
 						} else {
 							be = htab[hent];
 							do {
-								if (memcmp(ctx->g_blocks[k].cksum,
+								if (ckcmp(ctx->g_blocks[k].cksum,
 								    be->cksum, cfg->chunk_cksum_sz) == 0 &&
 								    ctx->g_blocks[k].length == be->length) {
 									global_blockentry_t *en;
@@ -938,7 +958,11 @@ process_blocks:
 						hash_entry_t *he;
 
 						he = db_lookup_insert_s(cfg, sim_ck, 0, seg_offset, 0, 1);
-						if (he) {
+
+						/*
+						 * If match found also check that match is not with self!
+						 */
+						if (he && he->item_offset != seg_offset) {
 							/*
 							 * Match found. Load segment metadata from disk and perform
 							 * identity deduplication with the segment chunks.
@@ -967,7 +991,7 @@ process_blocks:
 									do {
 										if (be->length & RABIN_INDEX_FLAG)
 											goto next_ent;
-										if (memcmp(seg_blocks[k].cksum,
+										if (ckcmp(seg_blocks[k].cksum,
 										    be->cksum, cfg->chunk_cksum_sz) == 0 &&
 										    seg_blocks[k].length == be->length) {
 											be->length = (be->length |
@@ -985,7 +1009,6 @@ next_ent:
 									} while(1);
 								}
 							}
-							break;
 						}
 						sim_ck -= cfg->similarity_cksum_sz;
 					}
@@ -1400,7 +1423,7 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size)
 			len = LE32(*((uint32_t *)g_dedupe_idx));
 			g_dedupe_idx += RABIN_ENTRY_SIZE;
 			++blk;
-			flag = len & GLOBAL_FLAG;
+			flag = len & RABIN_INDEX_FLAG;
 			len &= RABIN_INDEX_VALUE;
 
 			if (sz + len > data_sz) {

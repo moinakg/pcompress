@@ -1,5 +1,6 @@
 files.lst
 *.pc*
+.seg*
 *.o
 *.so
 pcompress
