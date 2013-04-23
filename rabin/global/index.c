@@ -158,21 +158,18 @@ set_cfg:
 	// Compute total hashtable entries first
 	*hash_entry_size = sizeof (hash_entry_t) + cfg->similarity_cksum_sz - 1;
 	if (*pct_interval == 0) {
-		cfg->intervals = 1;
-		cfg->sub_intervals = 0;
+		cfg->sub_intervals = 1;
 		*hash_slots = file_sz / cfg->chunk_sz_bytes + 1;
 
 	} else if (*pct_interval == 100) {
-		cfg->intervals = 1;
-		cfg->sub_intervals = 0;
+		cfg->sub_intervals = 1;
 		*hash_slots = SLOTS_FOR_MEM(memlimit, *hash_entry_size);
 		*pct_interval = 0;
 	} else {
 		cfg->intervals = 100 / *pct_interval;
-		cfg->sub_intervals = (cfg->segment_sz-2) / cfg->intervals * 2;
-		cfg->intervals--;
+		cfg->sub_intervals = (cfg->segment_sz / cfg->intervals) >> 1;
 		*hash_slots = file_sz / cfg->segment_sz_bytes + 1;
-		*hash_slots *= (cfg->intervals + cfg->sub_intervals);
+		*hash_slots *= cfg->sub_intervals;
 	}
 
 	/*
@@ -236,7 +233,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	if (cfg->dedupe_mode == MODE_SIMILARITY)
 		intervals = 1;
 	else
-		intervals = cfg->intervals + cfg->sub_intervals;
+		intervals = cfg->sub_intervals;
 	indx->memlimit = memlimit - (hash_entry_size << 2);
 	indx->list = (htab_t *)calloc(intervals, sizeof (htab_t));
 	indx->hash_entry_size = hash_entry_size;

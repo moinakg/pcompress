@@ -310,7 +310,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 
 	if (arc && dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL) {
 		ctx->similarity_cksums = (uchar_t *)slab_calloc(NULL,
-					arc->intervals + arc->sub_intervals,
+					arc->sub_intervals,
 					arc->similarity_cksum_sz);
 		if (!ctx->similarity_cksums) {
 			fprintf(stderr,
@@ -860,31 +860,19 @@ process_blocks:
 					 * magnitudes.
 					 */
 					qsort(seg_heap, length/8, 8, cmpint);
-					sim_ck = ctx->similarity_cksums;
-					crc = 0;
-					sub_i = cfg->sub_intervals;
-					increment = (length / cfg->intervals) / sub_i;
-					tgt = seg_heap;
-					while (increment < cfg->chunk_cksum_sz/4 && sub_i > 1) {
-						sub_i--;
-						increment = (length / cfg->intervals) / sub_i;
-					}
 
 					/*
-					 * Compute the range similarity hashes.
+					 * Compute the min-values range similarity hashes.
 					 */
+					sim_ck = ctx->similarity_cksums;
+					sub_i = cfg->sub_intervals;
 					len = length;
+					tgt = seg_heap;
+					increment = cfg->chunk_cksum_sz;
+					if  (increment * sub_i > len)
+						sub_i = len / increment;
 					for (j = 0; j<sub_i; j++) {
-						crc = lzma_crc64(tgt, increment, 0);
-						*((uint64_t *)sim_ck) = crc;
-						tgt += increment;
-						len -= increment;
-						sim_ck += cfg->similarity_cksum_sz;
-					}
-
-					increment = length / cfg->intervals;
-					for (j=0; j<cfg->intervals-1; j++) {
-						crc = lzma_crc64(tgt, increment/8, 0);
+						crc = lzma_crc64(tgt, increment/4, 0);
 						*((uint64_t *)sim_ck) = crc;
 						tgt += increment;
 						len -= increment;
@@ -956,12 +944,12 @@ process_blocks:
 
 					/*
 					 * Now lookup all the similarity hashes. We sort the hashes first so that
-					 * all duplicates can be easily detected.
+					 * all duplicate hash values can be easily eliminated.
 					 */
-					qsort(ctx->similarity_cksums, cfg->intervals + sub_i - 1, 8, cmpint);
+					qsort(ctx->similarity_cksums, sub_i, 8, cmpint);
 					crc = 0;
 					off1 = UINT64_MAX;
-					for (j=cfg->intervals + sub_i; j > 0; j--) {
+					for (j=sub_i; j > 0; j--) {
 						hash_entry_t *he = NULL;
 
 						/*
