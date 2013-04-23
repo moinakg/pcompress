@@ -838,7 +838,7 @@ process_blocks:
 				ary_sz = cfg->segment_sz * sizeof (global_blockentry_t **);
 				htab = (global_blockentry_t **)(seg_heap - ary_sz);
 				for (i=0; i<blknum;) {
-					uint64_t crc;
+					uint64_t crc, off1;
 					length = 0;
 
 					/*
@@ -955,20 +955,41 @@ process_blocks:
 					}
 
 					/*
-					 * Now lookup the similarity hashes starting at the highest
-					 * significance level.
+					 * Now lookup all the similarity hashes. We sort the hashes first so that
+					 * all duplicates can be easily detected.
 					 */
+					qsort(ctx->similarity_cksums, cfg->intervals + sub_i - 1, 8, cmpint);
+					crc = 0;
+					off1 = UINT64_MAX;
 					for (j=cfg->intervals + sub_i; j > 0; j--) {
-						hash_entry_t *he = NULL, *he1 = NULL;
+						hash_entry_t *he = NULL;
 
-						he = db_lookup_insert_s(cfg, sim_ck, 0, seg_offset, 0, 1);
-						if (he && he != he1) {
+						/*
+						 * Check for duplicate checksum which need not be looked up
+						 * again.
+						 */
+						if (crc == *((uint64_t *)sim_ck)) {
+							he = NULL;
+						} else {
+							he = db_lookup_insert_s(cfg, sim_ck, 0, seg_offset, 0, 1);
+							/*
+							 * Check for different checksum but same segment match.
+							 * This is not a complete check but does help to reduce
+							 * wasted processing.
+							 */
+							if (he && off1 == he->item_offset) {
+								crc = *((uint64_t *)sim_ck);
+								he = NULL;
+							}
+						}
+						if (he) {
 							/*
 							 * Match found. Load segment metadata from disk and perform
 							 * identity deduplication with the segment chunks.
 							 */
-							he1 = he;
+							crc = *((uint64_t *)sim_ck);
 							offset = he->item_offset;
+							off1 = offset;
 							if (db_segcache_map(cfg, ctx->id, &o_blks, &offset,
 							    (uchar_t **)&seg_blocks) == -1) {
 								fprintf(stderr, "Segment cache mmap failed.\n");
