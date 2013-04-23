@@ -846,7 +846,6 @@ process_blocks:
 					 */
 					blks = cfg->segment_sz;
 					if (blks > blknum-i) blks = blknum-i;
-					len = 0;
 					length = 0;
 					tgt = seg_heap;
 					for (j=0; j<blks; j++) {
@@ -855,11 +854,12 @@ process_blocks:
 						tgt += cfg->chunk_cksum_sz;
 					}
 					blks = j+i;
-					qsort(seg_heap, length/8, 8, cmpint);
 
 					/*
-					 * Compute the range similarity hashes.
+					 * Sort concatenated chunk hash buffer by raw 64-bit integer
+					 * magnitudes.
 					 */
+					qsort(seg_heap, length/8, 8, cmpint);
 					sim_ck = ctx->similarity_cksums;
 					crc = 0;
 					sub_i = cfg->sub_intervals;
@@ -869,6 +869,10 @@ process_blocks:
 						sub_i--;
 						increment = (length / cfg->intervals) / sub_i;
 					}
+
+					/*
+					 * Compute the range similarity hashes.
+					 */
 					len = length;
 					for (j = 0; j<sub_i; j++) {
 						crc = lzma_crc64(tgt, increment, 0);
@@ -951,18 +955,19 @@ process_blocks:
 					}
 
 					/*
-					 * Now lookup the similarity minhashes starting at the highest
+					 * Now lookup the similarity hashes starting at the highest
 					 * significance level.
 					 */
 					for (j=cfg->intervals + sub_i; j > 0; j--) {
-						hash_entry_t *he;
+						hash_entry_t *he = NULL, *he1 = NULL;
 
 						he = db_lookup_insert_s(cfg, sim_ck, 0, seg_offset, 0, 1);
-						if (he) {
+						if (he && he != he1) {
 							/*
 							 * Match found. Load segment metadata from disk and perform
 							 * identity deduplication with the segment chunks.
 							 */
+							he1 = he;
 							offset = he->item_offset;
 							if (db_segcache_map(cfg, ctx->id, &o_blks, &offset,
 							    (uchar_t **)&seg_blocks) == -1) {

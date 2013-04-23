@@ -169,7 +169,8 @@ set_cfg:
 		*pct_interval = 0;
 	} else {
 		cfg->intervals = 100 / *pct_interval;
-		cfg->sub_intervals = (cfg->segment_sz + 1) / cfg->intervals;
+		cfg->sub_intervals = (cfg->segment_sz-2) / cfg->intervals * 2;
+		cfg->intervals--;
 		*hash_slots = file_sz / cfg->segment_sz_bytes + 1;
 		*hash_slots *= (cfg->intervals + cfg->sub_intervals);
 	}
