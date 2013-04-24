@@ -82,7 +82,7 @@ static props_func_ptr _props_func;
 
 static int main_cancel;
 static int adapt_mode = 0;
-static int pipe_mode = 0;
+static int pipe_mode = 0, pipe_out = 0;
 static int nthreads = 0;
 static int hide_mem_stats = 1;
 static int hide_cmp_stats = 1;
@@ -1116,7 +1116,7 @@ start_decompress(const char *filename, const char *to_filename)
 		if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
 			    algo, &props, enable_delta_encode, dedupe_flag, version, DECOMPRESS, 0,
-			    NULL);
+			    NULL, pipe_mode);
 			if (tdat->rctx == NULL) {
 				UNCOMP_BAIL;
 			}
@@ -1783,7 +1783,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		/*
 		 * Create a temporary file to hold compressed data which is renamed at
 		 * the end. The target file name is same as original file with the '.pz'
-		 * extension appended.
+		 * extension appended unless '-' was specified to output to stdout.
 		 */
 		strcpy(tmpfile1, filename);
 		strcpy(tmpfile1, dirname(tmpfile1));
@@ -1794,13 +1794,23 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		} else {
 			strcpy(tmpdir, tmp);
 		}
-		strcat(tmpfile1, "/.pcompXXXXXX");
-		snprintf(to_filename, sizeof (to_filename), "%s" COMP_EXTN, filename);
-		if ((compfd = mkstemp(tmpfile1)) == -1) {
-			perror("mkstemp ");
-			COMP_BAIL;
+
+		if (pipe_out) {
+			compfd = fileno(stdout);
+			if (compfd == -1) {
+				perror("fileno ");
+				COMP_BAIL;
+			}
+			f_name = NULL;
+		} else {
+			strcat(tmpfile1, "/.pcompXXXXXX");
+			snprintf(to_filename, sizeof (to_filename), "%s" COMP_EXTN, filename);
+			if ((compfd = mkstemp(tmpfile1)) == -1) {
+				perror("mkstemp ");
+				COMP_BAIL;
+			}
+			f_name = tmpfile1;
 		}
-		f_name = tmpfile1;
 		signal(SIGINT, Int_Handler);
 		signal(SIGTERM, Int_Handler);
 	} else {
@@ -1840,12 +1850,12 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		strcpy(tmpdir, tmp);
 	}
 
-	if (enable_rabin_global && !pipe_mode) {
+	if (enable_rabin_global) {
 		my_sysinfo msys_info;
 
 		get_sys_limits(&msys_info);
 		global_dedupe_bufadjust(rab_blk_size, &chunksize, 0, algo, cksum,
-				CKSUM_BLAKE256, sbuf.st_size, msys_info.freeram, nthreads);
+			CKSUM_BLAKE256, sbuf.st_size, msys_info.freeram, nthreads, pipe_mode);
 	}
 
 	/*
@@ -1952,7 +1962,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
 			    algo, &props, enable_delta_encode, dedupe_flag, VERSION, COMPRESS, sbuf.st_size,
-			    tmpdir);
+			    tmpdir, pipe_mode);
 			if (tdat->rctx == NULL) {
 				COMP_BAIL;
 			}
@@ -2095,7 +2105,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	file_offset = 0;
 	if (enable_rabin_split) {
 		rctx = create_dedupe_context(chunksize, 0, 0, algo, &props, enable_delta_encode,
-		    enable_fixed_scan, VERSION, COMPRESS, 0, NULL);
+		    enable_fixed_scan, VERSION, COMPRESS, 0, NULL, pipe_mode);
 		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 	} else {
 		rbytes = Read(uncompfd, cread_buf, chunksize);
@@ -2239,7 +2249,7 @@ comp_done:
 	}
 
 	if (err) {
-		if (compfd != -1 && !pipe_mode)
+		if (compfd != -1 && !pipe_mode && !pipe_out)
 			unlink(tmpfile1);
 		if (filename)
 			fprintf(stderr, "Error compressing file: %s\n", filename);
@@ -2260,7 +2270,7 @@ comp_done:
 		 * Rename the temporary file to the actual compressed file
 		 * unless we are in a pipe.
 		 */
-		if (!pipe_mode) {
+		if (!pipe_mode && !pipe_out) {
 			/*
 			 * Ownership and mode of target should be same as original.
 			 */
@@ -2621,25 +2631,32 @@ main(int argc, char *argv[])
 		usage(); /* At least 1 filename needed. */
 		exit(1);
 
-	} else if (num_rem == 1) {
+	} else if (num_rem == 1 || num_rem == 2) {
 		if (do_compress) {
 			char apath[MAXPATHLEN];
 
 			if ((filename = realpath(argv[optind], NULL)) == NULL)
 				err_exit(1, "%s", argv[optind]);
+
+			if (num_rem == 2) {
+				optind++;
+				if (*(argv[optind]) == '-') {
+					to_filename = "-";
+					pipe_out = 1;
+				}
+				to_filename = realpath(argv[optind], NULL);
+			} else {
+				strcpy(apath, filename);
+				strcat(apath, COMP_EXTN);
+				to_filename = realpath(apath, NULL);
+			}
+
 			/* Check if compressed file exists */
-			strcpy(apath, filename);
-			strcat(apath, COMP_EXTN);
-			if ((to_filename = realpath(apath, NULL)) != NULL) {
+			if (to_filename != NULL) {
 				free(filename);
 				err_exit(0, "Compressed file %s exists\n", to_filename);
 			}
-		} else {
-			usage();
-			exit(1);
-		}
-	} else if (num_rem == 2) {
-		if (do_uncompress) {
+		} else if (do_uncompress && num_rem == 2) {
 			/*
 			 * While decompressing, input can be stdin and output a physical file.
 			 */

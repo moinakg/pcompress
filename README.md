@@ -39,7 +39,7 @@ Usage
 =====
 
     To compress a file:
-       pcompress -c <algorithm> [-l <compress level>] [-s <chunk size>] <file>
+       pcompress -c <algorithm> [-l <compress level>] [-s <chunk size>] <file> [-]
        Where <algorithm> can be the folowing:
        lzfx   - Very fast and small algorithm based on LZF.
        lz4    - Ultra fast, high-throughput algorithm reaching RAM B/W at level1.
@@ -67,8 +67,12 @@ Usage
        <chunk_size> - This can be in bytes or can use the following suffixes:
                 g - Gigabyte, m - Megabyte, k - Kilobyte.
                 Larger chunks produce better compression at the cost of memory.
+                In case of Global Deduplication (see below) this chunk size is
+                just a hint and may get automatically adjusted.
        <compress_level> - Can be a number from 0 meaning minimum and 14 meaning
                 maximum compression.
+       '-'    - If '-' is given as the final argument then it specified that
+                compressed output should go to stdout.
 
 NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
       from http://libbsc.com/ . It is only available if pcompress in built with
@@ -129,6 +133,42 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
             -     Specify an average Dedupe block size. 1 - 4K, 2 - 8K ... 5 - 64K.
        '-M' -     Display memory allocator statistics
        '-C' -     Display compression statistics
+
+    Global Deduplication:
+       '-G' -     This flag enables Global Deduplication. This makes pcompress maintain an
+                  in-memory index to lookup cryptographic block hashes for duplicates. Once
+                  a duplicate is found it is replaced with a reference to the original block.
+                  This allows detecting and eliminating duplicate blocks across the entire
+                  dataset. In contrast using only '-D' or '-F' flags does deduplication only
+                  within the chunk but uses less memory and is much faster than Global Dedupe.
+
+                  The '-G' flag can be combined with either '-D' or '-F' flags to indicate
+                  rabin chunking or fixed chunking respectively. If these flags are not
+                  specified then the default is to assume rabin chunking via '-D'.
+                  All other Dedupe flags have the same meanings in this context.
+
+                  Delta Encoding is not supported with Global Deduplication at this time. The
+                  in-memory hashtable index can use upto 75% of free RAM depending on the size
+                  of the dataset. In Pipe mode the index will always use 75% of free RAM since
+                  the dataset size is not known. This is the simple full chunk or block index
+                  mode. If the available RAM is not enough to hold all block checksums then
+                  older block entries are discarded automatically from the matching hash slots.
+
+                  If pipe mode is not used and the given dataset is a file then Pcompress
+                  checks whether the index size will exceed three times of 75% of the available
+                  free RAM. In such a case it automatically switches to a Segmented Deduplication
+                  mode. Here data is first split into blocks as above. Then upto 2048 blocks are
+                  grouped together to form a larger segment. The individual block hashes for a
+                  segment are stored on a tempfile on disk. A few min-values hashes are then
+                  computed from the block hashes of the segment which are then loaded into the
+                  index. These hashes are used to detect segments that are approximately similar
+                  to each other. Once found the block hashes of the matching segments are loaded
+                  from the temp file and actual deduplication is performed. This allows the
+                  in-memory index size to be approximately 0.0025% of the total dataset size and
+                  requires very few disk reads for every 2048 blocks processed.
+                  
+                  In pipe mode Global Deduplication always uses a segmented similarity based
+                  index. It allows efficient network transfer of large data.
 
     Encryption flags:
        '-e <ALGO>'

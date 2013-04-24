@@ -190,7 +190,7 @@ typedef struct {
 
 extern dedupe_context_t *create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, 
 	int rab_blk_sz, const char *algo, const algo_props_t *props, int delta_flag, int dedupe_flag,
-	int file_version, compress_op_t op, uint64_t file_size, char *tmppath);
+	int file_version, compress_op_t op, uint64_t file_size, char *tmppath, int pipe_mode);
 extern void destroy_dedupe_context(dedupe_context_t *ctx);
 extern unsigned int dedupe_compress(dedupe_context_t *ctx, unsigned char *buf, 
 	uint64_t *size, uint64_t offset, uint64_t *rabin_pos, int mt);
@@ -205,6 +205,6 @@ extern uint32_t dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char 
 	int delta_flag);
 extern int global_dedupe_bufadjust(uint32_t rab_blk_sz, uint64_t *user_chunk_sz, int pct_interval,
 		 const char *algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
-		 size_t memlimit, int nthreads);
+		 size_t memlimit, int nthreads, int pipe_mode);
 
 #endif /* _RABIN_POLY_H_ */

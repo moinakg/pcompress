@@ -75,7 +75,6 @@
 #include <pthread.h>
 #include <heapq.h>
 #include <xxhash.h>
-#include <blake2_digest.h>
 
 #include "rabin_dedup.h"
 #if defined(__USE_SSE_INTRIN__) && defined(__SSE4_1__) && RAB_POLYNOMIAL_WIN_SIZE == 16
@@ -109,8 +108,6 @@ static pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
 uint64_t ir[256], out[256];
 static int inited = 0;
 archive_config_t *arc = NULL;
-static struct blake2_dispatch bdsp;
-int seg = 0;
 
 static uint32_t
 dedupe_min_blksz(int rab_blk_sz)
@@ -137,7 +134,7 @@ dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta
 int
 global_dedupe_bufadjust(uint32_t rab_blk_sz, uint64_t *user_chunk_sz, int pct_interval,
 		 const char *algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
-		 size_t memlimit, int nthreads)
+		 size_t memlimit, int nthreads, int pipe_mode)
 {
 	uint64_t memreqd;
 	archive_config_t cfg;
@@ -146,6 +143,9 @@ global_dedupe_bufadjust(uint32_t rab_blk_sz, uint64_t *user_chunk_sz, int pct_in
 
 	rv = 0;
 	pct_i = pct_interval;
+	if (pipe_mode && pct_i == 0)
+		pct_i = DEFAULT_PCT_INTERVAL;
+
 	rv = setup_db_config_s(&cfg, rab_blk_sz, user_chunk_sz, &pct_i, algo, ck, ck_sim,
 		 file_sz, &hash_slots, &hash_entry_size, &memreqd, memlimit, "/tmp");
 	return (rv);
@@ -157,7 +157,7 @@ global_dedupe_bufadjust(uint32_t rab_blk_sz, uint64_t *user_chunk_sz, int pct_in
 dedupe_context_t *
 create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz,
     const char *algo, const algo_props_t *props, int delta_flag, int dedupe_flag,
-    int file_version, compress_op_t op, uint64_t file_size, char *tmppath) {
+    int file_version, compress_op_t op, uint64_t file_size, char *tmppath, int pipe_mode) {
 	dedupe_context_t *ctx;
 	uint32_t i;
 
@@ -206,20 +206,23 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		 */
 		if (dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL && op == COMPRESS && rab_blk_sz > 0) {
 			my_sysinfo msys_info;
+			int pct_interval;
 
 			/*
 			 * Get amount of memory to use. The freeram got here is adjusted amount.
 			 */
 			get_sys_limits(&msys_info);
+			pct_interval = 0;
+			if (pipe_mode)
+				pct_interval = DEFAULT_PCT_INTERVAL;
 
-			arc = init_global_db_s(NULL, tmppath, rab_blk_sz, chunksize, 0,
+			arc = init_global_db_s(NULL, tmppath, rab_blk_sz, chunksize, pct_interval,
 					      algo, props->cksum, GLOBAL_SIM_CKSUM, file_size,
 					      msys_info.freeram, props->nthreads);
 			if (arc == NULL) {
 				pthread_mutex_unlock(&init_lock);
 				return (NULL);
 			}
-			blake2_module_init(&bdsp, &proc_info);
 		}
 		inited = 1;
 	}

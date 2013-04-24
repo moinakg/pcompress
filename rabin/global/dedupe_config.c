@@ -285,15 +285,13 @@ read_config(char *configfile, archive_config_t *cfg)
 	cfg->chunk_sz_bytes = RAB_BLK_AVG_SZ(cfg->chunk_sz);
 	cfg->directory_levels = 2;
 
+	segment_sz_bytes = EIGHT_MB;
 	if (cfg->archive_sz < ONE_TB) {
-		segment_sz_bytes = FOUR_MB;
 		cfg->directory_fanout = 128;
 
 	} else if (cfg->archive_sz < ONE_PB) {
-		segment_sz_bytes = EIGHT_MB;
 		cfg->directory_fanout = 256;
 	} else {
-		segment_sz_bytes = EIGHT_MB;
 		cfg->directory_fanout = 256;
 		cfg->directory_levels = 3;
 	}

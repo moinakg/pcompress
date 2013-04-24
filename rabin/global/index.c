@@ -115,23 +115,25 @@ setup_db_config_s(archive_config_t *cfg, uint32_t chunksize, uint64_t *user_chun
 	/*
 	 * file_sz = 0 and pct_interval = 0 means we are in pipe mode and want a simple
 	 * index. Set pct_interval to 100 to indicate that we need to use all of memlimit
-	 * for the simple index.
+	 * for the simple index - This is UNUSED at present.
 	 * 
 	 * If file_sz != 0 but pct_interval = 0 then we need to create a simple index
 	 * sized for the given file. If the available memory is not sufficient for a full
-	 * index and required index size is 1.25x of availble mem then switch to a
+	 * index and required index size is 3x of availble memory then switch to a
 	 * segmented index.
 	 * 
 	 * If file_sz != 0 and pct_interval != 0 then we explicitly want to create a segmented
-	 * index. This option is auto-selected to support the previous behavior.
+	 * index. This is auto-selected to support the previous behavior.
 	 * 
 	 * If file_sz = 0 and pct_interval != 0 then we are in pipe mode and want a segmented
-	 * index. This is typically for WAN deduplication of large data transfers.
+	 * index. This is auto-selected if Global Dedupe is used in pipe mode.
 	 */
-	if (pct_interval != 0)
-		set_user = 0;
-	else
+	if (*pct_interval != 0) {
 		set_user = 1;
+	} else {
+		set_user = 0;
+	}
+
 	if (file_sz == 0 && *pct_interval == 0)
 		*pct_interval = 100;
 
@@ -156,7 +158,7 @@ set_cfg:
 	}
 
 	// Compute total hashtable entries first
-	*hash_entry_size = sizeof (hash_entry_t) + cfg->similarity_cksum_sz - 1;
+	*hash_entry_size = sizeof (hash_entry_t) + cfg->chunk_cksum_sz - 1;
 	if (*pct_interval == 0) {
 		cfg->sub_intervals = 1;
 		*hash_slots = file_sz / cfg->chunk_sz_bytes + 1;
@@ -166,10 +168,19 @@ set_cfg:
 		*hash_slots = SLOTS_FOR_MEM(memlimit, *hash_entry_size);
 		*pct_interval = 0;
 	} else {
+		*hash_entry_size = sizeof (hash_entry_t) + cfg->similarity_cksum_sz - 1;
 		cfg->intervals = 100 / *pct_interval;
 		cfg->sub_intervals = cfg->intervals;
-		*hash_slots = file_sz / cfg->segment_sz_bytes;
-		*hash_slots *= cfg->sub_intervals;
+
+		/*
+		 * If file size is zero we use entire memlimit for hash slots.
+		 */
+		if (file_sz == 0) {
+			*hash_slots = SLOTS_FOR_MEM(memlimit, *hash_entry_size);
+		} else {
+			*hash_slots = file_sz / cfg->segment_sz_bytes;
+			*hash_slots *= cfg->sub_intervals;
+		}
 	}
 
 	/*
@@ -197,7 +208,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 		 size_t file_sz, size_t memlimit, int nthreads)
 {
 	archive_config_t *cfg;
-	int rv, orig_pct;
+	int rv;
 	uint32_t hash_slots, intervals, i;
 	uint64_t memreqd;
 	int hash_entry_size;
@@ -207,7 +218,6 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 		fprintf(stderr, "Disk based index not yet implemented.\n");
 		return (NULL);
 	}
-	orig_pct = pct_interval;
 	cfg = calloc(1, sizeof (archive_config_t));
 
 	rv = setup_db_config_s(cfg, chunksize, &user_chunk_sz, &pct_interval, algo, ck, ck_sim,
