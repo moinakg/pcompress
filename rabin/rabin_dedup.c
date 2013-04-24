@@ -866,16 +866,14 @@ process_blocks:
 					 */
 					sim_ck = ctx->similarity_cksums;
 					sub_i = cfg->sub_intervals;
-					len = length;
 					tgt = seg_heap;
 					increment = cfg->chunk_cksum_sz;
-					if  (increment * sub_i > len)
-						sub_i = len / increment;
+					if  (increment * sub_i > length)
+						sub_i = length / increment;
 					for (j = 0; j<sub_i; j++) {
 						crc = lzma_crc64(tgt, increment/4, 0);
 						*((uint64_t *)sim_ck) = crc;
 						tgt += increment;
-						len -= increment;
 						sim_ck += cfg->similarity_cksum_sz;
 					}
 

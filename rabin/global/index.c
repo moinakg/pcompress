@@ -168,7 +168,7 @@ set_cfg:
 	} else {
 		cfg->intervals = 100 / *pct_interval;
 		cfg->sub_intervals = cfg->intervals;
-		*hash_slots = file_sz / cfg->segment_sz_bytes + 1;
+		*hash_slots = file_sz / cfg->segment_sz_bytes;
 		*hash_slots *= cfg->sub_intervals;
 	}
 
@@ -320,7 +320,7 @@ int
 db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offset, uchar_t **blocks)
 {
 	uchar_t *mapbuf, *hdr;
-	int fd;
+	int fd, dummy;
 	uint32_t len, adj;
 	uint64_t pos;
 
@@ -364,6 +364,7 @@ db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offs
 	*blknum = *((uint32_t *)(hdr));
 	*offset = *((uint64_t *)(hdr + 4));
 	*blocks = hdr + SEGCACHE_HDR_SZ;
+	dummy = *(hdr + SEGCACHE_HDR_SZ);
 
 	cfg->seg_fd_r[tid].mapping = mapbuf;
 	cfg->seg_fd_r[tid].len = len + adj;
@@ -431,6 +432,15 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		while (ent) {
 			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0 &&
 			    ent->item_size == item_size && ent->item_offset != item_offset) {
+				return (ent);
+			}
+			pent = &(ent->next);
+			ent = ent->next;
+		}
+	} else if (cfg->similarity_cksum_sz == 8) {
+		while (ent) {
+			if (*((uint64_t *)sim_cksum) == *((uint64_t *)ent->cksum) &&
+			    ent->item_offset != item_offset) {
 				return (ent);
 			}
 			pent = &(ent->next);
