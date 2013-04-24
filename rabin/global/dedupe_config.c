@@ -185,8 +185,8 @@ read_config(char *configfile, archive_config_t *cfg)
 	cfg->verify_chunks = 0;
 	cfg->algo = COMPRESS_LZ4;
 	cfg->chunk_cksum_type = DEFAULT_CHUNK_CKSUM;
-	cfg->similarity_cksum = DEFAULT_SIMILARITY_CKSUM;
-	cfg->pct_interval = DEFAULT_SIMILARITY_INTERVAL;
+	cfg->similarity_cksum = GLOBAL_SIM_CKSUM;
+	cfg->pct_interval = DEFAULT_PCT_INTERVAL;
 
 	fh = fopen(configfile, "r");
 	if (fh == NULL) {
@@ -266,13 +266,6 @@ read_config(char *configfile, archive_config_t *cfg)
 				return (1);
 			}
 		} else if (strncmp(line, "CHUNK_CKSUM", 11) == 0) {
-			cfg->chunk_cksum_type = get_cksum_type(pos);
-			if (cfg->chunk_cksum_type == CKSUM_INVALID) {
-				fprintf(stderr, "Invalid CHUNK_CKSUM setting.\n");
-				fclose(fh);
-				return (1);
-			}
-		} else if (strncmp(line, "SIMILARITY_CKSUM", 16) == 0) {
 			cfg->chunk_cksum_type = get_cksum_type(pos);
 			if (cfg->chunk_cksum_type == CKSUM_INVALID) {
 				fprintf(stderr, "Invalid CHUNK_CKSUM setting.\n");
@@ -373,10 +366,6 @@ set_config_s(archive_config_t *cfg, const char *algo, cksum_t ck, cksum_t ck_sim
 		cfg->dedupe_mode = MODE_SIMPLE;
 		cfg->segment_sz_bytes = user_chunk_sz;
 		cfg->similarity_cksum_sz = cfg->chunk_cksum_sz;
-
-	} else if (cfg->archive_sz < (ONE_TB * 100)) {
-		cfg->segment_sz_bytes = FOUR_MB;
-
 	} else {
 		cfg->segment_sz_bytes = EIGHT_MB;
 	}
