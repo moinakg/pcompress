@@ -55,6 +55,7 @@ hash_entry_t *db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int 
 void destroy_global_db_s(archive_config_t *cfg);
 
 int db_segcache_write(archive_config_t *cfg, int tid, uchar_t *buf, uint32_t len, uint32_t blknum, uint64_t file_offset);
+void db_segcache_sync(archive_config_t *cfg);
 int db_segcache_pos(archive_config_t *cfg, int tid);
 int db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offset, uchar_t **blocks);
 int db_segcache_unmap(archive_config_t *cfg, int tid);

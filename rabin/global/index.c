@@ -313,6 +313,12 @@ db_segcache_write(archive_config_t *cfg, int tid, uchar_t *buf, uint32_t len, ui
 	return (0);
 }
 
+void
+db_segcache_sync(archive_config_t *cfg)
+{
+	fdatasync(cfg->seg_fd_w);
+}
+
 /*
  * Get the current file pointer position of the metadata file. This indicates the
  * position where the next entry will be added.
