@@ -44,7 +44,7 @@ extern "C" {
 #define	FLAG_DEDUP	1
 #define	FLAG_DEDUP_FIXED	2
 #define	FLAG_SINGLE_CHUNK	4
-#define	UTILITY_VERSION	"1.4.0"
+#define	UTILITY_VERSION	"2.0"
 #define	MASK_CRYPTO_ALG	0x30
 #define	MAX_LEVEL	14
 
