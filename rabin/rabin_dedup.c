@@ -869,7 +869,7 @@ process_blocks:
 				assert(cfg->similarity_cksum_sz == sizeof (uint64_t));
 				seg_heap = (uchar_t *)(ctx->g_blocks) - cfg->segment_sz * cfg->chunk_cksum_sz;
 				ary_sz = (cfg->sub_intervals * cfg->similarity_cksum_sz + sizeof (blks) + 1) *
-				    ((blknum+1) / cfg->segment_sz) + 3;
+				    (blknum / cfg->segment_sz + 1) + 3;
 				sim_offsets = seg_heap - ary_sz;
 				src = sim_offsets;
 				ary_sz = cfg->segment_sz * sizeof (global_blockentry_t **);
