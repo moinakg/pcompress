@@ -73,7 +73,7 @@ Usage
                 just a hint and may get automatically adjusted.
        <compress_level> - Can be a number from 0 meaning minimum and 14 meaning
                 maximum compression.
-       '-'    - If '-' is given as the final argument then it specified that
+       '-'    - If '-' is given as the final argument then it specifies that
                 compressed output should go to stdout.
 
 NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
@@ -82,8 +82,11 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
       
     To decompress a file compressed using above command:
        pcompress -d <compressed file> <target file>
+       
+    <compressed file> can be '-' to indicate reading from stdin while write goes
+    to <target file>
 
-    To operate as a pipe, read from stdin and write to stdout:
+    To operate as a full pipe, read from stdin and write to stdout:
        pcompress -p ...
 
     Attempt Rabin fingerprinting based deduplication on chunks:
