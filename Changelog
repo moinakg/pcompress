@@ -1,3 +1,52 @@
+== 2.0 Major Release ==
+Add test cases for Global Deduplication.
+Update documentation and code comments.
+Remove tempfile pathname after creation to ensure clean removal after process exit.
+Simplify segment lookup loop.
+Fix assertion.
+Change Segmented Dedupe flow to improve parallelism.
+Periodically sync writes to segcache file.
+Use simple insertion sort for small numbers of elements.
+Capability to output data to stdout when compressing.
+Always use segmented similarity bases dedupe when using -G option in pipe mode.
+Standardize on average 8MB segment size for segmented dedupe.
+Fix hashtable sizing.
+Some miscellaneous cleanups.
+Update README with details of new features.
+Optimize index lookup for 8-byte keys.
+More cleanups.
+More tweaks to slightly improve segment dedupe efficiency.
+Some minor cleanps.
+Improve segment similarity detection and drastically reduce index size.
+Improve duplicate segment match detection.
+Tweak percentage intervals computation to improve segmented dedupe ratio.
+Avoid repeat processing of already processed segments.
+Clean up temp cache dir handling.
+Allow temp dir setting via specific env variable to point to fast devices like ramdisk,ssd.
+Several bugfixes.
+Avoid matching with self during hash lookup.
+Several fixes and optimizations.
+Many optimizations and changes to Segmented Global Dedupe.
+Use chunk hash based similarity matching rather than content based.
+Use sorting to order hash buffer rather than min-heap for better accuracy.
+Use fast CRC64 for similarity hash for speed and lower memory requirements.
+Many optimizations to segmented global dedupe.
+Use chunk hash based cumulative similarity matching instead of chunk content.
+Update usage text and add minor tweaks.
+Properly cleanup global dedupe state.
+Complete implementation for Segmented Global Deduplication.
+Work in progress changes for Segmented Global Deduplication.
+Work in progress changes for Segmented Global Deduplication.
+Work in progress changes for scalable segmented global deduplication.
+Allow user-specified environment setting to control in-memory index size.
+Implement global dedupe in pipe mode.
+Update hash index calculations to use upto 75% memavail when file size is not known.
+Use little-endian nonce format for Salsa20.
+Add global index cleanup function.
+Fix location of sem_wait().
+More comments.
+Add check to disable Delta Compression with Global deduplication for now.
+Implement Global Deduplication.
 == 1.4.0 Update Release ==
 Update couple more test parameters with new crypto options.
 Update README and test cases with new crypto options.
