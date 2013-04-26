@@ -866,7 +866,7 @@ process_blocks:
 				 */
 
 				cfg = ctx->arc;
-				assert(cfg->similarity_cksum_sz >= sizeof (uint64_t));
+				assert(cfg->similarity_cksum_sz == sizeof (uint64_t));
 				seg_heap = (uchar_t *)(ctx->g_blocks) - cfg->segment_sz * cfg->chunk_cksum_sz;
 				ary_sz = (cfg->sub_intervals * cfg->similarity_cksum_sz + sizeof (blks) + 1) *
 				    ((blknum+1) / cfg->segment_sz) + 3;
@@ -935,47 +935,49 @@ process_blocks:
 					 * Now lookup all the similarity hashes. We sort the hashes first so that
 					 * all duplicate hash values can be easily eliminated.
 					 * 
-					 * The matching segment offsets in the segcache are stored in a list.
+					 * The matching segment offsets in the segcache are stored in a list. Entries
+					 * that were not found are stored with offset of UINT64_MAX.
 					 */
-					if (cfg->similarity_cksum_sz == 8) {
-						isort_uint64((uint64_t *)(ctx->similarity_cksums), sub_i);
-					} else {
-						fprintf(stderr, "Similarity Checksum Size: %d not implemented.\n",
-							cfg->similarity_cksum_sz);
-						ctx->valid = 0;
-						sem_post(ctx->index_sem_next);
-						return (0);
-					}
+					isort_uint64((uint64_t *)(ctx->similarity_cksums), sub_i);
 
 					sim_ck = ctx->similarity_cksums;
 					tgt = src + 1; // One byte for number of entries
 					crc = 0;
 					off1 = UINT64_MAX;
 					k = 0;
+
 					for (j=0; j < sub_i; j++) {
 						hash_entry_t *he = NULL;
-
-						/*
-						 * Check for duplicate checksum which need not be looked up
-						 * again.
-						 */
-						if (crc == *((uint64_t *)sim_ck)) {
-							he = NULL;
-						} else {
+						if (j > 0 && crc != *((uint64_t *)sim_ck)) {
 							he = db_lookup_insert_s(cfg, sim_ck, 0, seg_offset, 0, 1);
-							/*
-							 * Check for different checksum but same segment match.
-							 * This is not a complete check but does help to reduce
-							 * wasted processing.
-							 */
-							if (he && off1 == he->item_offset) {
-								crc = *((uint64_t *)sim_ck);
-								he = NULL;
-							}
+						} else {
+							he = NULL;
 						}
 						if (he) {
-							crc = *((uint64_t *)sim_ck);
-							off1 = he->item_offset;
+							*((uint64_t *)tgt) = he->item_offset;
+						} else {
+							*((uint64_t *)tgt) = UINT64_MAX;
+						}
+						crc = *((uint64_t *)sim_ck);
+						sim_ck += cfg->similarity_cksum_sz;
+						tgt += cfg->similarity_cksum_sz;
+					}
+
+					/*
+					 * At this point we have a list of segment offsets from the segcache
+					 * file. Sort the offsets to avoid subsequent random access.
+					 */
+					tgt = src + 1;
+					isort_uint64((uint64_t *)tgt, k);
+
+					/*
+					 * Now eliminate duplicate offsets and UINT64_MAX offset entries which
+					 * indicate entries that were not found.
+					 */
+					sim_ck = tgt;
+					for (j=0; j < sub_i; j++) {
+						if (off1 != *((uint64_t *)sim_ck) && *((uint64_t *)sim_ck) != UINT64_MAX) {
+							off1 = *((uint64_t *)sim_ck);
 							*((uint64_t *)tgt) = off1;
 							tgt += cfg->similarity_cksum_sz;
 							k++;
@@ -983,13 +985,6 @@ process_blocks:
 						sim_ck += cfg->similarity_cksum_sz;
 					}
 					*src = k; // Number of entries
-					src++;
-
-					/*
-					 * At this point we have a list of segment offsets from the segcache
-					 * file. Sort the offsets to avoid subsequent random access.
-					 */
-					isort_uint64((uint64_t *)src, k);
 					src = tgt;
 					i = blks;
 				}
