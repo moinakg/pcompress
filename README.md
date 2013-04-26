@@ -40,6 +40,7 @@ Usage
 
     To compress a file:
        pcompress -c <algorithm> [-l <compress level>] [-s <chunk size>] <file> [-]
+
        Where <algorithm> can be the folowing:
        lzfx   - Very fast and small algorithm based on LZF.
        lz4    - Ultra fast, high-throughput algorithm reaching RAM B/W at level1.
@@ -64,6 +65,7 @@ Usage
                 LZMA. It has significantly more memory usage than adapt.
        none   - No compression. This is only meaningful with -D and -E so Dedupe
                 can be done for post-processing with an external utility.
+
        <chunk_size> - This can be in bytes or can use the following suffixes:
                 g - Gigabyte, m - Megabyte, k - Kilobyte.
                 Larger chunks produce better compression at the cost of memory.
@@ -205,6 +207,15 @@ Set ALLOCATOR_BYPASS=1 in the environment to avoid using the the built-in
 allocator. Due to the the way it rounds up an allocation request to the nearest
 slab the built-in allocator can allocate extra unused memory. In addition you
 may want to use a different allocator in your environment.
+
+The variable PCOMPRESS_INDEX_MEM can be set to limit memory used by the Global
+Deduplication Index. The number specified is in multiples of a megabyte.
+
+The variable PCOMPRESS_CACHE_DIR can point to a directory where some temporary
+files relating to the Global Deduplication process can be stored. This for example
+can be a directory on a Solid State Drive to speed up Global Deduplication. The
+space used in this directory is proportional to the size of the dataset being
+processed and is slightly more than 8KB for every 1MB of data.
 
 Examples
 ========

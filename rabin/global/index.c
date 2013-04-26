@@ -223,15 +223,16 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	rv = setup_db_config_s(cfg, chunksize, &user_chunk_sz, &pct_interval, algo, ck, ck_sim,
 		 file_sz, &hash_slots, &hash_entry_size, &memreqd, memlimit, tmppath);
 
-	// Reduce hash_slots to remain within memlimit
+	/*
+	 * Reduce hash_slots to remain within memlimit
+	 */
 	while (memreqd > memlimit) {
 		hash_slots--;
 		memreqd = hash_slots * MEM_PER_UNIT(hash_entry_size);
 	}
 
 	/*
-	 * Now create as many hash tables as there are similarity match intervals
-	 * each having hash_slots / intervals slots.
+	 * Now initialize the hashtable[s] to setup the index. 
 	 */
 	indx = calloc(1, sizeof (index_t));
 	if (!indx) {
@@ -260,6 +261,10 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 		indx->memused += ((indx->hash_slots) * (sizeof (hash_entry_t *)));
 	}
 
+	/*
+	 * If Segmented Deduplication is required intervals will be set and a temporary
+	 * file is created to hold rabin block hash lists for each segment.
+	 */
 	if (pct_interval > 0) {
 		strcpy(cfg->rootdir, tmppath);
 		strcat(cfg->rootdir, "/.segXXXXXX");
@@ -276,6 +281,12 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 			cfg->seg_fd_r[i].fd = open(cfg->rootdir, O_RDONLY);
 			cfg->seg_fd_r[i].mapping = NULL;
 		}
+
+		/*
+		 * Remove tempfile entry from the filesystem metadata so that file gets
+		 * automatically removed once process exits.
+		 */
+		unlink(cfg->rootdir);
 	}
 	cfg->segcache_pos = 0;
 	cfg->dbdata = indx;
@@ -401,6 +412,9 @@ db_segcache_unmap(archive_config_t *cfg, int tid)
 	return (0);
 }
 
+/*
+ * Compare hashes. Hash size must be multiple of 8 bytes.
+ */
 static inline int
 mycmp(uchar_t *a, uchar_t *b, int sz)
 {
@@ -453,7 +467,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 			pent = &(ent->next);
 			ent = ent->next;
 		}
-	} else if (cfg->similarity_cksum_sz == 8) {
+	} else if (cfg->similarity_cksum_sz == 8) {// Fast path for 64-bit keys
 		while (ent) {
 			if (*((uint64_t *)sim_cksum) == *((uint64_t *)ent->cksum) &&
 			    ent->item_offset != item_offset) {
@@ -474,6 +488,10 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 	}
 	if (do_insert) {
 		if (indx->memused + indx->hash_entry_size >= indx->memlimit && htab[htab_entry] != NULL) {
+			/*
+			 * If the index is close to full capacity, steal the oldest hash bucket
+			 * in this slot to hold the new data.
+			 */
 			ent = htab[htab_entry];
 			htab[htab_entry] = htab[htab_entry]->next;
 		} else {
@@ -502,7 +520,6 @@ destroy_global_db_s(archive_config_t *cfg)
 		}
 		free(cfg->seg_fd_r);
 		close(cfg->seg_fd_w);
-		unlink(cfg->rootdir);
 	}
 }
 

@@ -12,7 +12,7 @@ for algo in lzfx lz4 adapt adapt2
 do
 	for tf in `cat files.lst`
 	do
-		for feat in "-F" "-F -B3 -L" "-F -B4" "-F -B5 -L" "-F -P" "-F -L -P"
+		for feat in "-F" "-F -B3 -L" "-F -B4" "-F -B5 -L" "-F -P" "-F -L -P" "-G -F -B3 -L"
 		do
 			for seg in 2m 100m
 			do
