@@ -119,14 +119,17 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
                   datasets.
 
        '-S' <cksum>
-            -     Specify chunk checksum to use: CRC64, SKEIN256, SKEIN512, SHA256 and
-                  SHA512. Default one is SKEIN256. The implementation actually uses SKEIN
-                  512-256. This is 25% slower than simple CRC64 but is many times more
-                  robust than CRC64 in detecting data integrity errors. SKEIN is a
-                  finalist in the NIST SHA-3 standard selection process and is one of
-                  the fastest in the group, especially on x86 platforms. BLAKE is faster
-                  than SKEIN on a few platforms.
-                  SKEIN 512-256 is about 60% faster than SHA 512-256 on x64 platforms.
+            - Specify chunk checksum to use:
+
+                     CRC64 - Extremely Fast 64-bit CRC from LZMA SDK.
+                    SHA256 - SHA512/256 version of Intel's optimized (SSE,AVX) SHA2 for x86.
+                    SHA512 - SHA512 version of Intel's optimized (SSE,AVX) SHA2 for x86.
+                 KECCAK256 - Official 256-bit NIST SHA3 optimized implementation.
+                 KECCAK512 - Official 512-bit NIST SHA3 optimized implementation.
+                  BLAKE256 - Very fast 256-bit BLAKE2, derived from the NIST SHA3
+                             runner-up BLAKE.
+                  BLAKE512 - Very fast 256-bit BLAKE2, derived from the NIST SHA3
+                             runner-up BLAKE.
 
        '-F' -     Perform Fixed Block Deduplication. This is faster than fingerprinting
                   based content-aware deduplication in some cases. However this is mostly

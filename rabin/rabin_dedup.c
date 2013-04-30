@@ -157,7 +157,8 @@ global_dedupe_bufadjust(uint32_t rab_blk_sz, uint64_t *user_chunk_sz, int pct_in
 dedupe_context_t *
 create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz,
     const char *algo, const algo_props_t *props, int delta_flag, int dedupe_flag,
-    int file_version, compress_op_t op, uint64_t file_size, char *tmppath, int pipe_mode) {
+    int file_version, compress_op_t op, uint64_t file_size, char *tmppath,
+    int pipe_mode, int nthreads) {
 	dedupe_context_t *ctx;
 	uint32_t i;
 
@@ -218,7 +219,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 
 			arc = init_global_db_s(NULL, tmppath, rab_blk_sz, chunksize, pct_interval,
 					      algo, props->cksum, GLOBAL_SIM_CKSUM, file_size,
-					      msys_info.freeram, props->nthreads);
+					      msys_info.freeram, nthreads);
 			if (arc == NULL) {
 				pthread_mutex_unlock(&init_lock);
 				return (NULL);
@@ -722,6 +723,10 @@ process_blocks:
 	DEBUG_STAT_EN(en_1 = get_wtime_millis());
 	DEBUG_STAT_EN(fprintf(stderr, "Original size: %" PRId64 ", blknum: %u\n", *size, blknum));
 	DEBUG_STAT_EN(fprintf(stderr, "Number of maxlen blocks: %u\n", max_count));
+	if (blknum <=2 && ctx->arc) {
+		sem_wait(ctx->index_sem);
+		sem_post(ctx->index_sem_next);
+	}
 	if (blknum > 2) {
 		uint64_t pos, matchlen, pos1 = 0;
 		int valid = 1;
@@ -906,11 +911,11 @@ process_blocks:
 					sim_ck = ctx->similarity_cksums;
 					sub_i = cfg->sub_intervals;
 					tgt = seg_heap;
-					increment = cfg->chunk_cksum_sz;
+					increment = cfg->chunk_cksum_sz / 2;
 					if  (increment * sub_i > length)
 						sub_i = length / increment;
 					for (j = 0; j<sub_i; j++) {
-						crc = lzma_crc64(tgt, increment/4, 0);
+						crc = lzma_crc64(tgt, increment/2, 0);
 						*((uint64_t *)sim_ck) = crc;
 						tgt += increment;
 						sim_ck += cfg->similarity_cksum_sz;
@@ -927,9 +932,13 @@ process_blocks:
 					}
 
 					seg_offset = db_segcache_pos(cfg, ctx->id);
-					len = blks * sizeof (global_blockentry_t);
-					db_segcache_write(cfg, ctx->id, (uchar_t *)&(ctx->g_blocks[i]),
-					    len, blks-i, ctx->file_offset);
+					len = (blks-i) * sizeof (global_blockentry_t);
+					if (db_segcache_write(cfg, ctx->id, (uchar_t *)&(ctx->g_blocks[i]),
+					    len, blks-i, ctx->file_offset) == -1) {
+						sem_post(ctx->index_sem_next);
+						ctx->valid = 0;
+						return (0);
+					}
 
 					/*
 					 * Now lookup all the similarity hashes. We sort the hashes first so that
@@ -993,7 +1002,6 @@ process_blocks:
 				 * Signal the next thread in sequence to access the index.
 				 */
 				sem_post(ctx->index_sem_next);
-				db_segcache_sync(cfg);
 
 				/*
 				 * Now go through all the matching segments for all the current segments

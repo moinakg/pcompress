@@ -1116,7 +1116,7 @@ start_decompress(const char *filename, const char *to_filename)
 		if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
 			    algo, &props, enable_delta_encode, dedupe_flag, version, DECOMPRESS, 0,
-			    NULL, pipe_mode);
+			    NULL, pipe_mode, nprocs);
 			if (tdat->rctx == NULL) {
 				UNCOMP_BAIL;
 			}
@@ -1962,12 +1962,13 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 		if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
 			    algo, &props, enable_delta_encode, dedupe_flag, VERSION, COMPRESS, sbuf.st_size,
-			    tmpdir, pipe_mode);
+			    tmpdir, pipe_mode, nprocs);
 			if (tdat->rctx == NULL) {
 				COMP_BAIL;
 			}
 
 			tdat->rctx->index_sem = &(tdat->index_sem);
+			tdat->rctx->id = i;
 		} else {
 			tdat->rctx = NULL;
 		}
@@ -1991,9 +1992,9 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			tdat = dary[i];
 			tdat->rctx->index_sem_next = &(dary[(i + 1) % nprocs]->index_sem);
 		}
+		// When doing global dedupe first thread does not wait to access the index.
+		sem_post(&(dary[0]->index_sem));
 	}
-	// When doing global dedupe first thread does not wait to access the index.
-	sem_post(&(dary[0]->index_sem));
 
 	w.dary = dary;
 	w.wfd = compfd;
@@ -2105,7 +2106,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	file_offset = 0;
 	if (enable_rabin_split) {
 		rctx = create_dedupe_context(chunksize, 0, 0, algo, &props, enable_delta_encode,
-		    enable_fixed_scan, VERSION, COMPRESS, 0, NULL, pipe_mode);
+		    enable_fixed_scan, VERSION, COMPRESS, 0, NULL, pipe_mode, nprocs);
 		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 	} else {
 		rbytes = Read(uncompfd, cread_buf, chunksize);

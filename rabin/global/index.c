@@ -266,6 +266,8 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	 * file is created to hold rabin block hash lists for each segment.
 	 */
 	if (pct_interval > 0) {
+		int errored;
+
 		strcpy(cfg->rootdir, tmppath);
 		strcat(cfg->rootdir, "/.segXXXXXX");
 		cfg->seg_fd_w = mkstemp(cfg->rootdir);
@@ -277,9 +279,24 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 			free(cfg);
 			return (NULL);
 		}
+
+		errored = 0;
 		for (i = 0; i < nthreads; i++) {
 			cfg->seg_fd_r[i].fd = open(cfg->rootdir, O_RDONLY);
+			if (cfg->seg_fd_r[i].fd == -1) {
+				perror(" ");
+				errored = 1;
+				break;
+			}
 			cfg->seg_fd_r[i].mapping = NULL;
+		}
+
+		if (errored) {
+			cleanup_indx(indx);
+			if (cfg->seg_fd_r)
+				free(cfg->seg_fd_r);
+			free(cfg);
+			return (NULL);
 		}
 
 		/*
@@ -314,27 +331,33 @@ db_segcache_write(archive_config_t *cfg, int tid, uchar_t *buf, uint32_t len, ui
 	*((uint64_t *)(hdr + 4)) = file_offset;
 
 	w = Write(cfg->seg_fd_w, hdr, sizeof (hdr));
-	if (w < sizeof (hdr))
+	if (w < sizeof (hdr)) {
+		/*
+		 * On error restore file pointer to previous position so that
+		 * all subsequent offsets will be properly computed.
+		 */
+		lseek(cfg->seg_fd_w, cfg->segcache_pos, SEEK_SET);
 		return (-1);
+	}
 	cfg->segcache_pos += w;
 	w = Write(cfg->seg_fd_w, buf, len);
-	if (w < len)
+	if (w < len) {
+		/*
+		 * On error restore file pointer to previous position so that
+		 * all subsequent offsets will be properly computed.
+		 */
+		lseek(cfg->seg_fd_w, cfg->segcache_pos, SEEK_SET);
 		return (-1);
+	}
 	cfg->segcache_pos += w;
 	return (0);
-}
-
-void
-db_segcache_sync(archive_config_t *cfg)
-{
-	fdatasync(cfg->seg_fd_w);
 }
 
 /*
  * Get the current file pointer position of the metadata file. This indicates the
  * position where the next entry will be added.
  */
-int
+uint64_t
 db_segcache_pos(archive_config_t *cfg, int tid)
 {
 	return (cfg->segcache_pos);
@@ -369,8 +392,10 @@ db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offs
 	 */
 	db_segcache_unmap(cfg, tid);
 	fd = cfg->seg_fd_r[tid].fd;
-	if (lseek(fd, *offset, SEEK_SET) != *offset)
+	if (lseek(fd, *offset, SEEK_SET) != *offset) {
+		perror(" ");
 		return (-1);
+	}
 
 	/*
 	 * Mmap hdr and blocks. We assume max # of rabin block entries and mmap (unless remaining
@@ -383,8 +408,10 @@ db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offs
 		len = pos - *offset;
 
 	mapbuf = mmap(NULL, len + adj, PROT_READ, MAP_SHARED, fd, *offset - adj);
-	if (mapbuf == MAP_FAILED)
+	if (mapbuf == MAP_FAILED) {
+		perror(" ");
 		return (-1);
+	}
 
 	cfg->seg_fd_r[tid].cache_offset = *offset;
 	hdr = mapbuf + adj;
