@@ -116,11 +116,13 @@ typedef int32_t bsize_t;
 #	define	ATOMIC_SUB(var, val) __sync_fetch_and_sub(&var, val)
 #	define	PREFETCH_WRITE(x, n) __builtin_prefetch((x), 1, (n))
 #	define	PREFETCH_READ(x, n)  __builtin_prefetch((x), 0, (n))
+#	define	NOINLINE_ATTR __attribute__((noinline))
 #else
 #       define likely(expr) (expr)
 #       define unlikely(expr) (expr)
 #	define	PREFETCH_WRITE(x, n)
 #	define	PREFETCH_READ(x, n)
+#	define	NOINLINE_ATTR
 #	if defined(sun) || defined (__sun)
 #		include <atomic.h>
 #		define ATOMIC_ADD(var, val) atomic_add_int(&var, val)

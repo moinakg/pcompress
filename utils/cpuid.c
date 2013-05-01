@@ -112,8 +112,12 @@ cpu_exec_cpuid_ext(uint32_t* regs)
 	exec_cpuid(regs);
 }
 
+/*
+ * The function below is not inlined as it appears to bork optimized
+ * code generation on some older buggy GCC versions.
+ */
 void
-cpuid_get_raw_data(struct cpu_raw_data_t* data)
+NOINLINE_ATTR cpuid_get_raw_data(struct cpu_raw_data_t* data)
 {
 	unsigned i;
 	for (i = 0; i < 32; i++)
