@@ -83,8 +83,7 @@ static int ttt = 0;
           "movntiq %[val], (%[ptr1]);"\
           "movntiq %[val], 0x8(%[ptr1]);"\
           : \
-          : [ptr1] "q" (mem), [val] "q" (val) \
-          :)
+          : [ptr1] "q" (mem), [val] "q" (val) )
 #define MOV_DBL_QUAD_UNALIGNED(mem, val) \
           *((UInt64 *)(mem)) = val; *((UInt64 *)((Byte *)mem + 8)) = val
 
@@ -94,8 +93,7 @@ static int ttt = 0;
           "movntiq %[val], 0x10(%[ptr1]);"\
           "movntiq %[val], 0x18(%[ptr1]);"\
           : \
-          : [ptr1] "q" (mem), [val] "q" (val) \
-          :)
+          : [ptr1] "q" (mem), [val] "q" (val) )
 #define MOV_QUAD_QUAD_UNALIGNED(mem, val) \
           *((UInt64 *)(mem)) = val; *((UInt64 *)((Byte *)mem + 8)) = val; \
           *((UInt64 *)((Byte *)mem + 16)) = val; *((UInt64 *)((Byte *)mem + 24)) = val

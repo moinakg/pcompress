@@ -291,6 +291,12 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 			cfg->seg_fd_r[i].mapping = NULL;
 		}
 
+		/*
+		 * Remove tempfile entry from the filesystem metadata so that file gets
+		 * automatically removed once process exits.
+		 */
+		unlink(cfg->rootdir);
+
 		if (errored) {
 			cleanup_indx(indx);
 			if (cfg->seg_fd_r)
@@ -298,12 +304,6 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 			free(cfg);
 			return (NULL);
 		}
-
-		/*
-		 * Remove tempfile entry from the filesystem metadata so that file gets
-		 * automatically removed once process exits.
-		 */
-		unlink(cfg->rootdir);
 	}
 	cfg->segcache_pos = 0;
 	cfg->dbdata = indx;
