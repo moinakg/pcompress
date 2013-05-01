@@ -207,7 +207,8 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		 */
 		if (dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL && op == COMPRESS && rab_blk_sz > 0) {
 			my_sysinfo msys_info;
-			int pct_interval;
+			int pct_interval, chunk_cksum, cksum_bytes, mac_bytes;
+			char *ck;
 
 			/*
 			 * Get amount of memory to use. The freeram got here is adjusted amount.
@@ -217,8 +218,23 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 			if (pipe_mode)
 				pct_interval = DEFAULT_PCT_INTERVAL;
 
+			chunk_cksum = 0;
+			if ((ck = getenv("PCOMPRESS_CHUNK_HASH_GLOBAL")) != NULL) {
+				if (get_checksum_props(ck, &chunk_cksum, &cksum_bytes, &mac_bytes, 0) != 0 ||
+				    strcmp(ck, "CRC64") == 0) {
+					fprintf(stderr, "Invalid PCOMPRESS_CHUNK_HASH_GLOBAL. Reverting to default.\n");
+					chunk_cksum = -1;
+				}
+			}
+			if (chunk_cksum == 0) {
+				chunk_cksum = DEFAULT_CHUNK_CKSUM;
+				if (get_checksum_props(NULL, &chunk_cksum, &cksum_bytes, &mac_bytes, 0) != 0) {
+					fprintf(stderr, "Invalid default chunk checksum: %d\n", DEFAULT_CHUNK_CKSUM);
+					return (NULL);
+				}
+			}
 			arc = init_global_db_s(NULL, tmppath, rab_blk_sz, chunksize, pct_interval,
-					      algo, props->cksum, GLOBAL_SIM_CKSUM, file_size,
+					      algo, chunk_cksum, GLOBAL_SIM_CKSUM, file_size,
 					      msys_info.freeram, nthreads);
 			if (arc == NULL) {
 				pthread_mutex_unlock(&init_lock);

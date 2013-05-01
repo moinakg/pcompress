@@ -223,6 +223,10 @@ can be a directory on a Solid State Drive to speed up Global Deduplication. The
 space used in this directory is proportional to the size of the dataset being
 processed and is slightly more than 8KB for every 1MB of data.
 
+The default checksum used for chunk hashes during Global Deduplication is SHA256.
+However this can be changed by setting the PCOMPRESS_CHUNK_HASH_GLOBAL environment
+variable to one of the other checksum names except CRC64.
+
 Examples
 ========
 
