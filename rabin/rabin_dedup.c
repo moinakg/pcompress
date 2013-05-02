@@ -766,7 +766,7 @@ process_blocks:
 			 * First compute all the rabin chunk/block cryptographic hashes.
 			 */
 #if defined(_OPENMP)
-#	pragma omp parallel for if (mt)
+#	pragma omp parallel for
 #endif
 			for (i=0; i<blknum; i++) {
 				compute_checksum(ctx->g_blocks[i].cksum,
@@ -797,7 +797,7 @@ process_blocks:
 				/*
 				 * Now lookup blocks in index. First wait for our semaphore to be
 				 * signaled. If the previous thread in sequence is using the index
-				 * he will finish and then signal our semaphore. So we can have
+				 * it will finish and then signal our semaphore. So we can have
 				 * predictable serialization of index access in a sequence of
 				 * threads without locking.
 				 */
