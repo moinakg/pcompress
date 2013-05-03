@@ -20,21 +20,16 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
+ *      
  */
 
-#ifndef __HEAPQ_H_
+#ifndef __LZMA_CRC_H__
+#define	__LZMA_CRC_H__
 
-#define	__HEAPQ_H_
-#define __TYPE int64_t
+#include <crc_macros.h>
 
-typedef struct {
-    __TYPE *ary;
-    __TYPE len;
-    __TYPE tot;
-} heap_t;
+uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
+uint32_t lzma_crc32(const uint8_t *buf, size_t size, uint32_t crc);
 
-int ksmallest(__TYPE *ary, __TYPE len, heap_t *heap);
-void reset_heap(heap_t *h, __TYPE tot);
-void heapify(heap_t *h, __TYPE *ary);
 
 #endif

@@ -75,6 +75,8 @@
 #include <pthread.h>
 #include <heapq.h>
 #include <xxhash.h>
+#include <qsort.h>
+#include <lzma_crc.h>
 
 #include "rabin_dedup.h"
 #if defined(__USE_SSE_INTRIN__) && defined(__SSE4_1__) && RAB_POLYNOMIAL_WIN_SIZE == 16
@@ -102,7 +104,6 @@ extern int bsdiff(u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t newsi
 extern bsize_t get_bsdiff_sz(u_char *pbuf);
 extern int bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf,
 	bsize_t *_newsize);
-extern uint64_t lzma_crc64(const uint8_t *buf, size_t size, uint64_t crc);
 
 static pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
 uint64_t ir[256], out[256];
@@ -423,20 +424,14 @@ isort_uint64(uint64_t *ary, uint32_t nitems)
 }
 
 /*
- * Callback for qsort() for 64-bit min-values list in hash values.
+ * Sort an array of 64-bit unsigned integers. The QSORT macro provides an
+ * inline quicksort routine that does not use a callback function.
  */
-int
-cmpint(const void *a, const void *b)
+#define	int_lt(a,b) ((*a)<(*b))
+static void
+do_qsort(uint64_t *arr, uint32_t len)
 {
-	uint64_t a1 = *((uint64_t *)a);
-	uint64_t b1 = *((uint64_t *)b);
-
-	if (a1 < b1)
-		return (-1);
-	else if (a1 == b1)
-		return (0);
-	else
-		return (1);
+	QSORT(uint64_t, arr, len, int_lt);
 }
 
 static inline int
@@ -836,6 +831,7 @@ process_blocks:
 							length = 0;
 							dedupe_index_sz++;
 						}
+
 						/*
 						 * Add a reference entry to the dedupe array.
 						 */
@@ -919,7 +915,7 @@ process_blocks:
 					 * Sort concatenated chunk hash buffer by raw 64-bit integer
 					 * magnitudes.
 					 */
-					qsort(seg_heap, length/8, 8, cmpint);
+					do_qsort((uint64_t *)seg_heap, length/8);
 
 					/*
 					 * Compute the min-values range similarity hashes.

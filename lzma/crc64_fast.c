@@ -39,7 +39,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <crc_macros.h>
+#include "lzma_crc.h"
 
 #ifdef WORDS_BIGENDIAN
 #	define A1(x) ((x) >> 56)

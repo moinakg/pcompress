@@ -41,7 +41,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <crc_macros.h>
+#include <lzma_crc.h>
 
 extern const uint32_t lzma_crc32_table[8][256];
 

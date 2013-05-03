@@ -85,7 +85,7 @@ BZLIB_OBJS = $(BZLIB_SRCS:.c=.o)
 BZLIB_CPPFLAGS = @LIBBZ2_INC@
 
 RABINSRCS = rabin/rabin_dedup.c rabin/global/index.c rabin/global/dedupe_config.c
-RABINHDRS = rabin/rabin_dedup.h utils/utils.h rabin/global/index.h rabin/global/dedupe_config.h
+RABINHDRS = rabin/rabin_dedup.h utils/utils.h rabin/global/index.h rabin/global/dedupe_config.h lzma/lzma_crc.h utils/qsort.h
 RABINOBJS = $(RABINSRCS:.c=.o)
 
 BSDIFFSRCS = bsdiff/bsdiff.c bsdiff/bspatch.c bsdiff/rle_encoder.c
@@ -112,7 +112,7 @@ PPMDOBJS = $(PPMDSRCS:.c=.o)
 
 CRCSRCS = lzma/crc64_fast.c lzma/crc64_table.c lzma/crc32_fast.c lzma/crc32_table.c
 CRCHDRS = lzma/crc64_table_le.h lzma/crc64_table_be.h lzma/crc_macros.h \
-	lzma/crc32_table_le.h lzma/crc32_table_be.h
+	lzma/crc32_table_le.h lzma/crc32_table_be.h lzma/lzma_crc.h
 CRCOBJS = $(CRCSRCS:.c=.o)
 
 LZPSRCS = lzp/lzp.c
