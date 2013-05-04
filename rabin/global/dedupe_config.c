@@ -128,6 +128,12 @@ get_cksum_type(char *cksum_name)
 
 	} else if (strcmp(cksum_name, "KECCAK512") == 0) {
 		return (CKSUM_KECCAK512);
+
+	} else if (strcmp(cksum_name, "SKEIN256") == 0) {
+		return (CKSUM_SKEIN256);
+
+	} else if (strcmp(cksum_name, "SKEIN512") == 0) {
+		return (CKSUM_SKEIN512);
 	}
 	return (CKSUM_INVALID);
 }
@@ -155,6 +161,12 @@ get_cksum_str(cksum_t ck)
 
 	} else if (ck == CKSUM_KECCAK512) {
 		return ("KECCAK512");
+
+	} else if (ck == CKSUM_SKEIN256) {
+		return ("SKEIN256");
+
+	} else if (ck == CKSUM_SKEIN512) {
+		return ("SKEIN512");
 	}
 	return ("INVALID");
 }
@@ -165,10 +177,12 @@ get_cksum_sz(cksum_t ck)
 	if (ck == CKSUM_CRC64) {
 		return (8);
 
-	} else if (ck == CKSUM_SHA256 || ck == CKSUM_BLAKE256 || ck == CKSUM_KECCAK256) {
+	} else if (ck == CKSUM_SHA256 || ck == CKSUM_BLAKE256 || ck == CKSUM_KECCAK256 ||
+	    ck == CKSUM_SKEIN256) {
 		return (32);
 
-	} else if (ck == CKSUM_SHA512 || ck == CKSUM_BLAKE512 || ck == CKSUM_KECCAK512) {
+	} else if (ck == CKSUM_SHA512 || ck == CKSUM_BLAKE512 || ck == CKSUM_KECCAK512 ||
+	    ck == CKSUM_SKEIN512) {
 		return (64);
 	}
 	return (0);

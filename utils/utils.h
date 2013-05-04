@@ -160,6 +160,9 @@ typedef enum {
  * Backwards compatibility options. SKEIN in release 1.2 was replaced with
  * Blake2 from 1.3 onwards (for sheer speed of Blake2). We want to be able
  * to decode archives created with 1.2. New archives do not use SKEIN.
+ * 
+ * However SKEIN can be used as a chunk/block hash for Global Deduplication.
+ * So it will not be removed.
  */
 	CKSUM_SKEIN256 = 0x800,
 	CKSUM_SKEIN512 = 0x900,

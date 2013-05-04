@@ -221,7 +221,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 
 			chunk_cksum = 0;
 			if ((ck = getenv("PCOMPRESS_CHUNK_HASH_GLOBAL")) != NULL) {
-				if (get_checksum_props(ck, &chunk_cksum, &cksum_bytes, &mac_bytes, 0) != 0 ||
+				if (get_checksum_props(ck, &chunk_cksum, &cksum_bytes, &mac_bytes, 1) != 0 ||
 				    strcmp(ck, "CRC64") == 0) {
 					fprintf(stderr, "Invalid PCOMPRESS_CHUNK_HASH_GLOBAL. Reverting to default.\n");
 					chunk_cksum = -1;
