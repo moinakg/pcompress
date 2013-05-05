@@ -989,7 +989,7 @@ process_blocks:
 					 * file. Sort the offsets to avoid subsequent random access.
 					 */
 					tgt = src + 1;
-					isort_uint64((uint64_t *)tgt, k);
+					isort_uint64((uint64_t *)tgt, sub_i);
 
 					/*
 					 * Now eliminate duplicate offsets and UINT64_MAX offset entries which

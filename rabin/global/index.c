@@ -485,10 +485,11 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 
 	pent = &(htab[htab_entry]);
 	ent = htab[htab_entry];
-	if (cfg->pct_interval == 0) { // Global dedupe with simple index
+	if (cfg->pct_interval == 0) { // Global dedupe with simple index.
+		assert(cfg->similarity_cksum_sz == cfg->chunk_cksum_sz);
 		while (ent) {
 			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0 &&
-			    ent->item_size == item_size && ent->item_offset != item_offset) {
+			    ent->item_size == item_size) {
 				return (ent);
 			}
 			pent = &(ent->next);
@@ -496,8 +497,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		}
 	} else if (cfg->similarity_cksum_sz == 8) {// Fast path for 64-bit keys
 		while (ent) {
-			if (*((uint64_t *)sim_cksum) == *((uint64_t *)ent->cksum) &&
-			    ent->item_offset != item_offset) {
+			if (*((uint64_t *)sim_cksum) == *((uint64_t *)ent->cksum)) {
 				return (ent);
 			}
 			pent = &(ent->next);
@@ -505,8 +505,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		}
 	} else {
 		while (ent) {
-			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0 &&
-			    ent->item_offset != item_offset) {
+			if (mycmp(sim_cksum, ent->cksum, cfg->similarity_cksum_sz) == 0) {
 				return (ent);
 			}
 			pent = &(ent->next);
