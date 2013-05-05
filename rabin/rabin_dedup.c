@@ -902,10 +902,37 @@ process_blocks:
 					if (blks > blknum-i) blks = blknum-i;
 					length = 0;
 					tgt = seg_heap;
-					for (j=0; j<blks; j++) {
-						memcpy(tgt, ctx->g_blocks[j+i].cksum, cfg->chunk_cksum_sz);
-						length += cfg->chunk_cksum_sz;
-						tgt += cfg->chunk_cksum_sz;
+#ifdef	__USE_SSE_INTRIN__
+					if ((cfg->chunk_cksum_sz & 15) == 0) {
+						for (j=0; j<blks; j++) {
+							__m128i s;
+							uchar_t *sc;
+							k = cfg->chunk_cksum_sz;
+							sc = ctx->g_blocks[j+i].cksum;
+
+							/*
+							 * Use SSE2 to copy 16 bytes at a time avoiding a call
+							 * to memcpy() since hash sizes are typically multiple
+							 * of 16 bytes: 256-bit or 512-bit.
+							 */
+							while (k > 0) {
+								s = _mm_loadu_si128((__m128i *)sc);
+								_mm_storeu_si128((__m128i *)tgt, s);
+								tgt += 16;
+								sc += 16;
+								k -= 16;
+							}
+							length += cfg->chunk_cksum_sz;
+						}
+					} else {
+#else
+					{
+#endif
+						for (j=0; j<blks; j++) {
+							memcpy(tgt, ctx->g_blocks[j+i].cksum, cfg->chunk_cksum_sz);
+							length += cfg->chunk_cksum_sz;
+							tgt += cfg->chunk_cksum_sz;
+						}
 					}
 					*((uint32_t *)src) = blks;
 					src += sizeof (blks);

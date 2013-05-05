@@ -495,6 +495,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 			pent = &(ent->next);
 			ent = ent->next;
 		}
+	// The following two cases are for Segmented Dedupe approximate matching
 	} else if (cfg->similarity_cksum_sz == 8) {// Fast path for 64-bit keys
 		while (ent) {
 			if (*((uint64_t *)sim_cksum) == *((uint64_t *)ent->cksum)) {
