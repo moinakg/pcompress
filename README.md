@@ -158,9 +158,9 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
                   Delta Encoding is not supported with Global Deduplication at this time. The
                   in-memory hashtable index can use upto 75% of free RAM depending on the size
                   of the dataset. In Pipe mode the index will always use 75% of free RAM since
-                  the dataset size is not known. This is the simple full chunk or block index
-                  mode. If the available RAM is not enough to hold all block checksums then
-                  older block entries are discarded automatically from the matching hash slots.
+                  the dataset size is not known. This is the simple full block index mode. If
+                  the available RAM is not enough to hold all block checksums then older block
+                  entries are discarded automatically from the matching hash slots.
 
                   If pipe mode is not used and the given dataset is a file then Pcompress
                   checks whether the index size will exceed three times of 75% of the available
@@ -223,9 +223,29 @@ can be a directory on a Solid State Drive to speed up Global Deduplication. The
 space used in this directory is proportional to the size of the dataset being
 processed and is slightly more than 8KB for every 1MB of data.
 
-The default checksum used for chunk hashes during Global Deduplication is SHA256.
+The default checksum used for block hashes during Global Deduplication is SHA256.
 However this can be changed by setting the PCOMPRESS_CHUNK_HASH_GLOBAL environment
-variable to one of the other checksum names except CRC64.
+variable. The list of allowed checksums for this is:
+
+SHA256   , SHA512
+KECCAK256, KECCAK512
+BLAKE256 , BLAKE512
+SKEIN256 , SKEIN512
+
+Even though SKEIN is not supported as a chunk checksum (not deemed necessary
+because BLAKE2 is available) it can be used as a dedupe block checksum. One may
+ask why? The reasoning is we depend on hashes to find duplicate blocks. Now SHA256
+is the default because it is known to be robust and unbroken till date. Proven as
+yet in the field. However one may want a faster alternative so we have choices
+from the NIST SHA3 finalists in the form of SKEIN and BLAKE which are neck to
+neck with SKEIN getting an edge. SKEIN and BLAKE have seen extensive cryptanalysis
+in the intervening years and are unbroken with only marginal theoretical issues
+determined. BLAKE2 is a derivative of BLAKE and is tremendously fast but has not
+seen much specific cryptanalysis as yet, even though it is not new but just a
+performance optimized derivate. So cryptanalysis that applies to BLAKE should
+also apply and justify BLAKE2. However the paranoid may well trust SKEIN a bit
+more than BLAKE2 and SKEIN while not being as fast as BLAKE2 is still a lot faster
+than SHA2.
 
 Examples
 ========
