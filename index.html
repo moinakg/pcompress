@@ -53,6 +53,8 @@
 <li>
 <strong>Deduplication</strong>: High-speed Content-aware chunk-level Deduplication based on Rabin fingerprinting. Duplicate comparison uses exact byte-for-byte comparison and techniques to reduce Dedupe index size.</li>
 <li>
+<strong>Global Deduplication</strong>: Scalable, fast Content-aware Deduplication across the entire dataset. Duplicate comparison uses cryptographic hash based matching to detect duplicate blocks. By default SHA256 is used but this can be changed via an environment variable. Global Deduplication can reach petascale using only a relatively tiny in-memory index.</li>
+<li>
 <strong>Delta Compression</strong>: Deduplication also provides Delta Compression of closely matching chunks using <a href="http://www.daemonology.net/bsdiff/">Bsdiff</a>. <a href="http://en.wikipedia.org/wiki/MinHash">Minhashing</a> is used to detect similar chunks.</li>
 <li>
 <strong>Fixed Block option</strong>: Fixed block Deduplication is also supported and works extremely fast.</li>
