@@ -1947,6 +1947,7 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			tdat->cksum_mt = 0;
 		tdat->level = level;
 		tdat->data = NULL;
+		tdat->rctx = NULL;
 		tdat->props = &props;
 		sem_init(&(tdat->start_sem), 0, 0);
 		sem_init(&(tdat->cmp_done_sem), 0, 0);
@@ -1958,19 +1959,6 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 			    VERSION, COMPRESS) != 0) {
 				COMP_BAIL;
 			}
-		}
-		if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
-			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
-			    algo, &props, enable_delta_encode, dedupe_flag, VERSION, COMPRESS, sbuf.st_size,
-			    tmpdir, pipe_mode, nprocs);
-			if (tdat->rctx == NULL) {
-				COMP_BAIL;
-			}
-
-			tdat->rctx->index_sem = &(tdat->index_sem);
-			tdat->rctx->id = i;
-		} else {
-			tdat->rctx = NULL;
 		}
 
 		if (encrypt_type) {
@@ -1987,6 +1975,24 @@ start_compress(const char *filename, uint64_t chunksize, int level)
 	}
 	thread = 1;
 
+	/*
+	 * initialize Dedupe Context here after all other allocations so that index size can be correctly
+	 * computed based on free memory.
+	 */
+	if (enable_rabin_scan || enable_fixed_scan || enable_rabin_global) {
+		for (i = 0; i < nprocs; i++) {
+			tdat = dary[i];
+			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, rab_blk_size,
+			    algo, &props, enable_delta_encode, dedupe_flag, VERSION, COMPRESS, sbuf.st_size,
+			    tmpdir, pipe_mode, nprocs);
+			if (tdat->rctx == NULL) {
+				COMP_BAIL;
+			}
+
+			tdat->rctx->index_sem = &(tdat->index_sem);
+			tdat->rctx->id = i;
+		}
+	}
 	if (enable_rabin_global) {
 		for (i = 0; i < nprocs; i++) {
 			tdat = dary[i];
