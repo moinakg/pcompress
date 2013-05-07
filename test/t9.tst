@@ -21,6 +21,17 @@ do
 	fi
 done
 
+export PCOMPRESS_CHUNK_HASH_GLOBAL=CRC64
+cmd="../../pcompress -G -c none -l1 -s10m $tstf"
+echo "Running $cmd"
+eval $cmd
+if [ $? -eq 0 ]
+then
+	echo "FATAL: Compression DID NOT ERROR where expected"
+	rm -f ${tstf}.pz
+fi
+unset PCOMPRESS_CHUNK_HASH_GLOBAL
+
 for feat in "-L" "-L -D" "-L -D -E" "-L -B5" "-L -D -E -B2" "-F" "-F -L"
 do
 	cmd="../../pcompress -c dummy -l4 -s1m $feat $tstf"
@@ -30,9 +41,9 @@ do
 	then
 		echo "FATAL: Compression DID NOT ERROR where expected"
 		rm -f ${tstf}.pz
+		break
 	fi
 	rm -f ${tstf}.pz
-	break
 done
 
 for feat in "-B8 -s2m -l1" "-B0 -s2m -l1" "-D -s10k -l1" "-D -F -s2m -l1" "-p -e AES -s2m -l1" "-s2m -l15" "-e AES -k64" "-e SALSA20 -k8" "-e AES -k8" "-e SALSA20 -k64"
@@ -46,9 +57,9 @@ do
 		then
 			echo "FATAL: Compression DID NOT ERROR where expected"
 			rm -f ${tstf}.pz
+			break
 		fi
 		rm -f ${tstf}.pz
-		break
 	done
 done
 
