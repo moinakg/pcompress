@@ -1,7 +1,7 @@
 Pcompress
 =========
 
-Copyright (C) 2012 Moinak Ghosh. All rights reserved.
+Copyright (C) 2012-2013 Moinak Ghosh. All rights reserved.
 Use is subject to license terms.
 moinakg (_at) gma1l _dot com.
 Comments, suggestions, code, rants etc are welcome.
@@ -12,13 +12,13 @@ support for multiple algorithms like LZMA, Bzip2, PPMD, etc, with SKEIN/
 SHA checksums for data integrity. It can also do Lempel-Ziv pre-compression
 (derived from libbsc) to improve compression ratios across the board. SSE
 optimizations for the bundled LZMA are included. It also implements
-chunk-level Content-Aware Deduplication and Delta Compression features
-based on a Semi-Rabin Fingerprinting scheme. Delta Compression is done
-via the widely popular bsdiff algorithm. Similarity is detected using a
-technique based on MinHashing. When doing chunk-level dedupe it attempts
-to merge adjacent non-duplicate blocks index entries into a single larger
-entry to reduce metadata. In addition to all these it can internally split
-chunks at rabin boundaries to help dedupe and compression.
+Variable Block Deduplication and Delta Compression features based on a
+Semi-Rabin Fingerprinting scheme. Delta Compression is done via the widely
+popular bsdiff algorithm. Similarity is detected using a technique based
+on MinHashing. When doing Dedupe it attempts to merge adjacent non-
+duplicate block index entries into a single larger entry to reduce metadata.
+In addition to all these it can internally split chunks at rabin boundaries
+to help Dedupe and compression.
 
 It has low metadata overhead and overlaps I/O and compression to achieve
 maximum parallelism. It also bundles a simple slab allocator to speed

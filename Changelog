@@ -1,3 +1,32 @@
+== 2.1 Update Release ==
+Add more tests covering Segmented Global Dedupe.
+Fix some tests.
+Switch location of Dedupe context creation to allow correct index memory sizing.
+Update README with details of Global Dedupe block hash selection.
+Add SSE2 optimizations for Segmented Dedupe.
+Fix segment offset sorting.
+Get rid of incorrect duplicate checks in index.
+Allow SKEIN to be used as a Global Dedupe chunk lookup hash.                                                                                                        
+Add a qsort variant optimized for integers and use in global dedupe.
+Cleanup LZMA CRC64/32 declarations and add a header.
+Fix heapq header.
+Use openmp parallelism always for chunk hash computation during Global Dedupe.
+Use SHA256 for Global Dedupe chunk lookup hash by default.
+Allow changing Global Dedupe chunk lookup hash via env variable.
+Fix crash with some older GCC versions. Reported in issue #7.
+Fix issue #7.
+Ensure tempfile cleanup even with error abort.
+Fix bugs and improve accuracy in Segmented Dedupe.
+Fix segment hashlist size computation.
+Remove unnecessary sync of segment hashlist file writes.
+Pass correct number of threads to index creation routine.
+Add more error checks.
+Handle correct positioning of segment hashlist file offset on write error.
+Add missing semaphore signaling at dedupe abort points with global dedupe.
+Use closer min-values sampling for improved segmented dedupe accuracy.
+Update proper checksum info in README.
+Fix sizing of similarity hash buffer.
+Tweak index size computation.
 == 2.0 Major Release ==
 Add test cases for Global Deduplication.
 Update documentation and code comments.
