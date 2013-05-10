@@ -84,6 +84,10 @@
 #	define	SSE_MODE		1
 #endif
 
+#if defined(__USE_SSE_INTRIN__) && !defined(__SSE4_1__)
+#	include <emmintrin.h>
+#endif
+
 #if defined(_OPENMP)
 #include <omp.h>
 #endif
