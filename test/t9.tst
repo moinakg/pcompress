@@ -32,7 +32,7 @@ then
 fi
 unset PCOMPRESS_CHUNK_HASH_GLOBAL
 
-for feat in "-L" "-L -D" "-L -D -E" "-L -B5" "-L -D -E -B2" "-F" "-F -L"
+for feat in "-L" "-L -D" "-L -D -E -M -C" "-L -B5" "-L -D -E -B2" "-F" "-F -L"
 do
 	cmd="../../pcompress -c dummy -l4 -s1m $feat $tstf"
 	echo "Running $cmd"
@@ -40,6 +40,12 @@ do
 	if [ $? -eq 0 ]
 	then
 		echo "FATAL: Compression DID NOT ERROR where expected"
+		rm -f ${tstf}.pz
+		break
+	fi
+	if [ -f core* ]
+	then
+		echo "FATAL: Compression crashed"
 		rm -f ${tstf}.pz
 		break
 	fi
@@ -62,6 +68,46 @@ do
 		rm -f ${tstf}.pz
 	done
 done
+
+#
+# Create a file larger than 2GB
+#
+if [ ! -f ${tstf}.1 ]
+then
+	echo -n "Creating a file approximately 2GB in size "
+	cp ${tstf} ${tstf}.1
+	t_sz=$tsz
+	while [ $t_sz -lt 2147480000 ]
+	do
+		cat ${tstf} >> ${tstf}.1
+		echo -n "."
+		t_sz=$((t_sz + tsz))
+	done
+	echo ""
+	echo "Done"
+fi
+
+#
+# Try to compress with segment sizes larger than what some compression algos allow.
+#
+for feat in "-E -M -C -s 2147480000" "-D -E -M -C -L -P -B 2 -s 2147480000"
+do
+	for algo in lz4 libbsc
+	do
+		cmd="../../pcompress -c $algo $feat ${tstf}.1"
+		echo "Running $cmd"
+		eval $cmd
+		if [ $? -eq 0 ]
+		then
+			echo "FATAL: Compression DID NOT ERROR where expected"
+			rm -f ${tstf}.1.pz
+			break
+		fi
+		rm -f ${tstf}.1.pz
+	done
+done
+rm -f ${tstf}.1.pz
+rm -f ${tstf}.1
 
 for feat in "-S CRC64" "-S BLAKE256" "-S BLAKE512" "-S SHA256" "-S SHA512" "-S KECCAK256" "-S KECCAK512"
 do
