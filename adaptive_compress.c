@@ -84,11 +84,15 @@ void
 adapt_stats(int show)
 {
 	if (show) {
-		fprintf(stderr, "Adaptive mode stats:\n");
-		fprintf(stderr, "	BZIP2 chunk count: %u\n", bzip2_count);
-		fprintf(stderr, "	LIBBSC chunk count: %u\n", bsc_count);
-		fprintf(stderr, "	PPMd chunk count: %u\n", ppmd_count);
-		fprintf(stderr, "	LZMA chunk count: %u\n\n", lzma_count);
+		if (bzip2_count > 0 || bsc_count > 0 || ppmd_count > 0 || lzma_count > 0) {
+			fprintf(stderr, "Adaptive mode stats:\n");
+			fprintf(stderr, "	BZIP2 chunk count: %u\n", bzip2_count);
+			fprintf(stderr, "	LIBBSC chunk count: %u\n", bsc_count);
+			fprintf(stderr, "	PPMd chunk count: %u\n", ppmd_count);
+			fprintf(stderr, "	LZMA chunk count: %u\n\n", lzma_count);
+		} else {
+			fprintf(stderr, "\n");
+		}
 	}
 	lzma_count = 0;
 	bzip2_count = 0;

@@ -200,13 +200,17 @@ show_compression_stats(uint64_t chunksize)
 	fprintf(stderr, "\nCompression Statistics\n");
 	fprintf(stderr, "======================\n");
 	fprintf(stderr, "Total chunks           : %u\n", chunk_num);
-	fprintf(stderr, "Best compressed chunk  : %s(%.2f%%)\n",
-	    bytes_to_size(smallest_chunk), (double)smallest_chunk/(double)chunksize*100);
-	fprintf(stderr, "Worst compressed chunk : %s(%.2f%%)\n",
-	    bytes_to_size(largest_chunk), (double)largest_chunk/(double)chunksize*100);
-	avg_chunk /= chunk_num;
-	fprintf(stderr, "Avg compressed chunk   : %s(%.2f%%)\n\n",
-	    bytes_to_size(avg_chunk), (double)avg_chunk/(double)chunksize*100);
+	if (chunk_num == 0) {
+		fprintf(stderr, "No statistics to display.\n");
+	} else {
+		fprintf(stderr, "Best compressed chunk  : %s(%.2f%%)\n",
+		    bytes_to_size(smallest_chunk), (double)smallest_chunk/(double)chunksize*100);
+		fprintf(stderr, "Worst compressed chunk : %s(%.2f%%)\n",
+		    bytes_to_size(largest_chunk), (double)largest_chunk/(double)chunksize*100);
+		avg_chunk /= chunk_num;
+		fprintf(stderr, "Avg compressed chunk   : %s(%.2f%%)\n\n",
+		    bytes_to_size(avg_chunk), (double)avg_chunk/(double)chunksize*100);
+	}
 }
 
 void

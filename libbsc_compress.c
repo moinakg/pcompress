@@ -96,8 +96,8 @@ libbsc_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	int rv;
 
 	if (chunksize > BSC_MAX_CHUNK) {
-		fprintf(stderr, "Max allowed chunk size for LIBBSC is: %ld \n",
-		    BSC_MAX_CHUNK);
+		fprintf(stderr, "Max allowed chunk size for LIBBSC is: %s \n",
+		    bytes_to_size(BSC_MAX_CHUNK));
 		return (1);
 	}
 	bscdat = slab_alloc(NULL, sizeof (struct libbsc_params));
