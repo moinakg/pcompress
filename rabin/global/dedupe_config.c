@@ -379,7 +379,7 @@ set_config_s(archive_config_t *cfg, const char *algo, cksum_t ck, cksum_t ck_sim
 		cfg->segment_sz_bytes = user_chunk_sz;
 		cfg->similarity_cksum_sz = cfg->chunk_cksum_sz;
 	} else {
-		cfg->segment_sz_bytes = EIGHT_MB;
+		cfg->segment_sz_bytes = EIGHT_MB * cfg->chunk_sz;
 	}
 
 	cfg->segment_sz = cfg->segment_sz_bytes / cfg->chunk_sz_bytes;
