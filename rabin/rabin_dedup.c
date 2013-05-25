@@ -73,7 +73,7 @@
 #include <allocator.h>
 #include <utils.h>
 #include <pthread.h>
-#include <heapq.h>
+#include <heap.h>
 #include <xxhash.h>
 #include <qsort.h>
 #include <lzma_crc.h>
@@ -475,7 +475,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	uint64_t cur_roll_checksum, cur_pos_checksum;
 	uint32_t *ctx_heap;
 	rabin_blockentry_t **htab;
-	heap_t heap;
+	MinHeap heap;
 	DEBUG_STAT_EN(uint32_t max_count);
 	DEBUG_STAT_EN(max_count = 0);
 	DEBUG_STAT_EN(double strt, en_1, en);
@@ -672,17 +672,15 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			 * search engines to detect similar documents.
 			 */
 			if (ctx->delta_flag) {
-				memcpy(ctx_heap, buf1+last_offset, length);
 				length /= 8;
 				pc[1] = DELTA_NORMAL_PCT(length);
 				pc[2] = DELTA_EXTRA_PCT(length);
 				pc[3] = DELTA_EXTRA2_PCT(length);
 
-				reset_heap(&heap, pc[ctx->delta_flag]);
-				ksmallest((int64_t *)ctx_heap, length, &heap);
-
+				heap_nsmallest(&heap, (int64_t *)(buf1+last_offset),
+					       (int64_t *)ctx_heap, pc[ctx->delta_flag], length);
 				ctx->blocks[blknum]->similarity_hash =
-					XXH32((const uchar_t *)ctx_heap,  pc[ctx->delta_flag]*8, 0);
+					XXH32((const uchar_t *)ctx_heap, heap_size(&heap)*8, 0);
 			}
 			++blknum;
 			last_offset = i+1;
@@ -713,16 +711,16 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			uint64_t pc[4];
 
 			if (length > ctx->rabin_poly_min_block_size) {
-				memcpy(ctx_heap, buf1+last_offset, length);
 				length /= 8;
 				pc[1] = DELTA_NORMAL_PCT(length);
 				pc[2] = DELTA_EXTRA_PCT(length);
 				pc[3] = DELTA_EXTRA2_PCT(length);
 
-				reset_heap(&heap, pc[ctx->delta_flag]);
-				ksmallest((int64_t *)ctx_heap, length, &heap);
+				heap_nsmallest(&heap, (int64_t *)(buf1+last_offset),
+					       (int64_t *)ctx_heap, pc[ctx->delta_flag], length);
+
 				cur_sketch =
-				    XXH32((const uchar_t *)ctx_heap,  pc[ctx->delta_flag]*8, 0);
+				    XXH32((const uchar_t *)ctx_heap,  heap_size(&heap)*8, 0);
 			} else {
 				cur_sketch =
 				    XXH32((const uchar_t *)(buf1+last_offset), length, 0);

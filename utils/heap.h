@@ -27,14 +27,14 @@
 #define	__HEAPQ_H_
 #define __TYPE int64_t
 
-typedef struct {
-    __TYPE *ary;
-    __TYPE len;
-    __TYPE tot;
-} heap_t;
+typedef struct Heap_ {
+	__TYPE size;
+	__TYPE totsize;
+	__TYPE *tree;
+} MinHeap;
 
-int ksmallest(__TYPE *ary, __TYPE len, heap_t *heap);
-void reset_heap(heap_t *h, __TYPE tot);
-void heapify(heap_t *h, __TYPE *ary);
+#define	heap_size(heap) ((heap)->size)
+
+void heap_nsmallest(MinHeap *heap, __TYPE *data, __TYPE *heapbuf, __TYPE heapsize, __TYPE datasize);
 
 #endif

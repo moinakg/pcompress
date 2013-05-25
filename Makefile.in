@@ -25,8 +25,8 @@
 PROG= pcompress
 MAINSRCS = main.c utils/utils.c allocator.c lzma_compress.c ppmd_compress.c \
 	adaptive_compress.c lzfx_compress.c lz4_compress.c none_compress.c \
-	utils/xxhash_base.c utils/heapq.c utils/cpuid.c
-MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heapq.h \
+	utils/xxhash_base.c utils/heap.c utils/cpuid.c
+MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heap.h \
 	utils/cpuid.h utils/xxhash.h
 MAINOBJS = $(MAINSRCS:.c=.o)
 
