@@ -31,6 +31,12 @@ then
 	rm -f ${tstf}.pz
 fi
 unset PCOMPRESS_CHUNK_HASH_GLOBAL
+if [ -f core* ]
+then
+	echo "FATAL: Compression crashed"
+	rm -f ${tstf}.pz
+	rm -f core*
+fi
 
 for feat in "-L" "-L -D" "-L -D -E -M -C" "-L -B5" "-L -D -E -B2" "-F" "-F -L"
 do
@@ -47,6 +53,7 @@ do
 	then
 		echo "FATAL: Compression crashed"
 		rm -f ${tstf}.pz
+		rm -f core*
 		break
 	fi
 	rm -f ${tstf}.pz
