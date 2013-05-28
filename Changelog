@@ -1,3 +1,12 @@
+== 2.2 Bugfix Release ==
+Update invalid environment variable handling to actually fail rather than auto-correct.
+Fix a crash with invalid PCOMPRESS_CHUNK_HASH_GLOBAL.
+Update testcase to correctly detect core files.
+Drastic simplification of Min-heap code and resultant Delta speedup.
+Correspond segment size to chunk size for Segmented Dedupe for better accuracy.
+Add a testcase for issue #10.
+Fix issue #10.
+Fix issue #8.
 == 2.1 Update Release ==
 Add more tests covering Segmented Global Dedupe.
 Fix some tests.
