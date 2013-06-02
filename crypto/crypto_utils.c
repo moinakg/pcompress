@@ -988,7 +988,7 @@ get_pw_string(uchar_t pw[MAX_PW_LEN], const char *prompt, int twice)
 	s = fgets(pw1, MAX_PW_LEN, input);
 	fputs("\n", stderr);
 
-	if (s == NULL) {
+	if (s == NULL || strlen(s) < 2) {
 		tcsetattr(fd, TCSANOW, &oldt);
 		fflush(strm);
 		return (-1);

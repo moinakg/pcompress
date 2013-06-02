@@ -23,12 +23,19 @@
 #
 
 PROG= pcompress
-MAINSRCS = main.c utils/utils.c allocator.c lzma_compress.c ppmd_compress.c \
+LIB=libpcompress.so
+LINKLIB=pcompress
+LIBVER=1
+MAINSRCS = utils/utils.c allocator.c lzma_compress.c ppmd_compress.c \
 	adaptive_compress.c lzfx_compress.c lz4_compress.c none_compress.c \
-	utils/xxhash_base.c utils/heap.c utils/cpuid.c
+	utils/xxhash_base.c utils/heap.c utils/cpuid.c pcompress.c
 MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heap.h \
 	utils/cpuid.h utils/xxhash.h
 MAINOBJS = $(MAINSRCS:.c=.o)
+
+PROGSRCS = main.c
+PROGHDRS = pcompress.h  utils/utils.h
+PROGOBJS = $(PROGSRCS:.c=.o)
 
 XSALSA20_STREAM_C = crypto/xsalsa20/stream.c
 XSALSA20_STREAM_ASM = crypto/xsalsa20/stream.s
@@ -190,25 +197,26 @@ COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -L./buildtmp -Wl,-R@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,-R@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
-	-L./buildtmp -Wl,-R@OPENSSL_LIBDIR@ -lcrypto -lrt $(EXTRA_LDFLAGS)
+	-L./buildtmp -Wl,-R@OPENSSL_LIBDIR@ -lcrypto -lrt $(EXTRA_LDFLAGS) -Wl,-R/usr/lib,--enable-new-dtags \
+	-Wl,-R/usr/lib64,--enable-new-dtags -Wl,-R.,--enable-new-dtags
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
 $(SKEIN_BLOCK_OBJ) @SHA2ASM_OBJS@ @SHA2_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
 $(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS) $(XXHASH_OBJS) $(BLAKE2_OBJS) \
 @CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS)
 
-DEBUG_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp
-DEBUG_COMPILE = gcc -g -c @EXTRA_OPT_FLAGS@
-DEBUG_COMPILE_cpp = g++ -g -c @EXTRA_OPT_FLAGS@
+DEBUG_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
+DEBUG_COMPILE = gcc -g -c @EXTRA_OPT_FLAGS@ -fPIC
+DEBUG_COMPILE_cpp = g++ -g -c @EXTRA_OPT_FLAGS@ -fPIC
 DEBUG_VEC_FLAGS = 
 DEBUG_LOOP_OPTFLAGS = 
 DEBUG_GEN_OPT = -O -fno-omit-frame-pointer @LIBBSCGEN_OPT@ -fopenmp
 DEBUG_CPPFLAGS = $(COMMON_CPPFLAGS)
 DEBUG_FPTR_FLAG = 
 
-RELEASE_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp
-RELEASE_COMPILE = gcc -c @EXTRA_OPT_FLAGS@
-RELEASE_COMPILE_cpp = g++ -c @EXTRA_OPT_FLAGS@
+RELEASE_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
+RELEASE_COMPILE = gcc -c @EXTRA_OPT_FLAGS@ -fPIC
+RELEASE_COMPILE_cpp = g++ -c @EXTRA_OPT_FLAGS@ -fPIC
 RELEASE_VEC_FLAGS = $(COMMON_VEC_FLAGS)
 RELEASE_LOOP_OPTFLAGS = $(COMMON_LOOP_OPTFLAGS)
 RELEASE_CPPFLAGS = $(COMMON_CPPFLAGS) -DNDEBUG
@@ -218,7 +226,8 @@ RELEASE_FPTR_FLAG = -fomit-frame-pointer
 NO_SLAB_CPPFLAGS = -DDEBUG_NO_SLAB
 DEBUG_STATS_CPPFLAGS = -DDEBUG_STATS
 
-LINK = @LINK@
+LINK.PROG = @LINK@
+LINK.LIB = @LINK@ -shared
 COMPILE = @COMPILE@
 COMPILE_cpp = @COMPILE_cpp@
 VEC_FLAGS = @VEC_FLAGS@
@@ -324,14 +333,21 @@ $(BLAKE2_OBJS): $(BLAKE2_SRCS) $(BLAKE2_BASE_SRCS) $(BLAKE2_HDRS)
 $(MAINOBJS): $(MAINSRCS) $(MAINHDRS)
 	$(COMPILE) $(GEN_OPT) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
-$(PROG): $(OBJS)
-	$(LINK) -o $@ $(OBJS) $(LDLIBS)
+$(PROGOBJS): $(PROGSRCS) $(PROGHDRS)
+	$(COMPILE) $(GEN_OPT) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
+$(LIB): $(OBJS)
+	$(LINK.LIB) -Wl,-soname,$(LIB).$(LIBVER) -o $(LIB).$(LIBVER) $(OBJS) $(LDLIBS)
+	ln -sf $(LIB).$(LIBVER) $(LIB)
+
+$(PROG): $(LIB) $(PROGOBJS)
+	$(LINK.PROG) -o $@ $(PROGOBJS) $(LDLIBS) -L. -l$(LINKLIB)
 
 test: all
 	(cd test; ulimit -c unlimited; sh ./run_test.sh $(TESTSUITE) ) 2>&1 | tee test.log
 
 clean:
-	$(RM) $(PROG) $(OBJS) $(BAKFILES)
+	$(RM) $(PROG) $(OBJS) $(BAKFILES) $(LIB) $(LIB).$(LIBVER)
 	$(RM) test.log
 	$(RM_RF) test/datafiles
 	$(RM_RF) buildtmp
@@ -344,8 +360,15 @@ install: $(PROG)
 	@chmod 0755 $(DESTDIR)$(PREFIX)/bin
 	@cp $(PROG) $(DESTDIR)$(PREFIX)/bin
 	@chmod 0555 $(DESTDIR)$(PREFIX)/bin/$(PROG)
+
+	@mkdir -p $(DESTDIR)$(PREFIX)/lib
+	@chmod 0755 $(DESTDIR)$(PREFIX)/lib
+	@cp $(LIB).$(LIBVER) $(DESTDIR)$(PREFIX)/lib
+	@chmod 0555 $(DESTDIR)$(PREFIX)/lib/$(LIB).$(LIBVER)
+	@ln -sf $(LIB).$(LIBVER) $(DESTDIR)$(PREFIX)/lib/$(LIB)
+
 	@mkdir -p $(DESTDIR)$(PREFIX)/share/doc/$(PROG)
-	@chmod 0755 $(DESTDIR)$(PREFIX)/share $(PREFIX)/share/doc $(PREFIX)/share/doc/$(PROG)
+	@chmod 0755 $(DESTDIR)$(PREFIX)/share $(DESTDIR)$(PREFIX)/share/doc $(DESTDIR)$(PREFIX)/share/doc/$(PROG)
 	@cp README.md $(DESTDIR)$(PREFIX)/share/doc/$(PROG)/README
 	@chmod 0444 $(DESTDIR)$(PREFIX)/share/doc/$(PROG)/README
 

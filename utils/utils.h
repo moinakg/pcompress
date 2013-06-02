@@ -211,6 +211,7 @@ extern processor_info_t proc_info;
 #endif
 
 extern void err_exit(int show_errno, const char *format, ...);
+extern void err_print(int show_errno, const char *format, ...);
 extern const char *get_execname(const char *);
 extern int parse_numeric(int64_t *val, const char *str);
 extern char *bytes_to_size(uint64_t bytes);

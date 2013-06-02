@@ -70,6 +70,20 @@ err_exit(int show_errno, const char *format, ...)
 	exit(1);
 }
 
+void
+err_print(int show_errno, const char *format, ...)
+{
+	int err = errno;
+	va_list args;
+
+	va_start(args, format);
+	vfprintf(stderr, format, args);
+	va_end(args);
+
+	if (show_errno)
+		fprintf(stderr, "\nError: %s\n", strerror(err));
+}
+
 /*
  * Fetch the command name that started the current process.
  * The returned string must be freed by the caller.

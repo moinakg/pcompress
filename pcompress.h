@@ -66,7 +66,7 @@ extern "C" {
  */
 #define	COMPRESSED_CHUNKSZ	(sizeof (uint64_t))
 #define	ORIGINAL_CHUNKSZ	(sizeof (uint64_t))
-#define	CHUNK_HDR_SZ		(COMPRESSED_CHUNKSZ + cksum_bytes + ORIGINAL_CHUNKSZ + CHUNK_FLAG_SZ)
+#define	CHUNK_HDR_SZ		(COMPRESSED_CHUNKSZ + pctx->cksum_bytes + ORIGINAL_CHUNKSZ + CHUNK_FLAG_SZ)
 
 /*
  * lower 3 bits in higher nibble indicate chunk compression algorithm
@@ -174,6 +174,44 @@ extern int libbsc_deinit(void **data);
 extern void libbsc_stats(int show);
 #endif
 
+typedef struct pc_ctx {
+	compress_func_ptr _compress_func;
+	compress_func_ptr _decompress_func;
+	init_func_ptr _init_func;
+	deinit_func_ptr _deinit_func;
+	stats_func_ptr _stats_func;
+	props_func_ptr _props_func;
+
+	int inited;
+	int main_cancel;
+	int adapt_mode;
+	int pipe_mode, pipe_out;
+	int nthreads;
+	int hide_mem_stats;
+	int hide_cmp_stats;
+	int enable_rabin_scan;
+	int enable_rabin_global;
+	int enable_delta_encode;
+	int enable_delta2_encode;
+	int enable_rabin_split;
+	int enable_fixed_scan;
+	int lzp_preprocess;
+	int encrypt_type;
+	unsigned int chunk_num;
+	uint64_t largest_chunk, smallest_chunk, avg_chunk;
+	uint64_t chunksize;
+	const char *exec_name, *algo, *filename, *to_filename;
+	int do_compress, level;
+	int do_uncompress;
+	int cksum_bytes, mac_bytes;
+	int cksum, t_errored;
+	int rab_blk_size, keylen;
+	crypto_ctx_t crypto_ctx;
+	unsigned char *user_pw;
+	int user_pw_len;
+	char *pwd_file, *f_name;
+} pc_ctx_t;
+
 /*
  * Per-thread data structure for compression and decompression threads.
  */
@@ -200,7 +238,19 @@ struct cmp_data {
 	mac_ctx_t chunk_hmac;
 	algo_props_t *props;
 	int decompressing;
+	pc_ctx_t *pctx;
 };
+
+void usage(pc_ctx_t *pctx);
+pc_ctx_t *create_pc_context(void);
+int init_pc_context_argstr(pc_ctx_t *pctx, char *args);
+int init_pc_context(pc_ctx_t *pctx, int argc, char *argv[]);
+void destroy_pc_context(pc_ctx_t *pctx);
+void pc_set_userpw(pc_ctx_t *pctx, unsigned char *pwdata, int pwlen);
+
+int start_pcompress(pc_ctx_t *pctx);
+int start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int level);
+int start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename);
 
 #ifdef	__cplusplus
 }
