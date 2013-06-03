@@ -34,7 +34,7 @@
 /*
  * PPMd model order to working set memory size mappings.
  */
-unsigned int ppmd8_mem_sz[] = {
+static unsigned int ppmd8_mem_sz[] = {
 	(16 << 20),
 	(16 << 20),
 	(32 << 20),

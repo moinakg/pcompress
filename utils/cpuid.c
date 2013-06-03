@@ -62,7 +62,7 @@
 #define	XOP_FLAG		0x800
 #define	AES_FLAG		0x2000000
 
-void
+static void
 exec_cpuid(uint32_t *regs)
 {
 #ifdef __GNUC__

@@ -4,6 +4,7 @@ files.lst
 *.o
 *.so
 pcompress
+libpcompress*
 Makefile
 test.log
 test/datafiles

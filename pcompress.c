@@ -78,7 +78,7 @@ static void * writer_thread(void *dat);
 static int init_algo(pc_ctx_t *pctx, const char *algo, int bail);
 extern uint32_t lzma_crc32(const uint8_t *buf, uint64_t size, uint32_t crc);
 
-void
+void DLL_EXPORT
 usage(pc_ctx_t *pctx)
 {
 	fprintf(stderr,
@@ -686,7 +686,7 @@ cont:
  */
 #define UNCOMP_BAIL err = 1; goto uncomp_done
 
-int
+int DLL_EXPORT
 start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 {
 	char algorithm[ALGO_SZ];
@@ -1689,7 +1689,7 @@ do_cancel:
  */
 #define COMP_BAIL err = 1; goto comp_done
 
-int
+int DLL_EXPORT
 start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int level)
 {
 	struct wdata w;
@@ -2516,7 +2516,7 @@ init_algo(pc_ctx_t *pctx, const char *algo, int bail)
 /*
  * Pcompress context handling functions.
  */
-pc_ctx_t *
+pc_ctx_t DLL_EXPORT * 
 create_pc_context(void)
 {
 	pc_ctx_t *ctx = (pc_ctx_t *)malloc(sizeof (pc_ctx_t));
@@ -2537,7 +2537,7 @@ create_pc_context(void)
 	return (ctx);
 }
 
-void
+void DLL_EXPORT
 destroy_pc_context(pc_ctx_t *pctx)
 {
 	if (pctx->do_compress)
@@ -2549,7 +2549,7 @@ destroy_pc_context(pc_ctx_t *pctx)
 	slab_cleanup(pctx->hide_mem_stats);
 }
 
-int
+int DLL_EXPORT
 init_pc_context_argstr(pc_ctx_t *pctx, char *args)
 {
 	int ac;
@@ -2568,7 +2568,7 @@ init_pc_context_argstr(pc_ctx_t *pctx, char *args)
 	return (0);
 }
 
-int
+int DLL_EXPORT
 init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 {
 	int opt, num_rem, err, my_optind;
@@ -2859,7 +2859,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	return (0);
 }
 
-int
+int DLL_EXPORT
 start_pcompress(pc_ctx_t *pctx)
 {
 	int err;
@@ -2877,7 +2877,7 @@ start_pcompress(pc_ctx_t *pctx)
 /*
  * Setter functions for various parameters in the context.
  */
-void
+void DLL_EXPORT
 pc_set_userpw(pc_ctx_t *pctx, unsigned char *pwdata, int pwlen)
 {
 	pctx->user_pw = pwdata;

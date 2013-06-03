@@ -134,6 +134,14 @@ typedef int32_t bsize_t;
 #	endif
 #endif
 
+#ifdef __GNUC__
+#define DLL_EXPORT __attribute__ ((visibility ("default")))
+#define DLL_LOCAL  __attribute__ ((visibility ("hidden")))
+#else
+#define DLL_EXPORT
+#define DLL_LOCAL
+#endif
+
 #define ISP2(x) ((x != 0) && ((x & (~x + 1)) == x))
 
 #ifdef	DEBUG_STATS

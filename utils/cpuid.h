@@ -93,7 +93,6 @@ struct cpu_raw_data_t {
 	char vendor_str[VENDOR_STR_MAX];
 };
 
-void exec_cpuid(uint32_t *regs);
 void cpuid_get_raw_data(struct cpu_raw_data_t* data);
 void cpuid_basic_identify(processor_info_t *pc);
 
