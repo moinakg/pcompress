@@ -361,7 +361,6 @@ int
 set_config_s(archive_config_t *cfg, const char *algo, cksum_t ck, cksum_t ck_sim,
 	     uint32_t chunksize, size_t file_sz, uint64_t user_chunk_sz, int pct_interval)
 {
-
 	cfg->algo = get_compress_algo(algo);
 	cfg->chunk_cksum_type = ck;
 	cfg->similarity_cksum = ck_sim;

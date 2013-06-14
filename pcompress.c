@@ -1795,7 +1795,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	/* A host of sanity checks. */
 	if (!pctx->pipe_mode) {
 		char *tmp;
-		if ((uncompfd = open(filename, O_RDWR, 0)) == -1) {
+		if ((uncompfd = open(filename, O_RDONLY, 0)) == -1) {
 			err_print(1, "Cannot open: %s", filename);
 			return (1);
 		}

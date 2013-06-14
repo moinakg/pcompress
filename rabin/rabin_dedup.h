@@ -63,7 +63,7 @@
 #ifndef _RABIN_POLY_H_
 #define _RABIN_POLY_H_
 
-#include "utils.h"
+#include <utils.h>
 #include <index.h>
 #include <crypto_utils.h>
 #include <pthread.h>

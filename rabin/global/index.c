@@ -268,6 +268,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	if (pct_interval > 0) {
 		int errored;
 
+		DEBUG_STAT_EN(printf("Using Segmented Global Deduplication.\n"));
 		strcpy(cfg->rootdir, tmppath);
 		strcat(cfg->rootdir, "/.segXXXXXX");
 		cfg->seg_fd_w = mkstemp(cfg->rootdir);
