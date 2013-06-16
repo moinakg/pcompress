@@ -35,6 +35,18 @@ even if the same password is used and HMAC is used to do authentication.
 NOTE: This utility is Not an archiver. It compresses only single files or
       datastreams. To archive use something else like tar, cpio or pax.
 
+Links of Interest
+=================
+
+Project Home Page: http://moinakg.github.io/pcompress/
+
+http://moinakg.github.io/pcompress/#deduplication-chunking-analysis
+http://moinakg.github.io/pcompress/#compression-benchmarks
+http://moinakg.wordpress.com/2013/04/26/pcompress-2-0-with-global-deduplication/
+http://moinakg.wordpress.com/2013/03/26/coordinated-parallelism-using-semaphores/
+http://moinakg.wordpress.com/2013/06/11/architecture-for-a-deduplicated-archival-store-part-1/
+http://moinakg.wordpress.com/2013/06/15/architecture-for-a-deduplicated-archival-store-part-2/
+
 Usage
 =====
 
