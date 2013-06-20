@@ -114,6 +114,11 @@ uint64_t ir[256], out[256];
 static int inited = 0;
 archive_config_t *arc = NULL;
 
+uint64_t freqs[RAB_POLYNOMIAL_MAX_BLOCK_SIZE+1];
+uint64_t tot_chunks = 0;
+uint64_t tot_size = 0;
+double tot_time = 0;
+
 static uint32_t
 dedupe_min_blksz(int rab_blk_sz)
 {
@@ -130,6 +135,34 @@ dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta
 		rab_blk_sz = RAB_BLK_DEFAULT;
 
 	return ((chunksize / dedupe_min_blksz(rab_blk_sz)) * sizeof (uint32_t));
+}
+
+void
+dump_frequencies()
+{
+	int i, j;
+	uint64_t tot;
+	double tot_c, tot_s, bytes_sec;
+
+	printf("\nChunk Frequency Distribution\n");
+	printf("====================================\n");
+
+	for (i = 1; i <= RAB_POLYNOMIAL_MAX_BLOCK_SIZE;) {
+		tot = 0;
+		for (j = 0; j < 4096; j++) tot += freqs[i++];
+		if (tot > 0)
+			printf("%3d KB: %" PRIu64 "\n", i/1024, tot);
+	}
+	printf("====================================\n");
+	printf("Number of chunks  : %" PRIu64 "\n", tot_chunks);
+	tot_c = tot_chunks;
+	tot_s = tot_size;
+	printf("Average chunk size: %.2F Bytes\n", tot_s / tot_c);
+
+	bytes_sec = tot_s / tot_time * 1000;
+	printf("Average chunking speed: %.3f MB/s\n", BYTES_TO_MB(bytes_sec));
+
+	printf("====================================\n");
 }
 
 /*
@@ -185,6 +218,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		int term, pow, j;
 		uint64_t val, poly_pow;
 
+		memset(freqs, 0, sizeof (freqs));
 		poly_pow = 1;
 		for (j = 0; j < RAB_POLYNOMIAL_WIN_SIZE; j++) {
 			poly_pow = (poly_pow * RAB_POLYNOMIAL_CONST) & POLY_MASK;
@@ -478,9 +512,9 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	uint32_t *ctx_heap;
 	rabin_blockentry_t **htab;
 	MinHeap heap;
-	DEBUG_STAT_EN(uint32_t max_count);
-	DEBUG_STAT_EN(max_count = 0);
-	DEBUG_STAT_EN(double strt, en_1, en);
+	DEBUG_STAT_EN(uint32_t max_count = 0);
+	DEBUG_STAT_EN(double en);
+	double strt, en_1;
 
 	length = offset;
 	last_offset = 0;
@@ -489,7 +523,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	ctx->valid = 0;
 	cur_roll_checksum = 0;
 	if (*size < ctx->rabin_poly_avg_block_size) return (0);
-	DEBUG_STAT_EN(strt = get_wtime_millis());
+	strt = get_wtime_millis();
 
 	if (ctx->dedupe_flag == RABIN_DEDUPE_FIXED) {
 		blknum = *size / ctx->rabin_poly_avg_block_size;
@@ -516,7 +550,12 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			ctx->blocks[i]->hash = XXH32(buf1+last_offset, length, 0);
 			ctx->blocks[i]->similarity_hash = ctx->blocks[i]->hash;
 			last_offset += length;
+			tot_chunks++;
+			tot_size += length;
 		}
+		en_1 = get_wtime_millis();
+		tot_time += en_1 - strt;
+		for (i=0; i<blknum; i++) freqs[ctx->blocks[i]->length]++;
 		goto process_blocks;
 	}
 
@@ -659,6 +698,8 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 				ctx->g_blocks[blknum].length = length;
 				ctx->g_blocks[blknum].offset = last_offset;
 			}
+			tot_chunks++;
+			tot_size += length;
 			DEBUG_STAT_EN(if (length >= ctx->rabin_poly_max_block_size) ++max_count);
 
 			/*
@@ -708,6 +749,8 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			ctx->g_blocks[blknum].offset = last_offset;
 		}
 
+		tot_chunks++;
+		tot_size += length;
 		if (ctx->delta_flag) {
 			uint64_t cur_sketch;
 			uint64_t pc[4];
@@ -735,7 +778,8 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 
 process_blocks:
 	// If we found at least a few chunks, perform dedup.
-	DEBUG_STAT_EN(en_1 = get_wtime_millis());
+	en_1 = get_wtime_millis();
+	tot_time += en_1 - strt;
 	DEBUG_STAT_EN(fprintf(stderr, "Original size: %" PRId64 ", blknum: %u\n", *size, blknum));
 	DEBUG_STAT_EN(fprintf(stderr, "Number of maxlen blocks: %u\n", max_count));
 	if (blknum <=2 && ctx->arc) {
@@ -773,6 +817,7 @@ process_blocks:
 					ctx->g_blocks[i].length, 0, 0);
 			}
 
+			for (i=0; i<blknum; i++) freqs[ctx->g_blocks[i].length]++;
 			/*
 			 * Index table within this segment.
 			 */
@@ -1288,6 +1333,7 @@ next_ent:
 			}
 		}
 
+		for (i=0; i<blknum; i++) freqs[ctx->blocks[i]->length]++;
 		ary_sz = (blknum << 1) * sizeof (rabin_blockentry_t *);
 		htab = (rabin_blockentry_t **)(ctx->cbuf + ctx->real_chunksize - ary_sz);
 		memset(htab, 0, ary_sz);

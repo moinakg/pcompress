@@ -1103,12 +1103,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		}
 	}
 
-	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
-	if (pctx->nthreads > 0 && pctx->nthreads < nprocs)
-		nprocs = pctx->nthreads;
-	else
-		pctx->nthreads = nprocs;
-
+	nprocs = 1;
 	set_threadcounts(&props, &(pctx->nthreads), nprocs, DECOMPRESS_THREADS);
 	if (props.is_single_chunk)
 		pctx->nthreads = 1;
@@ -1662,7 +1657,8 @@ repeat:
 			pctx->avg_chunk += tdat->len_cmp;
 		}
 
-		wbytes = Write(w->wfd, tdat->cmp_seg, tdat->len_cmp);
+		//wbytes = Write(w->wfd, tdat->cmp_seg, tdat->len_cmp);
+		wbytes = tdat->len_cmp;
 		if (unlikely(wbytes != tdat->len_cmp)) {
 			perror("Chunk Write: ");
 do_cancel:
@@ -1785,12 +1781,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	thread = 0;
 	single_chunk = 0;
 	rctx = NULL;
-
-	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
-	if (pctx->nthreads > 0 && pctx->nthreads < nprocs)
-		nprocs = pctx->nthreads;
-	else
-		pctx->nthreads = nprocs;
+	nprocs = 1;
 
 	/* A host of sanity checks. */
 	if (!pctx->pipe_mode) {
@@ -2387,6 +2378,7 @@ comp_done:
 		if (uncompfd != -1) close(uncompfd);
 	}
 
+	dump_frequencies();
 	if (!pctx->hide_cmp_stats) show_compression_stats(pctx);
 	pctx->_stats_func(!pctx->hide_cmp_stats);
 
@@ -2726,6 +2718,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	optind = 0;
 	pthread_mutex_unlock(&opt_parse);
 
+	pctx->nthreads = 1;
 	if ((pctx->do_compress && pctx->do_uncompress) || (!pctx->do_compress && !pctx->do_uncompress)) {
 		return (2);
 	}

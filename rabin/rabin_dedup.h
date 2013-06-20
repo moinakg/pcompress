@@ -80,7 +80,7 @@
 #define	RAB_POLYNOMIAL_WIN_SIZE 16
 #define	RAB_POLYNOMIAL_MIN_WIN_SIZE 8
 #define	RAB_POLYNOMIAL_MAX_WIN_SIZE 64
-#define	RAB_POLYNOMIAL_MAX_BLOCK_SIZE (128 * 1024)
+#define	RAB_POLYNOMIAL_MAX_BLOCK_SIZE (64 * 1024)
 #define	RAB_BLK_MASK (((1 << RAB_BLK_MIN_BITS) - 1) >> 1)
 #define	RAB_BLK_AVG_SZ(x) (1 << ((x) + RAB_BLK_MIN_BITS))
 
@@ -206,5 +206,6 @@ extern uint32_t dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char 
 extern int global_dedupe_bufadjust(uint32_t rab_blk_sz, uint64_t *user_chunk_sz, int pct_interval,
 		 const char *algo, cksum_t ck, cksum_t ck_sim, size_t file_sz,
 		 size_t memlimit, int nthreads, int pipe_mode);
+extern void dump_frequencies();
 
 #endif /* _RABIN_POLY_H_ */
