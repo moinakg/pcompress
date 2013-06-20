@@ -116,7 +116,7 @@ archive_config_t *arc = NULL;
 
 uint64_t freqs[RAB_POLYNOMIAL_MAX_BLOCK_SIZE+1];
 uint64_t tot_chunks = 0;
-uint64_t tot_size = 0;
+uint64_t tot_size = 0, non_hashed_size = 0;
 double tot_time = 0;
 
 static uint32_t
@@ -161,6 +161,9 @@ dump_frequencies()
 
 	bytes_sec = tot_s / tot_time * 1000;
 	printf("Average chunking speed: %.3f MB/s\n", BYTES_TO_MB(bytes_sec));
+
+	tot_c = non_hashed_size;
+	printf("%%age of roll hash coverage: %.2f%%\n", (1 - tot_c / tot_s) * 100);
 
 	printf("====================================\n");
 }
@@ -552,6 +555,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			last_offset += length;
 			tot_chunks++;
 			tot_size += length;
+			non_hashed_size += length;
 		}
 		en_1 = get_wtime_millis();
 		tot_time += en_1 - strt;
@@ -641,6 +645,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	 */
 	offset = ctx->rabin_poly_min_block_size - RAB_WINDOW_SLIDE_OFFSET;
 	length = offset;
+	non_hashed_size += offset;
 	for (i=offset; i<j; i++) {
 		uint64_t pc[4];
 		uint32_t cur_byte = buf1[i];
@@ -731,12 +736,14 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			if (*size - last_offset <= ctx->rabin_poly_min_block_size) break;
 			length = ctx->rabin_poly_min_block_size - RAB_WINDOW_SLIDE_OFFSET;
 			i = i + length;
+			non_hashed_size += length;
 		}
 	}
 
 	// Insert the last left-over trailing bytes, if any, into a block.
 	if (last_offset < *size) {
 		length = *size - last_offset;
+		non_hashed_size += length;
 		if (!(ctx->arc)) {
 			if (ctx->blocks[blknum] == 0)
 				ctx->blocks[blknum] = (rabin_blockentry_t *)slab_alloc(NULL,
