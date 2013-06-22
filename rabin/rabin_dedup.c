@@ -115,7 +115,7 @@ static int inited = 0;
 archive_config_t *arc = NULL;
 
 uint64_t freqs[RAB_POLYNOMIAL_MAX_BLOCK_SIZE+1];
-uint64_t tot_chunks = 0;
+uint64_t tot_chunks = 0, min_chunk;
 uint64_t tot_size = 0, non_hashed_size = 0;
 double tot_time = 0;
 
@@ -147,6 +147,8 @@ dump_frequencies()
 	printf("\nChunk Frequency Distribution\n");
 	printf("====================================\n");
 
+	printf("Min chunk size: %" PRIu64 "\n", min_chunk);
+
 	for (i = 1; i <= RAB_POLYNOMIAL_MAX_BLOCK_SIZE;) {
 		tot = 0;
 		for (j = 0; j < 4096; j++) tot += freqs[i++];
@@ -163,6 +165,8 @@ dump_frequencies()
 	printf("Average chunking speed: %.3f MB/s\n", BYTES_TO_MB(bytes_sec));
 
 	tot_c = non_hashed_size;
+	printf("Total data length: %" PRIu64 "\n", tot_size);
+	printf("Hashed data length: %" PRIu64 "\n", tot_size - non_hashed_size);
 	printf("%%age of roll hash coverage: %.2f%%\n", (1 - tot_c / tot_s) * 100);
 
 	printf("====================================\n");
@@ -318,6 +322,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx->rabin_poly_avg_block_size = RAB_BLK_AVG_SZ(rab_blk_sz);
 	ctx->rabin_avg_block_mask = RAB_BLK_MASK;
 	ctx->rabin_poly_min_block_size = dedupe_min_blksz(rab_blk_sz);
+	min_chunk = ctx->rabin_poly_min_block_size;
 	ctx->delta_flag = 0;
 	ctx->deltac_min_distance = props->deltac_min_distance;
 	ctx->pagesize = sysconf(_SC_PAGE_SIZE);
