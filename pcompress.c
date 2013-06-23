@@ -2048,6 +2048,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 				COMP_BAIL;
 			}
 
+			tdat->rctx->full_chunking = pctx->full_chunking;
 			tdat->rctx->index_sem = &(tdat->index_sem);
 			tdat->rctx->id = i;
 		}
@@ -2173,6 +2174,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	if (pctx->enable_rabin_split) {
 		rctx = create_dedupe_context(chunksize, 0, 0, pctx->algo, &props, pctx->enable_delta_encode,
 		    pctx->enable_fixed_scan, VERSION, COMPRESS, 0, NULL, pctx->pipe_mode, nprocs);
+		rctx->full_chunking = 0;
 		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 	} else {
 		rbytes = Read(uncompfd, cread_buf, chunksize);
@@ -2571,7 +2573,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	pctx->chunksize = DEFAULT_CHUNKSIZE;
 
 	pthread_mutex_lock(&opt_parse);
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:rLPS:B:Fk:")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:rLPS:B:Fk:f")) != -1) {
 		int ovr;
 		int64_t chunksize;
 
@@ -2706,6 +2708,10 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 				err_print(0, "Invalid checksum type %s\n", optarg);
 				return (1);
 			}
+			break;
+
+		    case 'f':
+			pctx->full_chunking = 1;
 			break;
 
 		    case '?':

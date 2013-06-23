@@ -178,6 +178,7 @@ typedef struct {
 	short valid;
 	void *lzma_data;
 	int level, delta_flag, dedupe_flag, deltac_min_distance;
+	int full_chunking;
 	uint64_t file_offset; // For global dedupe
 	archive_config_t *arc;
 	sem_t *index_sem;

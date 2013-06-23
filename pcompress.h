@@ -197,6 +197,7 @@ typedef struct pc_ctx {
 	int enable_fixed_scan;
 	int lzp_preprocess;
 	int encrypt_type;
+	int full_chunking;
 	unsigned int chunk_num;
 	uint64_t largest_chunk, smallest_chunk, avg_chunk;
 	uint64_t chunksize;

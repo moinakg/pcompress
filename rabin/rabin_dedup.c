@@ -114,10 +114,11 @@ uint64_t ir[256], out[256];
 static int inited = 0;
 archive_config_t *arc = NULL;
 
-uint64_t freqs[RAB_POLYNOMIAL_MAX_BLOCK_SIZE+1];
-uint64_t tot_chunks = 0, min_chunk;
-uint64_t tot_size = 0, non_hashed_size = 0;
-double tot_time = 0;
+static uint64_t freqs[RAB_POLYNOMIAL_MAX_BLOCK_SIZE+1];
+static uint64_t tot_chunks = 0, min_chunk;
+static uint64_t tot_size = 0, non_hashed_size = 0;
+static double tot_time = 0;
+static int full_chunking = 0;
 
 static uint32_t
 dedupe_min_blksz(int rab_blk_sz)
@@ -140,7 +141,7 @@ dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta
 void
 dump_frequencies()
 {
-	int i, j;
+	int i, j, limit;
 	uint64_t tot;
 	double tot_c, tot_s, bytes_sec;
 
@@ -149,11 +150,16 @@ dump_frequencies()
 
 	printf("Min chunk size: %" PRIu64 "\n", min_chunk);
 
+	if (full_chunking)
+		limit = 1024;
+	else
+		limit = 4096;
 	for (i = 1; i <= RAB_POLYNOMIAL_MAX_BLOCK_SIZE;) {
 		tot = 0;
-		for (j = 0; j < 4096; j++) tot += freqs[i++];
-		if (tot > 0)
+		for (j = 0; j < limit; j++) tot += freqs[i++];
+		if (tot > 0) {
 			printf("%3d KB: %" PRIu64 "\n", i/1024, tot);
+		}
 	}
 	printf("====================================\n");
 	printf("Number of chunks  : %" PRIu64 "\n", tot_chunks);
@@ -530,6 +536,7 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	window_pos = 0;
 	ctx->valid = 0;
 	cur_roll_checksum = 0;
+	full_chunking = ctx->full_chunking;
 	if (*size < ctx->rabin_poly_avg_block_size) return (0);
 	strt = get_wtime_millis();
 
@@ -585,6 +592,9 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		 */
 		ary_sz += ctx->rabin_poly_max_block_size;
 		ctx_heap = (uint32_t *)(ctx->cbuf + ctx->real_chunksize - ary_sz);
+	}
+	if (ctx->full_chunking) {
+		ctx->rabin_poly_min_block_size = 1;
 	}
 #ifndef SSE_MODE
 	memset(ctx->current_window_data, 0, RAB_POLYNOMIAL_WIN_SIZE);
@@ -648,7 +658,11 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	 * Start our sliding window at a fixed number of bytes before the min window size.
 	 * It is pointless to slide the window over the whole length of the chunk.
 	 */
-	offset = ctx->rabin_poly_min_block_size - RAB_WINDOW_SLIDE_OFFSET;
+	if (ctx->full_chunking) {
+		offset = 0;
+	} else {
+		offset = ctx->rabin_poly_min_block_size - RAB_WINDOW_SLIDE_OFFSET;
+	}
 	length = offset;
 	non_hashed_size += offset;
 	for (i=offset; i<j; i++) {
@@ -697,16 +711,20 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		if ((cur_pos_checksum & ctx->rabin_avg_block_mask) == ctx->rabin_break_patt ||
 		    length >= ctx->rabin_poly_max_block_size) {
 
-			if (!(ctx->arc)) {
-				if (ctx->blocks[blknum] == 0)
-					ctx->blocks[blknum] = (rabin_blockentry_t *)slab_alloc(NULL,
-					    sizeof (rabin_blockentry_t));
-				ctx->blocks[blknum]->offset = last_offset;
-				ctx->blocks[blknum]->index = blknum; // Need to store for sorting
-				ctx->blocks[blknum]->length = length;
+			if (!(ctx->full_chunking)) {
+				if (!(ctx->arc)) {
+					if (ctx->blocks[blknum] == 0)
+						ctx->blocks[blknum] = (rabin_blockentry_t *)slab_alloc(NULL,
+					    	sizeof (rabin_blockentry_t));
+					ctx->blocks[blknum]->offset = last_offset;
+					ctx->blocks[blknum]->index = blknum; // Need to store for sorting
+					ctx->blocks[blknum]->length = length;
+				} else {
+					ctx->g_blocks[blknum].length = length;
+					ctx->g_blocks[blknum].offset = last_offset;
+				}
 			} else {
-				ctx->g_blocks[blknum].length = length;
-				ctx->g_blocks[blknum].offset = last_offset;
+				freqs[length]++;
 			}
 			tot_chunks++;
 			tot_size += length;
@@ -739,8 +757,10 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			last_offset = i+1;
 			length = 0;
 			if (*size - last_offset <= ctx->rabin_poly_min_block_size) break;
-			length = ctx->rabin_poly_min_block_size - RAB_WINDOW_SLIDE_OFFSET;
-			i = i + length;
+			if (ctx->full_chunking == 0) {
+				length = ctx->rabin_poly_min_block_size - RAB_WINDOW_SLIDE_OFFSET;
+				i = i + length;
+			}
 			non_hashed_size += length;
 		}
 	}
@@ -749,16 +769,20 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	if (last_offset < *size) {
 		length = *size - last_offset;
 		non_hashed_size += length;
-		if (!(ctx->arc)) {
-			if (ctx->blocks[blknum] == 0)
-				ctx->blocks[blknum] = (rabin_blockentry_t *)slab_alloc(NULL,
-					sizeof (rabin_blockentry_t));
-			ctx->blocks[blknum]->offset = last_offset;
-			ctx->blocks[blknum]->index = blknum;
-			ctx->blocks[blknum]->length = length;
+		if (!(ctx->full_chunking)) {
+			if (!(ctx->arc)) {
+				if (ctx->blocks[blknum] == 0)
+					ctx->blocks[blknum] = (rabin_blockentry_t *)slab_alloc(NULL,
+						sizeof (rabin_blockentry_t));
+				ctx->blocks[blknum]->offset = last_offset;
+				ctx->blocks[blknum]->index = blknum;
+				ctx->blocks[blknum]->length = length;
+			} else {
+				ctx->g_blocks[blknum].length = length;
+				ctx->g_blocks[blknum].offset = last_offset;
+			}
 		} else {
-			ctx->g_blocks[blknum].length = length;
-			ctx->g_blocks[blknum].offset = last_offset;
+			freqs[length]++;
 		}
 
 		tot_chunks++;
@@ -794,6 +818,7 @@ process_blocks:
 	tot_time += en_1 - strt;
 	DEBUG_STAT_EN(fprintf(stderr, "Original size: %" PRId64 ", blknum: %u\n", *size, blknum));
 	DEBUG_STAT_EN(fprintf(stderr, "Number of maxlen blocks: %u\n", max_count));
+	if (ctx->full_chunking) blknum = 0;
 	if (blknum <=2 && ctx->arc) {
 		sem_wait(ctx->index_sem);
 		sem_post(ctx->index_sem_next);
@@ -829,12 +854,12 @@ process_blocks:
 					ctx->g_blocks[i].length, 0, 0);
 			}
 
-			for (i=0; i<blknum; i++) freqs[ctx->g_blocks[i].length]++;
 			/*
 			 * Index table within this segment.
 			 */
 			g_dedupe_idx = ctx->cbuf + RABIN_HDR_SIZE;
 			dedupe_index_sz = 0;
+			for (i=0; i<blknum; i++) freqs[ctx->g_blocks[i].length]++;
 
 			/*
 			 * First entry in table is the original file offset where this
