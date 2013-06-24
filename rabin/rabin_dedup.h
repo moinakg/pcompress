@@ -86,7 +86,7 @@
 
 // The sliding window starts at min window size - this offset. It is needless
 // to slide the window over every byte in the chunk.
-#define	RAB_WINDOW_SLIDE_OFFSET	(256)
+#define	RAB_WINDOW_SLIDE_OFFSET	(64)
 
 // Minimum practical chunk size when doing dedup
 #define	RAB_MIN_CHUNK_SIZE (1048576L)
