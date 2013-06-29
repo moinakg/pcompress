@@ -2533,6 +2533,7 @@ create_pc_context(void)
 	ctx->hide_mem_stats = 1;
 	ctx->hide_cmp_stats = 1;
 	ctx->enable_rabin_split = 1;
+	ctx->rab_blk_size = 1;
 
 	return (ctx);
 }
