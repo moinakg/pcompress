@@ -882,6 +882,7 @@ process_blocks:
 				 * predictable serialization of index access in a sequence of
 				 * threads without locking.
 				 */
+				printf("Using simple dedupe index.\n");
 				length = 0;
 				DEBUG_STAT_EN(w1 = get_wtime_millis());
 				sem_wait(ctx->index_sem);
@@ -968,6 +969,7 @@ process_blocks:
 				 * ======================================================================
 				 */
 
+				printf("Using similarity based dedupe index.\n");
 				cfg = ctx->arc;
 				assert(cfg->similarity_cksum_sz == sizeof (uint64_t));
 				seg_heap = (uchar_t *)(ctx->g_blocks) - cfg->segment_sz * cfg->chunk_cksum_sz;
