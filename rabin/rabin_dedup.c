@@ -76,7 +76,6 @@
 #include <heap.h>
 #include <xxhash.h>
 #include <qsort.h>
-#include <lzma_crc.h>
 
 #include "rabin_dedup.h"
 #if defined(__USE_SSE_INTRIN__) && defined(__SSE4_1__) && RAB_POLYNOMIAL_WIN_SIZE == 16
@@ -874,7 +873,7 @@ process_blocks:
 			} else {
 				uchar_t *seg_heap, *sim_ck, *sim_offsets;
 				archive_config_t *cfg;
-				uint32_t increment, len, blks, o_blks, k;
+				uint32_t len, blks, o_blks, k;
 				global_blockentry_t *seg_blocks;
 				uint64_t seg_offset, offset;
 				global_blockentry_t **htab, *be;
@@ -897,6 +896,7 @@ process_blocks:
 				htab = (global_blockentry_t **)(src - ary_sz);
 				for (i=0; i<blknum;) {
 					uint64_t crc, off1;
+					uint64_t a, b;
 					length = 0;
 
 					/*
@@ -943,25 +943,29 @@ process_blocks:
 					blks = j+i;
 
 					/*
-					 * Sort concatenated chunk hash buffer by raw 64-bit integer
-					 * magnitudes.
+					 * Assume the concatenated chunk hash buffer as an array of 64-bit
+					 * integers and sort them in ascending order.
 					 */
 					do_qsort((uint64_t *)seg_heap, length/8);
 
 					/*
-					 * Compute the min-values range similarity hashes.
+					 * Compute the K min values sketch where K == 20 in this case.
 					 */
 					sim_ck = ctx->similarity_cksums;
-					sub_i = cfg->sub_intervals;
 					tgt = seg_heap;
-					increment = cfg->chunk_cksum_sz / 2;
-					if  (increment * sub_i > length)
-						sub_i = length / increment;
-					for (j = 0; j<sub_i; j++) {
-						crc = lzma_crc64(tgt, increment/2, 0);
-						*((uint64_t *)sim_ck) = crc;
-						tgt += increment;
-						sim_ck += cfg->similarity_cksum_sz;
+					sub_i = 0;
+
+					*((uint64_t *)sim_ck) = 0;
+					a = 0;
+					for (j = 0; j < length && sub_i < cfg->sub_intervals;) {
+						b = *((uint64_t *)tgt);
+						tgt += sizeof (uint64_t);
+						if (b != a) {
+							*((uint64_t *)sim_ck) = b;
+							sim_ck += sizeof (uint64_t);
+							a = b;
+							sub_i++;
+						}
 					}
 
 					/*
@@ -984,14 +988,10 @@ process_blocks:
 					}
 
 					/*
-					 * Now lookup all the similarity hashes. We sort the hashes first so that
-					 * all duplicate hash values can be easily eliminated.
-					 * 
+					 * Now lookup all the similarity hashes.
 					 * The matching segment offsets in the segcache are stored in a list. Entries
 					 * that were not found are stored with offset of UINT64_MAX.
 					 */
-					isort_uint64((uint64_t *)(ctx->similarity_cksums), sub_i);
-
 					sim_ck = ctx->similarity_cksums;
 					tgt = src + 1; // One byte for number of entries
 					crc = 0;
