@@ -1000,17 +1000,12 @@ process_blocks:
 
 					for (j=0; j < sub_i; j++) {
 						hash_entry_t *he = NULL;
-						if (j > 0 && crc != *((uint64_t *)sim_ck)) {
-							he = db_lookup_insert_s(cfg, sim_ck, 0, seg_offset, 0, 1);
-						} else {
-							he = NULL;
-						}
+						he = db_lookup_insert_s(cfg, sim_ck, 0, seg_offset, 0, 1);
 						if (he) {
 							*((uint64_t *)tgt) = he->item_offset;
 						} else {
 							*((uint64_t *)tgt) = UINT64_MAX;
 						}
-						crc = *((uint64_t *)sim_ck);
 						sim_ck += cfg->similarity_cksum_sz;
 						tgt += cfg->similarity_cksum_sz;
 					}
