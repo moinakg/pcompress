@@ -2180,8 +2180,9 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	 */
 	file_offset = 0;
 	if (pctx->enable_rabin_split) {
-		rctx = create_dedupe_context(chunksize, 0, 0, pctx->algo, &props, pctx->enable_delta_encode,
-		    pctx->enable_fixed_scan, VERSION, COMPRESS, 0, NULL, pctx->pipe_mode, nprocs);
+		rctx = create_dedupe_context(chunksize, 0, pctx->rab_blk_size, pctx->algo, &props,
+		    pctx->enable_delta_encode, pctx->enable_fixed_scan, VERSION, COMPRESS, 0, NULL,
+		    pctx->pipe_mode, nprocs);
 		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
 	} else {
 		rbytes = Read(uncompfd, cread_buf, chunksize);

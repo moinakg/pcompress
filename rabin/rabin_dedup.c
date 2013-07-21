@@ -512,8 +512,6 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 			ctx->blocks[i]->index = i; // Need to store for sorting
 			ctx->blocks[i]->length = length;
 			ctx->blocks[i]->similar = 0;
-			ctx->blocks[i]->hash = XXH32(buf1+last_offset, length, 0);
-			ctx->blocks[i]->similarity_hash = ctx->blocks[i]->hash;
 			last_offset += length;
 		}
 		goto process_blocks;
