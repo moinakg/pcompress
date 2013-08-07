@@ -2531,6 +2531,7 @@ create_pc_context(void)
 	init_pcompress();
 
 	memset(ctx, 0, sizeof (pc_ctx_t));
+	ctx->exec_name = (char *)malloc(NAME_MAX);
 	ctx->hide_mem_stats = 1;
 	ctx->hide_cmp_stats = 1;
 	ctx->enable_rabin_split = 1;
@@ -2574,11 +2575,16 @@ int DLL_EXPORT
 init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 {
 	int opt, num_rem, err, my_optind;
+	char *pos;
 
 	pctx->level = 6;
 	err = 0;
 	pctx->keylen = DEFAULT_KEYLEN;
 	pctx->chunksize = DEFAULT_CHUNKSIZE;
+	pos = argv[0] + strlen(argv[0]);
+	while (*pos != '/' && pos > argv[0]) pos--;
+	if (*pos == '/') pos++;
+	strcpy(pctx->exec_name, pos);
 
 	pthread_mutex_lock(&opt_parse);
 	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:rLPS:B:Fk:")) != -1) {

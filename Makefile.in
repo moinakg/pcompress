@@ -342,6 +342,9 @@ $(LIB): $(OBJS)
 
 $(PROG): $(LIB) $(PROGOBJS)
 	$(LINK.PROG) -o $@ $(PROGOBJS) $(LDLIBS) -L. -l$(LINKLIB)
+	cp $@ buildtmp
+	cat utils/pcompress.sh | sed "s#<PC_PATH>#`pwd`#" > pcompress
+	chmod +x pcompress
 
 test: all
 	(cd test; ulimit -c unlimited; sh ./run_test.sh $(TESTSUITE) ) 2>&1 | tee test.log
@@ -358,7 +361,7 @@ distclean: clean
 install: $(PROG)
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin
 	@chmod 0755 $(DESTDIR)$(PREFIX)/bin
-	@cp $(PROG) $(DESTDIR)$(PREFIX)/bin
+	@cp buildtmp/$(PROG) $(DESTDIR)$(PREFIX)/bin
 	@chmod 0555 $(DESTDIR)$(PREFIX)/bin/$(PROG)
 
 	@mkdir -p $(DESTDIR)$(PREFIX)/lib

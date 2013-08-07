@@ -200,7 +200,8 @@ typedef struct pc_ctx {
 	unsigned int chunk_num;
 	uint64_t largest_chunk, smallest_chunk, avg_chunk;
 	uint64_t chunksize;
-	const char *exec_name, *algo, *filename, *to_filename;
+	const char *algo, *filename, *to_filename;
+	char *exec_name;
 	int do_compress, level;
 	int do_uncompress;
 	int cksum_bytes, mac_bytes;

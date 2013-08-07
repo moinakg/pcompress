@@ -284,8 +284,10 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx->deltac_min_distance = props->deltac_min_distance;
 	ctx->pagesize = sysconf(_SC_PAGE_SIZE);
 	ctx->similarity_cksums = NULL;
-	if (arc)
+	if (arc) {
 		arc->pagesize = ctx->pagesize;
+		ctx->rabin_poly_max_block_size = RAB_POLY_MAX_BLOCK_SIZE_GLOBAL;
+	}
 
 	/*
 	 * Scale down similarity percentage based on avg block size unless user specified
