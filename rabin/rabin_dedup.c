@@ -227,7 +227,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 				if (get_checksum_props(ck, &chunk_cksum, &cksum_bytes, &mac_bytes, 1) != 0 ||
 				    strcmp(ck, "CRC64") == 0) {
 					fprintf(stderr, "Invalid PCOMPRESS_CHUNK_HASH_GLOBAL.\n");
-					chunk_cksum = -1;
+					chunk_cksum = DEFAULT_CHUNK_CKSUM;
 					pthread_mutex_unlock(&init_lock);
 					return (NULL);
 				}
@@ -236,6 +236,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 				chunk_cksum = DEFAULT_CHUNK_CKSUM;
 				if (get_checksum_props(NULL, &chunk_cksum, &cksum_bytes, &mac_bytes, 0) != 0) {
 					fprintf(stderr, "Invalid default chunk checksum: %d\n", DEFAULT_CHUNK_CKSUM);
+					pthread_mutex_unlock(&init_lock);
 					return (NULL);
 				}
 			}
@@ -259,10 +260,18 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		return (NULL);
 	}
 
-	if (chunksize < RAB_MIN_CHUNK_SIZE) {
-		fprintf(stderr, "Minimum chunk size for Dedup must be %" PRIu64 " bytes\n",
-		    RAB_MIN_CHUNK_SIZE);
-		return (NULL);
+	if (arc) {
+		if (chunksize < RAB_MIN_CHUNK_SIZE_GLOBAL) {
+			fprintf(stderr, "Minimum chunk size for Global Dedup must be %" PRIu64 " bytes\n",
+			RAB_MIN_CHUNK_SIZE_GLOBAL);
+			return (NULL);
+		}
+	} else {
+		if (chunksize < RAB_MIN_CHUNK_SIZE) {
+			fprintf(stderr, "Minimum chunk size for Dedup must be %" PRIu64 " bytes\n",
+			RAB_MIN_CHUNK_SIZE);
+			return (NULL);
+		}
 	}
 
 	/*
@@ -286,7 +295,8 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx->similarity_cksums = NULL;
 	if (arc) {
 		arc->pagesize = ctx->pagesize;
-		ctx->rabin_poly_max_block_size = RAB_POLY_MAX_BLOCK_SIZE_GLOBAL;
+		if (rab_blk_sz < 3)
+			ctx->rabin_poly_max_block_size = RAB_POLY_MAX_BLOCK_SIZE_GLOBAL;
 	}
 
 	/*

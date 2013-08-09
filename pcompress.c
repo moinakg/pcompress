@@ -1700,7 +1700,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	unsigned short version, flags;
 	struct stat sbuf;
 	int compfd = -1, uncompfd = -1, err;
-	int thread, bail, single_chunk;
+	int thread, wthread, bail, single_chunk;
 	uint32_t i, nprocs, np, p, dedupe_flag;
 	struct cmp_data **dary = NULL, *tdat;
 	pthread_t writer_thr;
@@ -1714,6 +1714,9 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	cread_buf = NULL;
 	flags = 0;
 	sbuf.st_size = 0;
+	err = 0;
+	thread = 0;
+	wthread = 0;
 	dedupe_flag = RABIN_DEDUPE_SEGMENTED; // Silence the compiler
 
 	if (pctx->encrypt_type) {
@@ -1781,8 +1784,6 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		}
 	}
 
-	err = 0;
-	thread = 0;
 	single_chunk = 0;
 	rctx = NULL;
 
@@ -2078,6 +2079,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		perror("Error in thread creation: ");
 		COMP_BAIL;
 	}
+	wthread = 1;
 
 	/*
 	 * Write out file header. First insert hdr elements into mem buffer
@@ -2322,7 +2324,8 @@ comp_done:
 			if (pctx->encrypt_type)
 				hmac_cleanup(&tdat->chunk_hmac);
 		}
-		pthread_join(writer_thr, NULL);
+		if (wthread)
+			pthread_join(writer_thr, NULL);
 	}
 
 	if (err) {

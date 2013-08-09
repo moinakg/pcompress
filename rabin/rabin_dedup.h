@@ -89,8 +89,9 @@
 // to slide the window over every byte in the chunk.
 #define	RAB_WINDOW_SLIDE_OFFSET	(64)
 
-// Minimum practical chunk size when doing dedup
+// Minimum practical chunk sizes when doing dedup
 #define	RAB_MIN_CHUNK_SIZE (1048576L)
+#define	RAB_MIN_CHUNK_SIZE_GLOBAL (2097152L)
 
 // An entry in the Rabin block array in the chunk.
 // It is either a length value <= RABIN_MAX_BLOCK_SIZE or an index value with

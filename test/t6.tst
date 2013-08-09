@@ -48,12 +48,12 @@ done
 
 for algo in lz4 zlib
 do
-	for dopts "" "-G -D" "-G -F" "-D"
+	for dopts in "" "-G -D" "-G -F" "-D"
 	do
 		for tf in `cat files.lst`
 		do
 			rm -f ${tf}.*
-			for seg in 1m 21m
+			for seg in 2m 21m
 			do
 				cmd="../../pcompress -c ${algo} -l6 -s ${seg} ${dopts} ${tf} - > ${tf}.pz"
 				echo "Running $cmd"
