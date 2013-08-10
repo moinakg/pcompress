@@ -1,3 +1,22 @@
+== 2.3 Update Release ==
+Fix multiple crashes for some corner cases.
+Increase max block size for variable dedup block sizes greater than 16KB.
+Update test cases and fix a test script bug.
+Use wrapper script to set paths when launching pcompress from build directory.
+Use smaller max block size when doing global dedupe.
+Fix init of executable name.
+Make data partitioning between threads more effective.
+Remove unnecessary computation to make Fixed block chunking faster.
+Fix Dedupe Mode initialization.
+Improve accuracy of the KMV sketch computation and speed it up.
+Reduce similarity indicators to reduce memory use with low impact on dedupe ratio.
+Add missing init of rabin block size.
+Reduce a rollign hash parameter for a slight speedup with no side effect.
+Update README with pointers to relevant analysis and documentation.
+Remove an rpath entry meant for testing.
+Make default symbol visibility to hidden with explicit public visibility specified.
+Add missing static scope to a few more places.
+Make Pcompress functionality into a library - initial changes.
 == 2.2 Bugfix Release ==
 Update invalid environment variable handling to actually fail rather than auto-correct.
 Fix a crash with invalid PCOMPRESS_CHUNK_HASH_GLOBAL.

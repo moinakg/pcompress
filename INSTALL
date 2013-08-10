@@ -5,7 +5,7 @@ Prerequisites
 64-bit System.
 GCC 4.4 (with mpfr, ppl and cloog support packages for loop
 	 vectorization).
-libz (zlib) and developments packages.
+libz (zlib) and development packages.
 Libbz2 and development packages.
 Libbsc source tree if BSC support is desired.
 	 See below:
