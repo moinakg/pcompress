@@ -367,7 +367,8 @@ set_config_s(archive_config_t *cfg, const char *algo, cksum_t ck, cksum_t ck_sim
 	cfg->compress_level = get_compress_level(cfg->algo);
 	cfg->chunk_cksum_sz = get_cksum_sz(cfg->chunk_cksum_type);
 	cfg->similarity_cksum_sz = get_cksum_sz(cfg->similarity_cksum);
-	cfg->chunk_sz = chunksize;
+	cfg->chunk_sz = chunksize; // Chunk size indicator 1 - 5.
+				  // Allows segment to be sized appropriately: 1 - 8M .. 5 - 40M
 	cfg->chunk_sz_bytes = RAB_BLK_AVG_SZ(cfg->chunk_sz);
 	cfg->pct_interval = pct_interval;
 	cfg->archive_sz = file_sz;

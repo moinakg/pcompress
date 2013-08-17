@@ -479,7 +479,17 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 	hash_entry_t **htab, *ent, **pent;
 
 	assert((cfg->similarity_cksum_sz & (sizeof (size_t) - 1)) == 0);
-	htab_entry = XXH32(sim_cksum, cfg->similarity_cksum_sz, 0);
+
+	/*
+	 * If doing similarity based dedupe, keys will be 64-bit and are portions of
+	 * cryptographic hashes. Since those are already a product of strong hashing
+	 * there is no need to re-hash the keys here.
+	 */
+	if (cfg->similarity_cksum_sz == 8) {
+		htab_entry = *((uint32_t *)sim_cksum);
+	} else {
+		htab_entry = XXH32(sim_cksum, cfg->similarity_cksum_sz, 0);
+	}
 	htab_entry ^= (htab_entry / cfg->similarity_cksum_sz);
 	htab_entry = htab_entry % indx->hash_slots;
 	htab = indx->list[interval].tab;
