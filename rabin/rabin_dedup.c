@@ -970,6 +970,7 @@ process_blocks:
 					for (j = 0; j < length && sub_i < cfg->sub_intervals;) {
 						b = *((uint64_t *)tgt);
 						tgt += sizeof (uint64_t);
+						j += sizeof (uint64_t);
 						if (b != a) {
 							*((uint64_t *)sim_ck) = b;
 							sim_ck += sizeof (uint64_t);

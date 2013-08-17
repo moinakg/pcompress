@@ -397,10 +397,10 @@ get_sys_limits(my_sysinfo *msys_info)
 	if (rv == -1) {
 		sys_info.freeram = 100 * 1024 * 1024; // 100M arbitrary
 	}
-	msys_info->totalram = sys_info.totalram;
-	msys_info->freeram = sys_info.freeram;
-	msys_info->totalswap = sys_info.totalswap;
-	msys_info->freeswap = sys_info.freeswap;
+	msys_info->totalram = sys_info.totalram * sys_info.mem_unit;
+	msys_info->freeram = sys_info.freeram * sys_info.mem_unit + sys_info.bufferram * sys_info.mem_unit;
+	msys_info->totalswap = sys_info.totalswap * sys_info.mem_unit;
+	msys_info->freeswap = sys_info.freeswap * sys_info.mem_unit;
 	msys_info->mem_unit = sys_info.mem_unit;
 
 	if ((val = getenv("PCOMPRESS_INDEX_MEM")) != NULL) {
