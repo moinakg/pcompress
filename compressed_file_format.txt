@@ -1,0 +1,87 @@
+###########################################################################################################
+#                                     Pcompress File Format.                                              #
+###########################################################################################################
+Broadly a compressed file consists of a header followed by one or more metadata members which is turn is
+followed by one or more compressed chunk data members.
+
+Apart from a standard chunk header, each compressed chunk has an internal format with various metadata
+headers of the compression and deduplication algorithms used.
+
+===========================================
+File Header
+===========================================
+8 Bytes - Compression algorithm name
+2 Bytes - File format version
+2 Bytes - Flags
+	
+ *   *   *   *   *   *   *   *   *   *   *   *   *   *   *   *
+ 15  14  13  12  11  10  9   8   7   6   5   4   3   2   1   0
+                     |       |           |   |       |   |   |
+                     |       |           |   |       |   |   `- Simple buffer-level Deduplication on/off
+                     '-------'           |   |       |   `----- Fixed Block Deduplication on/off
+                         |               |   |       |          Both bits set indicate Global Deduplication.
+                         |               |   |       |
+                         |               |   |       `--------- Solid archive. Entire file compressed in a
+                         |               |   |                  single buffer.
+                         |               |   |
+                         |               |   `----------------- AES Crypto
+                         |               `--------------------- Salsa20 Crypto
+                         |
+                         `------------------------------------- Indicate which data verification checksum
+                                                                was used.
+
+
+8 Bytes - Indicated per-thread buffer size
+4 Bytes - Compression level
+
+If Encryption Used
+-------------------------------------------
+4 Bytes - Salt Length
+X Bytes - Actual Salt bytes
+X Bytes - Nonce: 8 Bytes for AES and 24 Bytes for Salsa20
+4 Bytes - Key Length
+===========================================
+Header Checksum
+===========================================
+X Bytes - 4 Byte CRC32 without encryption
+          Header HMAC if encryption enabled. Size of HMAC depends on selected data verification hash.
+===========================================
+Chunk Header
+Each chunk is a single compressed buffer
+===========================================
+8 Bytes - Compressed Length
+X Bytes - Chunk data verification hash (upto 64 bytes) of the original uncompressed and unencrypted
+          data.
+X Bytes - Chunk Header CRC32 for normal compression
+          Full chunk HMAC, including header, when encrypting. Computation is in this order:
+          Compression -> Encryption -> HMAC.
+1 Byte  - Chunk Flags
+
+   *  *  *  *  *  *  *  *
+   7  6  5  4  3  2  1  0
+   |  |     |     |  |  |
+   |  '-----'     |  |  `- 0 - Uncompressed
+   |     |        |  |     1 - Compressed
+   |     |        |  |   
+   |     |        |  `---- 1 - Chunk was Deduped
+   |     |        `------- 1 - Chunk was pre-compressed
+   |     |
+   |     |                 1 - Bzip2 (Adaptive Mode)
+   |     `---------------- 2 - Lzma (Adaptive Mode)
+   |                       3 - PPMD (Adaptive Mode)
+   |
+   `---------------------- 1 - Chunk size flag (if original chunk is of variable length)
+
+X Bytes - Compressed chunk data
+
+Original uncompressed chunk size can be less than indicated per-thread buffer size. In that
+case chunk size bit is set in the flags (as above) and size value is appended after the
+compressed chunk data.
+-------------------------------------------
+8 Bytes - Original uncompressed chunk size
+===========================================
+File Trailer
+===========================================
+8 Bytes - Zero bytes indicating zero compressed length
+          and end of file.
+
