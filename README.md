@@ -136,7 +136,7 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
                   datasets.
 
        '-S' <cksum>
-            - Specify chunk checksum to use:
+            -     Specify chunk checksum to use:
 
                      CRC64 - Extremely Fast 64-bit CRC from LZMA SDK.
                     SHA256 - SHA512/256 version of Intel's optimized (SSE,AVX) SHA2 for x86.
@@ -156,6 +156,20 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
 
        '-B' <1..5>
             -     Specify an average Dedupe block size. 1 - 4K, 2 - 8K ... 5 - 64K.
+                  Default deduplication block size is 4KB.
+       '-B' 0
+            -     This uses blocks as small as 2KB for deduplication. This option can be
+                  used for datasets of a few GBs to a few hundred TBs in size depending on
+                  available RAM.
+                  
+                  Caveats:
+                  In some cases like LZMA with extreme compression levels and with '-L' and
+                  '-P' preprocessing enabled, this can result in lower compression as compared
+                  to using '-B 1'.
+                  For fast compression algorithms like LZ4 and Zlib this should always benefit.
+                  However please test on your sample data with your desired compression
+                  algorithm to verify the results.
+
        '-M' -     Display memory allocator statistics
        '-C' -     Display compression statistics
 

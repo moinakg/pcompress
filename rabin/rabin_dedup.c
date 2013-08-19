@@ -125,7 +125,7 @@ dedupe_min_blksz(int rab_blk_sz)
 uint32_t
 dedupe_buf_extra(uint64_t chunksize, int rab_blk_sz, const char *algo, int delta_flag)
 {
-	if (rab_blk_sz < 1 || rab_blk_sz > 5)
+	if (rab_blk_sz < 0 || rab_blk_sz > 5)
 		rab_blk_sz = RAB_BLK_DEFAULT;
 
 	return ((chunksize / dedupe_min_blksz(rab_blk_sz)) * sizeof (uint32_t));
@@ -166,7 +166,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	dedupe_context_t *ctx;
 	uint32_t i;
 
-	if (rab_blk_sz < 1 || rab_blk_sz > 5)
+	if (rab_blk_sz < 0 || rab_blk_sz > 5)
 		rab_blk_sz = RAB_BLK_DEFAULT;
 
 	if (dedupe_flag == RABIN_DEDUPE_FIXED || dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL) {
@@ -209,7 +209,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		 * It is essentially a hashtable that is used for crypto-hash based
 		 * chunk matching.
 		 */
-		if (dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL && op == COMPRESS && rab_blk_sz > 0) {
+		if (dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL && op == COMPRESS && rab_blk_sz >= 0) {
 			my_sysinfo msys_info;
 			int pct_interval, chunk_cksum, cksum_bytes, mac_bytes;
 			char *ck;

@@ -147,6 +147,8 @@ usage(pc_ctx_t *pctx)
 	    "             deduplication ratio.\n"
 	    "   '-B' <1..5>\n"
 	    "           - Specify an average Dedupe block size. 1 - 4K, 2 - 8K ... 5 - 64K.\n"
+	    "   '-B' 0\n"
+	    "           - Use ultra-small 2KB blocks for deduplication. See README for caveats.\n"
 	    "   '-M'    - Display memory allocator statistics\n"
 	    "   '-C'    - Display compression statistics\n\n");
 	fprintf(stderr, "\n"
@@ -2640,8 +2642,8 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 		    case 'B':
 			pctx->rab_blk_size = atoi(optarg);
-			if (pctx->rab_blk_size < 1 || pctx->rab_blk_size > 5) {
-				err_print(0, "Average Dedupe block size must be in range 1 (4k) - 5 (64k)\n");
+			if (pctx->rab_blk_size < 0 || pctx->rab_blk_size > 5) {
+				err_print(0, "Average Dedupe block size must be in range 0 (2k), 1 (4k) .. 5 (64k)\n");
 				return (1);
 			}
 			break;
