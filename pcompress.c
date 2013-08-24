@@ -2748,7 +2748,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		return (2);
 	}
 
-	if (pctx->level == -1) {
+	if (pctx->level == -1 && pctx->do_compress) {
 		if (memcmp(pctx->algo, "lz4", 3) == 0) {
 			pctx->level = 1;
 		} else {
