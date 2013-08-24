@@ -56,9 +56,9 @@
 #include <ctype.h>
 
 /*
- * We use 5MB chunks by default.
+ * We use 8MB chunks by default.
  */
-#define	DEFAULT_CHUNKSIZE	(5 * 1024 * 1024)
+#define	DEFAULT_CHUNKSIZE	(8 * 1024 * 1024)
 #define	EIGHTY_PCT(x) ((x) - ((x)/5))
 
 struct wdata {
@@ -516,6 +516,7 @@ redo:
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan || pctx->enable_rabin_global) &&
 	    (HDR & CHUNK_FLAG_DEDUP)) {
 		uchar_t *cmpbuf, *ubuf;
+
 		/* Extract various sizes from dedupe header. */
 		parse_dedupe_hdr(cseg, &blknum, &dedupe_index_sz, &dedupe_data_sz,
 				&dedupe_index_sz_cmp, &dedupe_data_sz_cmp, &_chunksize);
@@ -1395,6 +1396,7 @@ redo:
 	compressed_chunk = tdat->compressed_chunk + CHUNK_FLAG_SZ;
 	rbytes = tdat->rbytes;
 	dedupe_index_sz = 0;
+	type = COMPRESSED;
 
 	/* Perform Dedup if enabled. */
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan)) {
@@ -1434,9 +1436,9 @@ redo:
 	 * reducing compression effectiveness of the data chunk. So we separate them.
 	 */
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan) && tdat->rctx->valid) {
+		uint64_t o_chunksize;
 		_chunksize = tdat->rbytes - dedupe_index_sz - RABIN_HDR_SIZE;
 		index_size_cmp = dedupe_index_sz;
-
 		rv = 0;
 
 		/*
@@ -1473,6 +1475,8 @@ plain_index:
 		index_size_cmp += RABIN_HDR_SIZE;
 		dedupe_index_sz += RABIN_HDR_SIZE;
 		memcpy(compressed_chunk, tdat->uncompressed_chunk, RABIN_HDR_SIZE);
+		o_chunksize = _chunksize;
+
 		/* Compress data chunk. */
 		if (pctx->lzp_preprocess || pctx->enable_delta2_encode) {
 			rv = preproc_compress(pctx, tdat->compress, tdat->uncompressed_chunk + dedupe_index_sz,
@@ -1490,9 +1494,12 @@ plain_index:
 		}
 
 		/* Can't compress data just retain as-is. */
-		if (rv < 0)
+		if (rv < 0 || _chunksize >= o_chunksize) {
+			_chunksize = o_chunksize;
+			type = UNCOMPRESSED;
 			memcpy(compressed_chunk + index_size_cmp,
 			    tdat->uncompressed_chunk + dedupe_index_sz, _chunksize);
+		}
 		/* Now update rabin header with the compressed sizes. */
 		update_dedupe_hdr(compressed_chunk, index_size_cmp - RABIN_HDR_SIZE, _chunksize);
 		_chunksize += index_size_cmp;
@@ -1522,14 +1529,12 @@ plain_index:
 	 * chunk will be left uncompressed.
 	 */
 	tdat->len_cmp = _chunksize;
-	if (_chunksize >= rbytes || rv < 0) {
+	if (_chunksize >= tdat->rbytes || rv < 0) {
 		if (!(pctx->enable_rabin_scan || pctx->enable_fixed_scan) || !tdat->rctx->valid)
 			memcpy(compressed_chunk, tdat->uncompressed_chunk, tdat->rbytes);
 		type = UNCOMPRESSED;
 		tdat->len_cmp = tdat->rbytes;
 		if (rv < 0) rv = COMPRESS_NONE;
-	} else {
-		type = COMPRESSED;
 	}
 
 	/*
@@ -2582,7 +2587,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	int opt, num_rem, err, my_optind;
 	char *pos;
 
-	pctx->level = 6;
+	pctx->level = -1;
 	err = 0;
 	pctx->keylen = DEFAULT_KEYLEN;
 	pctx->chunksize = DEFAULT_CHUNKSIZE;
@@ -2743,6 +2748,13 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		return (2);
 	}
 
+	if (pctx->level == -1) {
+		if (memcmp(pctx->algo, "lz4", 3) == 0) {
+			pctx->level = 1;
+		} else {
+			pctx->level = 6;
+		}
+	}
 	/*
 	 * Remaining mandatory arguments are the filenames.
 	 */

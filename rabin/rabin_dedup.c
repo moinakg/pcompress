@@ -824,7 +824,7 @@ process_blocks:
 						 * Block match in index not found.
 						 * Block was added to index. Merge this block.
 						 */
-						if (length + ctx->g_blocks[i].length > RABIN_MAX_BLOCK_SIZE) {
+						if (length + ctx->g_blocks[i].length >= RABIN_MAX_BLOCK_SIZE) {
 							*((uint32_t *)g_dedupe_idx) = LE32(length);
 							g_dedupe_idx += RABIN_ENTRY_SIZE;
 							length = 0;
@@ -1602,7 +1602,7 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size)
 				 * However this approach precludes pipe-mode streamed decompression since
 				 * it requires random access to the output file.
 				 */
-				if (pos1 > offset) {
+				if (pos1 >= offset) {
 					src2 = ctx->cbuf + (pos1 - offset);
 					memcpy(pos2, src2, len);
 				} else {
