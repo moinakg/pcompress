@@ -281,10 +281,25 @@ than SHA2.
 Examples
 ========
 
+Simple compress "file.tar" using zlib(gzip) algorithm. Default chunk or per-thread
+segment size is 8MB and default compression level is 6.
+
+    pcompress -c zlib file.tar
+
 Compress "file.tar" using bzip2 level 6, 64MB chunk size and use 4 threads. In
 addition perform identity deduplication and delta compression prior to compression.
 
     pcompress -D -E -c bzip2 -l6 -s64m -t4 file.tar
+    
+Compress "file.tar" using zlib and also perform Global Deduplication. Default block
+size used for deduplication is 4KB. Also redirect the compressed output to stdout and
+send it to a compressed file at a different path.
+
+    pcompress -G -c zlib -l9 -s10m file.tar - > /path/to/compress_file.tar.pz
+    
+Perform the same as above but this time use a deduplication block size of 8KB.
+
+    pcompress -G -c zlib -l9 -B2 -s10m file.tar - > /path/to/compress_file.tar.pz
 
 Compress "file.tar" using extreme compression mode of LZMA and a chunk size of
 of 1GB. Allow pcompress to detect the number of CPU cores and use as many threads.
