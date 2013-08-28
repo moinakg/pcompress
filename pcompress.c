@@ -1478,11 +1478,12 @@ plain_index:
 		o_chunksize = _chunksize;
 
 		/* Compress data chunk. */
-		if (pctx->lzp_preprocess || pctx->enable_delta2_encode) {
+		if ((pctx->lzp_preprocess || pctx->enable_delta2_encode) && _chunksize > 0) {
 			rv = preproc_compress(pctx, tdat->compress, tdat->uncompressed_chunk + dedupe_index_sz,
 			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
 			    tdat->level, 0, tdat->data, tdat->props);
-		} else {
+
+		} else if (_chunksize > 0) {
 			DEBUG_STAT_EN(double strt, en);
 
 			DEBUG_STAT_EN(strt = get_wtime_millis());
@@ -1491,6 +1492,8 @@ plain_index:
 			DEBUG_STAT_EN(en = get_wtime_millis());
 			DEBUG_STAT_EN(fprintf(stderr, "Chunk compression speed %.3f MB/s\n",
 					      get_mb_s(_chunksize, strt, en)));
+		} else {
+			rv = -1;
 		}
 
 		/* Can't compress data just retain as-is. */
