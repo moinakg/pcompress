@@ -736,7 +736,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 				return (1);
 		}
 
-		if ((uncompfd = open(to_filename, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR | S_IWUSR)) == -1) {
+		if ((uncompfd = open(to_filename, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1) {
 			close(compfd);
 			err_print(1, "Cannot open: %s", to_filename);
 			return (1);
@@ -863,7 +863,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 	}
 
 	/*
-	 * Archives older than 5 did not support MACs.
+	 * Archives older than version 5 did not support MACs.
 	 */
 	if (version < 5)
 		pctx->mac_bytes = 0;
@@ -988,6 +988,8 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 							pw[pw_len-1] = '\0';
 						lseek(fd, 0, SEEK_SET);
 						Write(fd, zero, pw_len);
+						len = ftruncate(fd, 0);
+						/*^^^ Make compiler happy. */
 					} else {
 						pw_len = -1;
 					}
