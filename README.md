@@ -154,9 +154,10 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
                   gives lower dedupe ratio than content-aware dedupe (-D) and does not
                   support delta compression.
 
-       '-B' <1..5>
-            -     Specify an average Dedupe block size. 1 - 4K, 2 - 8K ... 5 - 64K.
-                  Default deduplication block size is 4KB.
+       '-B' <0..5>
+            -     Specify an average Dedupe block size. 0 - 2K, 1 - 4K, 2 - 8K ... 5 - 64K.
+                  Default deduplication block size is 4KB for Global Deduplication and 2KB
+                  otherwise.
        '-B' 0
             -     This uses blocks as small as 2KB for deduplication. This option can be
                   used for datasets of a few GBs to a few hundred TBs in size depending on

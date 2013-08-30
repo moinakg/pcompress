@@ -2595,7 +2595,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	pctx->level = -1;
 	err = 0;
 	pctx->keylen = DEFAULT_KEYLEN;
-	pctx->chunksize = DEFAULT_CHUNKSIZE;
+	pctx->chunksize = -1;
 	pos = argv[0] + strlen(argv[0]);
 	while (*pos != '/' && pos > argv[0]) pos--;
 	if (*pos == '/') pos++;
@@ -2759,6 +2759,13 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		} else {
 			pctx->level = 6;
 		}
+	}
+
+	if (pctx->chunksize == -1) {
+		if (!pctx->enable_rabin_global)
+			pctx->chunksize = 0;
+		else
+			pctx->chunksize = DEFAULT_CHUNKSIZE;
 	}
 	/*
 	 * Remaining mandatory arguments are the filenames.

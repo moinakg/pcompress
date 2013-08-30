@@ -59,7 +59,7 @@ do
 	rm -f ${tstf}.pz
 done
 
-for feat in "-B8 -s2m -l1" "-B0 -s2m -l1" "-D -s10k -l1" "-D -F -s2m -l1" "-p -e AES -s2m -l1" "-s2m -l15" "-e AES -k64" "-e SALSA20 -k8" "-e AES -k8" "-e SALSA20 -k64"
+for feat in "-B8 -s2m -l1" "-B-1 -s2m -l1" "-D -s10k -l1" "-D -F -s2m -l1" "-p -e AES -s2m -l1" "-s2m -l15" "-e AES -k64" "-e SALSA20 -k8" "-e AES -k8" "-e SALSA20 -k64"
 do
 	for algo in lzfx lz4 zlib bzip2 libbsc ppmd lzma
 	do

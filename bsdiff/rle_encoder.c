@@ -61,6 +61,7 @@ zero_rle_encode(const void *ibuf, const unsigned int ilen,
 			count |= ZERO_MASK;
 			*((unsigned short *)(ob + pos2)) = htons(count);
 			pos2 += 2;
+			if (pos2 > *olen) break;
 		} else {
 			unsigned int pos3, pos4, state;
 			pos3 = pos2;

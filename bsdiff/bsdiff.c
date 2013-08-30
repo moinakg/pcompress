@@ -444,9 +444,19 @@ bsdiff(u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t newsize,
 	/* Write extra data */
 	len = newsize - rv;
 	ulen = len;
-	if (zero_rle_encode(eb, eblen, BUFPTR(&pf), &ulen) == -1) {
-		rv = 0;
-		goto out;
+	if (eblen > 0) {
+		if (zero_rle_encode(eb, eblen, BUFPTR(&pf), &ulen) == -1) {
+			rv = 0;
+			goto out;
+		}
+		if (ulen >= eblen) {
+			if (eblen > len) {
+				rv = 0;
+				goto out;
+			}
+			memcpy(BUFPTR(&pf), eb, eblen);
+			ulen = eblen;
+		}
 	}
 	/* Output size of extra data */
 	len = ulen;

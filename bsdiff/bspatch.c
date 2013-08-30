@@ -184,12 +184,18 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 	datalen = len;
 
 	len = extralen;
-	if (zero_rle_decode(pbuf + hdrsz + lzctrllen + lzdatalen, lzextralen, extradata, &len) == -1 ||
-	    len != extralen) {
-		fprintf(stderr, "bspatch: Failed to decompress extra data.\n");
-		rv = 0;
-		goto out;
+	if (len > 0) {
+		if (extralen == lzextralen) {
+			memcpy(extradata, pbuf + hdrsz + lzctrllen + lzdatalen, lzextralen);
+
+		} else if (zero_rle_decode(pbuf + hdrsz + lzctrllen + lzdatalen, lzextralen, extradata, &len) == -1 ||
+		    len != extralen) {
+			fprintf(stderr, "bspatch: Failed to decompress extra data.\n");
+			rv = 0;
+			goto out;
+		}
 	}
+
 	extralen = len;
 	BUFOPEN(&cpf, ctrldata, ctrllen);
 	BUFOPEN(&dpf, diffdata, datalen);
