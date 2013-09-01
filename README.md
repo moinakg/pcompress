@@ -68,7 +68,7 @@ Usage
                 between chunk processing threads and algorithm threads.
        bzip2  - Bzip2 Algorithm from libbzip2.
        ppmd   - The PPMd algorithm excellent for textual data. PPMd requires
-                at least 64MB X CPUs more memory than the other modes.
+                at least 64MB X core-count more memory than the other modes.
 
        libbsc - A Block Sorting Compressor using the Burrows Wheeler Transform
                 like Bzip2 but runs faster and gives better compression than
@@ -106,10 +106,8 @@ NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
     To operate as a full pipe, read from stdin and write to stdout:
        pcompress -p ...
 
-    Attempt Rabin fingerprinting based deduplication on chunks:
+    Attempt Rabin fingerprinting based deduplication on a per-chunk basis:
        pcompress -D ...
-       pcompress -D -r ... - Do NOT split chunks at a rabin boundary. Default
-                             is to split.
 
     Perform Delta Encoding in addition to Identical Dedup:
        pcompress -E ... - This also implies '-D'. This performs Delta Compression

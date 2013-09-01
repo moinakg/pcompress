@@ -96,7 +96,7 @@ usage(pc_ctx_t *pctx)
 	    "            between chunk processing threads and algorithm threads.\n"
 	    "   bzip2  - Bzip2 Algorithm from libbzip2.\n"
 	    "   ppmd   - The PPMd algorithm excellent for textual data. PPMd requires\n"
-	    "            at least 64MB X CPUs more memory than the other modes.\n"
+	    "            at least 64MB X core-count more memory than the other modes.\n"
 #ifdef ENABLE_PC_LIBBSC
 	    "   libbsc - A Block Sorting Compressor using the Burrows Wheeler Transform\n"
 	    "            like Bzip2 but runs faster and gives better compression than\n"
@@ -119,9 +119,8 @@ usage(pc_ctx_t *pctx)
 	    "   %s -d <compressed file> <target file>\n"
 	    "3) To operate as a pipe, read from stdin and write to stdout:\n"
 	    "   %s -p ...\n"
-	    "4) Attempt Rabin fingerprinting based deduplication on chunks:\n"
+	    "4) Attempt Rabin fingerprinting based deduplication on a per-chunk basis:\n"
 	    "   %s -D ...\n"
-	    "   %s -D -r ... - Do NOT split chunks at a rabin boundary. Default is to split.\n\n"
 	    "5) Perform Deduplication across the entire dataset (Global Dedupe):\n"
 	    "   %s -G <-D|-F> - This option requires one of '-D' or '-F' to be specified\n"
 	    "             to identify the block splitting method.\n"
@@ -140,7 +139,7 @@ usage(pc_ctx_t *pctx)
 	    "   '-S' <cksum>\n"
 	    "           - Specify chunk checksum to use:\n\n",
 	    UTILITY_VERSION, pctx->exec_name, pctx->exec_name, pctx->exec_name, pctx->exec_name,
-	    pctx->exec_name, pctx->exec_name, pctx->exec_name);
+	    pctx->exec_name, pctx->exec_name);
 	list_checksums(stderr, "             ");
 	fprintf(stderr, "\n"
 	    "   '-F'    - Perform Fixed-Block Deduplication. Faster than '-D' but with lower\n"
@@ -2717,10 +2716,6 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 		    case 'P':
 			pctx->enable_delta2_encode = 1;
-			break;
-
-		    case 'r':
-			pctx->enable_rabin_split = 0;
 			break;
 
 		    case 'k':

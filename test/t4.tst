@@ -10,10 +10,10 @@ do
 	for tf in `cat files.lst`
 	do
 		rm -f ${tf}.*
-		for feat in "-D" "-D -B3 -L" "-D -B4 -E" "-D -B0 -EE" "-D -B5 -EE -L" "-D -B2 -r" "-P" "-D -P" "-D -L -P" \
+		for feat in "-D" "-D -B3 -L" "-D -B4 -E" "-D -B0 -EE" "-D -B5 -EE -L" "-D -B2" "-P" "-D -P" "-D -L -P" \
 				"-G -D" "-G -F" "-G -L -P" "-G -B2"
 		do
-			for seg in 2m 100m
+			for seg in 2m 11m
 			do
 				cmd="../../pcompress -c ${algo} -l 3 -s ${seg} $feat ${tf}"
 				echo "Running $cmd"
