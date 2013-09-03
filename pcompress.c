@@ -2549,7 +2549,7 @@ create_pc_context(void)
 	ctx->hide_mem_stats = 1;
 	ctx->hide_cmp_stats = 1;
 	ctx->enable_rabin_split = 1;
-	ctx->rab_blk_size = 1;
+	ctx->rab_blk_size = -1;
 
 	return (ctx);
 }
@@ -2594,7 +2594,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	pctx->level = -1;
 	err = 0;
 	pctx->keylen = DEFAULT_KEYLEN;
-	pctx->chunksize = -1;
+	pctx->chunksize = DEFAULT_CHUNKSIZE;
 	pos = argv[0] + strlen(argv[0]);
 	while (*pos != '/' && pos > argv[0]) pos--;
 	if (*pos == '/') pos++;
@@ -2756,11 +2756,9 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		}
 	}
 
-	if (pctx->chunksize == -1) {
+	if (pctx->rab_blk_size == -1) {
 		if (!pctx->enable_rabin_global)
-			pctx->chunksize = 0;
-		else
-			pctx->chunksize = DEFAULT_CHUNKSIZE;
+			pctx->rab_blk_size = 0;
 	}
 	/*
 	 * Remaining mandatory arguments are the filenames.
