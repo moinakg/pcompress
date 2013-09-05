@@ -212,6 +212,7 @@ typedef struct{
 	int64_t totalswap;
 	int64_t freeswap;
 	int64_t mem_unit;
+	int64_t sharedram;
 } my_sysinfo;
 
 #ifndef _IN_UTILS_

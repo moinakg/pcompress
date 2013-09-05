@@ -389,6 +389,7 @@ void
 get_sys_limits(my_sysinfo *msys_info)
 {
 	struct sysinfo sys_info;
+	unsigned long totram;
 	int rv;
 	char *val;
 
@@ -402,6 +403,18 @@ get_sys_limits(my_sysinfo *msys_info)
 	msys_info->totalswap = sys_info.totalswap * sys_info.mem_unit;
 	msys_info->freeswap = sys_info.freeswap * sys_info.mem_unit;
 	msys_info->mem_unit = sys_info.mem_unit;
+	msys_info->sharedram = sys_info.sharedram * sys_info.mem_unit;
+
+	/*
+	 * If free memory is less than half of total memory (excluding shared allocations),
+	 * and at least 75% of swap is free then adjust free memory value to 75% of
+	 * total memory excluding shared allocations.
+	 */
+	totram = msys_info->totalram - sys_info.sharedram;
+	if (msys_info->freeram <= (totram >> 1) &&
+	    msys_info->freeswap >= ((msys_info->totalswap >> 1) + (msys_info->totalswap >> 2))) {
+		msys_info->freeram = (totram >> 1) + (totram >> 2);
+	}
 
 	if ((val = getenv("PCOMPRESS_INDEX_MEM")) != NULL) {
 		uint64_t mem;

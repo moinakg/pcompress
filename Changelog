@@ -1,3 +1,28 @@
+== 2.4 Bugfix Release ==
+Add identifiers to error messages for clarity.
+Fix init of dedupe block size.
+Tweak free memory detection to include swap and shared memory consideration.
+Fix incorrect chunk size initialization from a previous commit.
+Remove confusing option with little practical utility.
+Update test cases and documentation.
+Additional error checks in RLE encoding for bsdiff extra data.
+Add a buffer overflow check in RLE encoder.
+Avoid calling RLE encoding if extra data length is zero.
+Make 2KB block size default for non-global deduplication.
+Update test cases for new 2KB block size support.
+Truncate password file after zeroing.
+Add more example usage.
+Avoid calling compression routine when dedupe reduces data size to zero.
+Default compression level only when compressing.
+Fix issue #11.
+Increase default chunk size to 8MB.
+Use default compression level of 1 (fast mode) for LZ4.
+Support for deduplication using 2KB block size.
+Add basic file format documentation.
+Reduce memory threshold for switching to Similarity based Deduplication.
+Avoid unnecessary re-hashing of 64-bit keys of the segment index.
+Update free memory computation to include cached buffers.
+Fix a potential rare corner case.
 == 2.3 Update Release ==
 Fix multiple crashes for some corner cases.
 Increase max block size for variable dedup block sizes greater than 16KB.

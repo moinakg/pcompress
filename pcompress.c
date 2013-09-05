@@ -1128,7 +1128,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 	for (i = 0; i < nprocs; i++) {
 		dary[i] = (struct cmp_data *)slab_alloc(NULL, sizeof (struct cmp_data));
 		if (!dary[i]) {
-			fprintf(stderr, "Out of memory\n");
+			fprintf(stderr, "1: Out of memory\n");
 			UNCOMP_BAIL;
 		}
 		tdat = dary[i];
@@ -1287,7 +1287,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 					tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
 					    chunksize);
 				if (!tdat->compressed_chunk || !tdat->uncompressed_chunk) {
-					fprintf(stderr, "Out of memory\n");
+					fprintf(stderr, "2: Out of memory\n");
 					UNCOMP_BAIL;
 				}
 				tdat->cmp_seg = tdat->uncompressed_chunk;
@@ -1995,21 +1995,20 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	if (pctx->nthreads * props.nthreads > 1) fprintf(stderr, "s");
 	nprocs = pctx->nthreads;
 	fprintf(stderr, "\n");
-
 	dary = (struct cmp_data **)slab_calloc(NULL, nprocs, sizeof (struct cmp_data *));
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan))
 		cread_buf = (uchar_t *)slab_alloc(NULL, compressed_chunksize);
 	else
 		cread_buf = (uchar_t *)slab_alloc(NULL, chunksize);
 	if (!cread_buf) {
-		fprintf(stderr, "Out of memory\n");
+		fprintf(stderr, "3: Out of memory\n");
 		COMP_BAIL;
 	}
 
 	for (i = 0; i < nprocs; i++) {
 		dary[i] = (struct cmp_data *)slab_alloc(NULL, sizeof (struct cmp_data));
 		if (!dary[i]) {
-			fprintf(stderr, "Out of memory\n");
+			fprintf(stderr, "4: Out of memory\n");
 			COMP_BAIL;
 		}
 		tdat = dary[i];
@@ -2241,7 +2240,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 				tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ +
 				    pctx->cksum_bytes + pctx->mac_bytes;
 				if (!tdat->cmp_seg || !tdat->uncompressed_chunk) {
-					fprintf(stderr, "Out of memory\n");
+					fprintf(stderr, "5: Out of memory\n");
 					COMP_BAIL;
 				}
 			}
@@ -2759,6 +2758,8 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	if (pctx->rab_blk_size == -1) {
 		if (!pctx->enable_rabin_global)
 			pctx->rab_blk_size = 0;
+		else
+			pctx->rab_blk_size = RAB_BLK_DEFAULT;
 	}
 	/*
 	 * Remaining mandatory arguments are the filenames.
