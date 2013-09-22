@@ -288,7 +288,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	}
 
 	*dest = type;
-	*((uint64_t *)(dest + 1)) = htonll(srclen);
+	U64_P(dest + 1) = htonll(srclen);
 	_dstlen = srclen;
 	DEBUG_STAT_EN(strt = get_wtime_millis());
 	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr, data);
@@ -328,7 +328,7 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 	++sorc;
 	--srclen;
 	if (type & PREPROC_COMPRESSED) {
-		*dstlen = ntohll(*((uint64_t *)(sorc)));
+		*dstlen = ntohll(U64_P(sorc));
 		sorc += 8;
 		srclen -= 8;
 		DEBUG_STAT_EN(strt = get_wtime_millis());
@@ -482,7 +482,7 @@ redo:
 		 */
 		uint32_t crc1, crc2;
 
-		crc1 = htonl(*((uint32_t *)(tdat->compressed_chunk + pctx->cksum_bytes)));
+		crc1 = htonl(U32_P(tdat->compressed_chunk + pctx->cksum_bytes));
 		memset(tdat->compressed_chunk + pctx->cksum_bytes, 0, pctx->mac_bytes);
 		crc2 = lzma_crc32((uchar_t *)&tdat->len_cmp_be, sizeof (tdat->len_cmp_be), 0);
 		crc2 = lzma_crc32(tdat->compressed_chunk,
@@ -927,7 +927,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		}
 
 		if (pctx->encrypt_type == CRYPTO_ALG_AES) {
-			*((uint64_t *)nonce) = ntohll(*((uint64_t *)n1));
+			U64_P(nonce) = ntohll(U64_P(n1));
 
 		} else if (pctx->encrypt_type == CRYPTO_ALG_SALSA20) {
 			deserialize_checksum(nonce, n1, noncelen);
@@ -1641,7 +1641,7 @@ plain_index:
 		if (type & CHSIZE_MASK)
 			crc = lzma_crc32(tdat->cmp_seg + tdat->len_cmp - ORIGINAL_CHUNKSZ,
 			    ORIGINAL_CHUNKSZ, crc);
-		*((uint32_t *)mac_ptr) = htonl(crc);
+		U32_P(mac_ptr) = htonl(crc);
 	}
 	
 	sem_post(&tdat->cmp_done_sem);
@@ -2122,7 +2122,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		serialize_checksum(pctx->crypto_ctx.salt, pos, pctx->crypto_ctx.saltlen);
 		pos += pctx->crypto_ctx.saltlen;
 		if (pctx->encrypt_type == CRYPTO_ALG_AES) {
-			*((uint64_t *)pos) = htonll(*((uint64_t *)crypto_nonce(&(pctx->crypto_ctx))));
+			U64_P(pos) = htonll(U64_P(crypto_nonce(&(pctx->crypto_ctx))));
 			pos += 8;
 
 		} else if (pctx->encrypt_type == CRYPTO_ALG_SALSA20) {
@@ -2168,7 +2168,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		 * Compute header CRC32 and store that. Only archive version 5 and above.
 		 */
 		uint32_t crc = lzma_crc32(cread_buf, pos - cread_buf, 0);
-		*((uint32_t *)cread_buf) = htonl(crc);
+		U32_P(cread_buf) = htonl(crc);
 		if (Write(compfd, cread_buf, sizeof (uint32_t)) != sizeof (uint32_t)) {
 			perror("Write ");
 			COMP_BAIL;

@@ -249,7 +249,7 @@ valouti32(bsize_t x, u_char *buf)
 {
 	int32_t val;
 	val = x;
-	*((int32_t *)buf) = htonl(val);
+	I32_P(buf) = htonl(val);
 }
 
 bsize_t

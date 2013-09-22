@@ -151,6 +151,12 @@ typedef int32_t bsize_t;
 #endif
 
 #define	BYTES_TO_MB(x) ((x) / (1024 * 1024))
+#define	U64_P(x) *((uint64_t *)(x))
+#define	U32_P(x) *((uint32_t *)(x))
+#define	U16_P(x) *((uint16_t *)(x))
+#define	I64_P(x) *((int64_t *)(x))
+#define	I32_P(x) *((int32_t *)(x))
+#define	I16_P(x) *((int16_t *)(x))
 
 /*
  * Public checksum properties. CKSUM_MAX_BYTES must be updated if a

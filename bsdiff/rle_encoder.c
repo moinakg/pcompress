@@ -53,13 +53,13 @@ zero_rle_encode(const void *ibuf, const unsigned int ilen,
 			 * We have a run of zeroes. Count them and store only the count.
 			 */
 			while (pos1 < (ilen - sz) && count < (COUNT_MAX - sz)) {
-				val = *((uint64_t *)(ib+pos1));
+				val = U64_P(ib+pos1);
 				if (val) break;
 				pos1 += sizeof (val); count += sizeof (val);
 			}
 			for (;pos1<ilen && ib[pos1]==0 && count<COUNT_MAX; pos1++) ++count;
 			count |= ZERO_MASK;
-			*((unsigned short *)(ob + pos2)) = htons(count);
+			U16_P(ob + pos2) = htons(count);
 			pos2 += 2;
 			if (pos2 > *olen) break;
 		} else {
@@ -82,7 +82,7 @@ zero_rle_encode(const void *ibuf, const unsigned int ilen,
 				ob[pos2++] = ib[pos1++];
 				++count;
 			}
-			*((unsigned short *)(ob + pos3)) = htons(count);
+			U16_P(ob + pos3) = htons(count);
 		}
 	}
 	*olen = pos2;
@@ -105,7 +105,7 @@ zero_rle_decode(const void* ibuf, unsigned int ilen,
 	pos2 = 0;
 	pos1 = 0;
 	for (; pos1<ilen && pos2<*olen;) {
-		count = ntohs(*((unsigned short *)(ib + pos1)));
+		count = ntohs(U16_P(ib + pos1));
 		pos1 += 2;
 		if (count & ZERO_MASK) {
 			count &= DATA_MASK;

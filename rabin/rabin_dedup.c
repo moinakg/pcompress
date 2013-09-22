@@ -792,7 +792,7 @@ process_blocks:
 			 * First entry in table is the original file offset where this
 			 * data segment begins.
 			 */
-			*((uint64_t *)g_dedupe_idx) = LE64(ctx->file_offset);
+			U64_P(g_dedupe_idx) = LE64(ctx->file_offset);
 			g_dedupe_idx += (RABIN_ENTRY_SIZE * 2);
 			dedupe_index_sz += 2;
 			matchlen = 0;
@@ -825,7 +825,7 @@ process_blocks:
 						 * Block was added to index. Merge this block.
 						 */
 						if (length + ctx->g_blocks[i].length >= RABIN_MAX_BLOCK_SIZE) {
-							*((uint32_t *)g_dedupe_idx) = LE32(length);
+							U32_P(g_dedupe_idx) = LE32(length);
 							g_dedupe_idx += RABIN_ENTRY_SIZE;
 							length = 0;
 							dedupe_index_sz++;
@@ -839,7 +839,7 @@ process_blocks:
 							/*
 							 * Write pending accumulated block length value.
 							 */
-							*((uint32_t *)g_dedupe_idx) = LE32(length);
+							U32_P(g_dedupe_idx) = LE32(length);
 							g_dedupe_idx += RABIN_ENTRY_SIZE;
 							length = 0;
 							dedupe_index_sz++;
@@ -848,10 +848,10 @@ process_blocks:
 						/*
 						 * Add a reference entry to the dedupe array.
 						 */
-						*((uint32_t *)g_dedupe_idx) = LE32((he->item_size | RABIN_INDEX_FLAG) &
+						U32_P(g_dedupe_idx) = LE32((he->item_size | RABIN_INDEX_FLAG) &
 							CLEAR_SIMILARITY_FLAG);
 						g_dedupe_idx += RABIN_ENTRY_SIZE;
-						*((uint64_t *)g_dedupe_idx) = LE64(he->item_offset);
+						U64_P(g_dedupe_idx) = LE64(he->item_offset);
 						g_dedupe_idx += (RABIN_ENTRY_SIZE * 2);
 						matchlen += he->item_size;
 						dedupe_index_sz += 3;
@@ -867,7 +867,7 @@ process_blocks:
 				 * Write final pending block length value (if any).
 				 */
 				if (length > 0) {
-					*((uint32_t *)g_dedupe_idx) = LE32(length);
+					U32_P(g_dedupe_idx) = LE32(length);
 					g_dedupe_idx += RABIN_ENTRY_SIZE;
 					length = 0;
 					dedupe_index_sz++;
@@ -948,7 +948,7 @@ process_blocks:
 							tgt += cfg->chunk_cksum_sz;
 						}
 					}
-					*((uint32_t *)src) = blks;
+					U32_P(src) = blks;
 					src += sizeof (blks);
 					blks = j+i;
 
@@ -965,14 +965,14 @@ process_blocks:
 					tgt = seg_heap;
 					sub_i = 0;
 
-					*((uint64_t *)sim_ck) = 0;
+					U64_P(sim_ck) = 0;
 					a = 0;
 					for (j = 0; j < length && sub_i < cfg->sub_intervals;) {
-						b = *((uint64_t *)tgt);
+						b = U64_P(tgt);
 						tgt += sizeof (uint64_t);
 						j += sizeof (uint64_t);
 						if (b != a) {
-							*((uint64_t *)sim_ck) = b;
+							U64_P(sim_ck) = b;
 							sim_ck += sizeof (uint64_t);
 							a = b;
 							sub_i++;
@@ -1013,9 +1013,9 @@ process_blocks:
 						hash_entry_t *he = NULL;
 						he = db_lookup_insert_s(cfg, sim_ck, 0, seg_offset, 0, 1);
 						if (he) {
-							*((uint64_t *)tgt) = he->item_offset;
+							U64_P(tgt) = he->item_offset;
 						} else {
-							*((uint64_t *)tgt) = UINT64_MAX;
+							U64_P(tgt) = UINT64_MAX;
 						}
 						sim_ck += cfg->similarity_cksum_sz;
 						tgt += cfg->similarity_cksum_sz;
@@ -1034,9 +1034,9 @@ process_blocks:
 					 */
 					sim_ck = tgt;
 					for (j=0; j < sub_i; j++) {
-						if (off1 != *((uint64_t *)sim_ck) && *((uint64_t *)sim_ck) != UINT64_MAX) {
-							off1 = *((uint64_t *)sim_ck);
-							*((uint64_t *)tgt) = off1;
+						if (off1 != U64_P(sim_ck) && U64_P(sim_ck) != UINT64_MAX) {
+							off1 = U64_P(sim_ck);
+							U64_P(tgt) = off1;
 							tgt += cfg->similarity_cksum_sz;
 							k++;
 						}
@@ -1058,7 +1058,7 @@ process_blocks:
 				 */
 				src = sim_offsets;
 				for (i=0; i<blknum;) {
-					blks = *((uint32_t *)src) + i;
+					blks = U32_P(src) + i;
 					src += sizeof (blks);
 
 					/*
@@ -1120,7 +1120,7 @@ process_blocks:
 						 * Load segment metadata from disk and perform identity deduplication
 						 * with the segment chunks.
 						 */
-						offset = *((uint64_t *)sim_ck);
+						offset = U64_P(sim_ck);
 						if (db_segcache_map(cfg, ctx->id, &o_blks, &offset,
 						    (uchar_t **)&seg_blocks) == -1) {
 							fprintf(stderr, "** Segment cache mmap failed.\n");
@@ -1181,7 +1181,7 @@ next_ent:
 						 * Block was added to index. Merge this block.
 						 */
 						if (length + ctx->g_blocks[i].length > RABIN_MAX_BLOCK_SIZE) {
-							*((uint32_t *)g_dedupe_idx) = LE32(length);
+							U32_P(g_dedupe_idx) = LE32(length);
 							g_dedupe_idx += RABIN_ENTRY_SIZE;
 							length = 0;
 							dedupe_index_sz++;
@@ -1195,7 +1195,7 @@ next_ent:
 							/*
 							 * Write pending accumulated block length value.
 							 */
-							*((uint32_t *)g_dedupe_idx) = LE32(length);
+							U32_P(g_dedupe_idx) = LE32(length);
 							g_dedupe_idx += RABIN_ENTRY_SIZE;
 							length = 0;
 							dedupe_index_sz++;
@@ -1203,9 +1203,9 @@ next_ent:
 						/*
 						 * Add a reference entry to the dedupe array.
 						 */
-						*((uint32_t *)g_dedupe_idx) = LE32(ctx->g_blocks[i].length);
+						U32_P(g_dedupe_idx) = LE32(ctx->g_blocks[i].length);
 						g_dedupe_idx += RABIN_ENTRY_SIZE;
-						*((uint64_t *)g_dedupe_idx) = LE64(ctx->g_blocks[i].offset);
+						U64_P(g_dedupe_idx) = LE64(ctx->g_blocks[i].offset);
 						g_dedupe_idx += (RABIN_ENTRY_SIZE * 2);
 						matchlen += (ctx->g_blocks[i].length & RABIN_INDEX_VALUE);
 						dedupe_index_sz += 3;
@@ -1216,7 +1216,7 @@ next_ent:
 				 * Write final pending block length value (if any).
 				 */
 				if (length > 0) {
-					*((uint32_t *)g_dedupe_idx) = LE32(length);
+					U32_P(g_dedupe_idx) = LE32(length);
 					g_dedupe_idx += RABIN_ENTRY_SIZE;
 					length = 0;
 					dedupe_index_sz++;
@@ -1246,7 +1246,7 @@ next_ent:
 			 * Now copy the block data;
 			 */
 			for (i=0; i<blknum-2;) {
-				length = LE32(*((uint32_t *)g_dedupe_idx));
+				length = LE32(U32_P(g_dedupe_idx));
 				g_dedupe_idx += RABIN_ENTRY_SIZE;
 				++i;
 
@@ -1483,7 +1483,7 @@ dedupe_done:
 			uint64_t *entries;
 			DEBUG_STAT_EN(uint64_t sz);
 			DEBUG_STAT_EN(sz = *size);
-			*((uint32_t *)cbuf) = htonl(blknum);
+			U32_P(cbuf) = htonl(blknum);
 			cbuf += sizeof (uint32_t);
 			entries = (uint64_t *)cbuf;
 			entries[0] = htonll(*size);
@@ -1524,7 +1524,7 @@ parse_dedupe_hdr(uchar_t *buf, uint32_t *blknum, uint64_t *dedupe_index_sz,
 {
 	uint64_t *entries;
 
-	*blknum = ntohl(*((uint32_t *)(buf)));
+	*blknum = ntohl(U32_P(buf));
 	buf += sizeof (uint32_t);
 
 	entries = (uint64_t *)buf;
@@ -1561,14 +1561,14 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size)
 
 		blknum &= CLEAR_GLOBAL_FLAG;
 		g_dedupe_idx = buf + RABIN_HDR_SIZE;
-		offset = LE64(*((uint64_t *)g_dedupe_idx));
+		offset = LE64(U64_P(g_dedupe_idx));
 		g_dedupe_idx += (RABIN_ENTRY_SIZE * 2);
 		blknum -= 2;
 		src1 = buf + RABIN_HDR_SIZE + dedupe_index_sz;
 
 		sem_wait(ctx->index_sem);
 		for (blk=0; blk<blknum;) {
-			len = LE32(*((uint32_t *)g_dedupe_idx));
+			len = LE32(U32_P(g_dedupe_idx));
 			g_dedupe_idx += RABIN_ENTRY_SIZE;
 			++blk;
 			flag = len & RABIN_INDEX_FLAG;
@@ -1585,7 +1585,7 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size)
 				src1 += len;
 				sz += len;
 			} else {
-				pos1 = LE64(*((uint64_t *)g_dedupe_idx));
+				pos1 = LE64(U64_P(g_dedupe_idx));
 				g_dedupe_idx += (RABIN_ENTRY_SIZE * 2);
 				blk += 2;
 

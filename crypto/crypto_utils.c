@@ -782,16 +782,16 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 					} else {
 						uint64_t v;
 						v = tp.tv_sec * 1000UL + tp.tv_nsec;
-						*((uint64_t *)&sb[b]) = v;
+						U64_P(&sb[b]) = v;
 						b += 8;
 					}
-					*((uint32_t *)&sb[b]) = rand();
+					U32_P(&sb[b]) = rand();
 					b += 4;
-					*((uint32_t *)&sb[b]) = getpid();
+					U32_P(&sb[b]) = getpid();
 					b += 4;
 					compute_checksum(&sb[b], CKSUM_SHA256, sb, b, 0, 0);
 					b = 8 + 4;
-					*((uint32_t *)&sb[b]) = rand();
+					U32_P(&sb[b]) = rand();
 					compute_checksum(salt, CKSUM_SHA256, &sb[b], 32 + 4, 0, 0);
 				}
 			}
@@ -825,7 +825,7 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 			memcpy(cctx->salt, salt, saltlen);
 
 			if (crypto_alg == CRYPTO_ALG_AES) {
-				if (aes_init(actx, cctx->salt, saltlen, pwd, pwd_len, *((uint64_t *)nonce),
+				if (aes_init(actx, cctx->salt, saltlen, pwd, pwd_len, U64_P(nonce),
 				    enc_dec) != 0) {
 					fprintf(stderr, "Failed to initialize AES context\n");
 					return (-1);

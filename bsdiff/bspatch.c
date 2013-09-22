@@ -69,7 +69,7 @@ __FBSDID("$FreeBSD: src/usr.bin/bsdiff/bspatch/bspatch.c,v 1.1 2005/08/06 01:59:
 static int32_t
 valini32(u_char *buf)
 {
-	return ntohl(*((int32_t *)buf));
+	return ntohl(I32_P(buf));
 }
 
 bsize_t

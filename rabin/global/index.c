@@ -328,8 +328,8 @@ db_segcache_write(archive_config_t *cfg, int tid, uchar_t *buf, uint32_t len, ui
 	int64_t w;
 	uchar_t hdr[SEGCACHE_HDR_SZ];
 
-	*((uint32_t *)(hdr)) = blknum;
-	*((uint64_t *)(hdr + 4)) = file_offset;
+	U32_P(hdr) = blknum;
+	U64_P(hdr + 4) = file_offset;
 
 	w = Write(cfg->seg_fd_w, hdr, sizeof (hdr));
 	if (w < sizeof (hdr)) {
@@ -382,8 +382,8 @@ db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offs
 	adj = *offset % cfg->pagesize;
 	if (*offset == cfg->seg_fd_r[tid].cache_offset && cfg->seg_fd_r[tid].mapping) {
 		hdr = (uchar_t *)(cfg->seg_fd_r[tid].mapping) + adj;
-		*blknum = *((uint32_t *)(hdr));
-		*offset = *((uint64_t *)(hdr + 4));
+		*blknum = U32_P(hdr);
+		*offset = U64_P(hdr + 4);
 		*blocks = hdr + SEGCACHE_HDR_SZ;
 		return (0);
 	}
@@ -416,8 +416,8 @@ db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offs
 
 	cfg->seg_fd_r[tid].cache_offset = *offset;
 	hdr = mapbuf + adj;
-	*blknum = *((uint32_t *)(hdr));
-	*offset = *((uint64_t *)(hdr + 4));
+	*blknum = U32_P(hdr);
+	*offset = U64_P(hdr + 4);
 	*blocks = hdr + SEGCACHE_HDR_SZ;
 	dummy = *(hdr + SEGCACHE_HDR_SZ);
 
@@ -486,7 +486,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 	 * there is no need to re-hash the keys here.
 	 */
 	if (cfg->similarity_cksum_sz == 8) {
-		htab_entry = *((uint32_t *)sim_cksum);
+		htab_entry = U32_P(sim_cksum);
 	} else {
 		htab_entry = XXH32(sim_cksum, cfg->similarity_cksum_sz, 0);
 	}
@@ -509,7 +509,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 	// The following two cases are for Segmented Dedupe approximate matching
 	} else if (cfg->similarity_cksum_sz == 8) {// Fast path for 64-bit keys
 		while (ent) {
-			if (*((uint64_t *)sim_cksum) == *((uint64_t *)ent->cksum)) {
+			if (U64_P(sim_cksum) == U64_P(ent->cksum)) {
 				return (ent);
 			}
 			pent = &(ent->next);
