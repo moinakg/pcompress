@@ -801,12 +801,12 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 			 */
 			if (crypto_alg == CRYPTO_ALG_AES) {
 				if (aes_init(actx, salt, 32, pwd, pwd_len, 0, enc_dec) != 0) {
-					fprintf(stderr, "Failed to initialize AES context\n");
+					log_msg(LOG_ERR, 0, "Failed to initialize AES context\n");
 					return (-1);
 				}
 			} else {
 				if (salsa20_init(sctx, salt, 32, pwd, pwd_len, 0, enc_dec) != 0) {
-					fprintf(stderr, "Failed to initialize SALSA20 context\n");
+					log_msg(LOG_ERR, 0, "Failed to initialize SALSA20 context\n");
 					return (-1);
 				}
 			}
@@ -816,7 +816,7 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 			 * Pass given nonce and salt.
 			 */
 			if (saltlen > MAX_SALTLEN) {
-				fprintf(stderr, "Salt too long. Max allowed length is %d\n",
+				log_msg(LOG_ERR, 0, "Salt too long. Max allowed length is %d\n",
 				    MAX_SALTLEN);
 				free(actx);
 				return (-1);
@@ -827,12 +827,12 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 			if (crypto_alg == CRYPTO_ALG_AES) {
 				if (aes_init(actx, cctx->salt, saltlen, pwd, pwd_len, U64_P(nonce),
 				    enc_dec) != 0) {
-					fprintf(stderr, "Failed to initialize AES context\n");
+					log_msg(LOG_ERR, 0, "Failed to initialize AES context\n");
 					return (-1);
 				}
 			} else {
 				if (salsa20_init(sctx, salt, 32, pwd, pwd_len, nonce, enc_dec) != 0) {
-					fprintf(stderr, "Failed to initialize SALSA20 context\n");
+					log_msg(LOG_ERR, 0, "Failed to initialize SALSA20 context\n");
 					return (-1);
 				}
 			}
@@ -847,7 +847,7 @@ init_crypto(crypto_ctx_t *cctx, uchar_t *pwd, int pwd_len, int crypto_alg,
 		actx = NULL;
 		sctx = NULL;
 	} else {
-		fprintf(stderr, "Unrecognized algorithm code: %d\n", crypto_alg);
+		log_msg(LOG_ERR, 0, "Unrecognized algorithm code: %d\n", crypto_alg);
 		return (-1);
 	}
 	return (0);
@@ -869,7 +869,7 @@ crypto_buf(crypto_ctx_t *cctx, uchar_t *from, uchar_t *to, uint64_t bytes, uint6
 			return (salsa20_decrypt((salsa20_ctx_t *)(cctx->crypto_ctx), from, to, bytes, id));
 		}
 	} else {
-		fprintf(stderr, "Unrecognized algorithm code: %d\n", cctx->crypto_alg);
+		log_msg(LOG_ERR, 0, "Unrecognized algorithm code: %d\n", cctx->crypto_alg);
 		return (-1);
 	}
 	return (0);

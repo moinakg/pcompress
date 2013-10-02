@@ -61,7 +61,7 @@ init_global_db(char *configfile)
 
 	cfg = calloc(1, sizeof (archive_config_t));
 	if (!cfg) {
-		fprintf(stderr, "Memory allocation failure\n");
+		log_msg(LOG_ERR, 0, "Memory allocation failure\n");
 		return (NULL);
 	}
 
@@ -215,7 +215,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 	index_t *indx;
 
 	if (path != NULL) {
-		fprintf(stderr, "Disk based index not yet implemented.\n");
+		log_msg(LOG_WARN, 0, "Disk based index not yet implemented.\n");
 		return (NULL);
 	}
 	cfg = calloc(1, sizeof (archive_config_t));

@@ -55,7 +55,7 @@ lz_fx_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	int lev;
 
 	if (chunksize > UINT_MAX) {
-		fprintf(stderr, "Chunk size too big for LZFX.\n");
+		log_msg(LOG_ERR, 0, "Chunk size too big for LZFX.\n");
 		return (1);
 	}
 	lzdat = (struct lzfx_params *)slab_alloc(NULL, sizeof (struct lzfx_params));
@@ -86,19 +86,19 @@ lz_fx_err(int err)
 {
 	switch (err) {
 	    case LZFX_ESIZE:
-		fprintf(stderr, "LZFX: Output buffer too small.\n");
+		log_msg(LOG_ERR, 0, "LZFX: Output buffer too small.\n");
 		break;
 	    case LZFX_ECORRUPT:
-		fprintf(stderr, "LZFX: Corrupt data for decompression.\n");
+		log_msg(LOG_ERR, 0, "LZFX: Corrupt data for decompression.\n");
 		break;
 	    case LZFX_EARGS:
-		fprintf(stderr, "LZFX: Invalid arguments.\n");
+		log_msg(LOG_ERR, 0, "LZFX: Invalid arguments.\n");
 		break;
 	    case LZFX_ENOMEM:
-		fprintf(stderr, "LZFX: Out of memory when allocating hashtable.\n");
+		log_msg(LOG_ERR, 0, "LZFX: Out of memory when allocating hashtable.\n");
 		break;
 	    default:
-		fprintf(stderr, "LZFX: Unknown error code: %d\n", err);
+		log_msg(LOG_ERR, 0, "LZFX: Unknown error code: %d\n", err);
 	}
 }
 

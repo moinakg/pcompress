@@ -226,7 +226,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 			if ((ck = getenv("PCOMPRESS_CHUNK_HASH_GLOBAL")) != NULL) {
 				if (get_checksum_props(ck, &chunk_cksum, &cksum_bytes, &mac_bytes, 1) != 0 ||
 				    strcmp(ck, "CRC64") == 0) {
-					fprintf(stderr, "Invalid PCOMPRESS_CHUNK_HASH_GLOBAL.\n");
+					log_msg(LOG_ERR, 0, "Invalid PCOMPRESS_CHUNK_HASH_GLOBAL.\n");
 					chunk_cksum = DEFAULT_CHUNK_CKSUM;
 					pthread_mutex_unlock(&init_lock);
 					return (NULL);
@@ -235,7 +235,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 			if (chunk_cksum == 0) {
 				chunk_cksum = DEFAULT_CHUNK_CKSUM;
 				if (get_checksum_props(NULL, &chunk_cksum, &cksum_bytes, &mac_bytes, 0) != 0) {
-					fprintf(stderr, "Invalid default chunk checksum: %d\n", DEFAULT_CHUNK_CKSUM);
+					log_msg(LOG_ERR, 0, "Invalid default chunk checksum: %d\n", DEFAULT_CHUNK_CKSUM);
 					pthread_mutex_unlock(&init_lock);
 					return (NULL);
 				}
@@ -256,19 +256,19 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	 * Rabin window size must be power of 2 for optimization.
 	 */
 	if (!ISP2(RAB_POLYNOMIAL_WIN_SIZE)) {
-		fprintf(stderr, "Rabin window size must be a power of 2 in range 4 <= x <= 64\n");
+		log_msg(LOG_ERR, 0, "Rabin window size must be a power of 2 in range 4 <= x <= 64\n");
 		return (NULL);
 	}
 
 	if (arc) {
 		if (chunksize < RAB_MIN_CHUNK_SIZE_GLOBAL) {
-			fprintf(stderr, "Minimum chunk size for Global Dedup must be %" PRIu64 " bytes\n",
+			log_msg(LOG_ERR, 0, "Minimum chunk size for Global Dedup must be %" PRIu64 " bytes\n",
 			RAB_MIN_CHUNK_SIZE_GLOBAL);
 			return (NULL);
 		}
 	} else {
 		if (chunksize < RAB_MIN_CHUNK_SIZE) {
-			fprintf(stderr, "Minimum chunk size for Dedup must be %" PRIu64 " bytes\n",
+			log_msg(LOG_ERR, 0, "Minimum chunk size for Dedup must be %" PRIu64 " bytes\n",
 			RAB_MIN_CHUNK_SIZE);
 			return (NULL);
 		}
@@ -324,7 +324,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		++(ctx->blknum);
 
 	if (ctx->blknum > RABIN_MAX_BLOCKS) {
-		fprintf(stderr, "Chunk size too large for dedup.\n");
+		log_msg(LOG_ERR, 0, "Chunk size too large for dedup.\n");
 		destroy_dedupe_context(ctx);
 		return (NULL);
 	}
@@ -340,7 +340,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	}
 	if(ctx == NULL || ctx->current_window_data == NULL ||
 	    (ctx->blocks == NULL && real_chunksize > 0 && dedupe_flag != RABIN_DEDUPE_FILE_GLOBAL)) {
-		fprintf(stderr,
+		log_msg(LOG_ERR, 0,
 		    "Could not allocate rabin polynomial context, out of memory\n");
 		destroy_dedupe_context(ctx);
 		return (NULL);
@@ -351,7 +351,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 					arc->sub_intervals,
 					arc->similarity_cksum_sz);
 		if (!ctx->similarity_cksums) {
-			fprintf(stderr,
+			log_msg(LOG_ERR, 0,
 			    "Could not allocate dedupe context, out of memory\n");
 			destroy_dedupe_context(ctx);
 			return (NULL);
@@ -365,7 +365,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 
 		// The lzma_data member is not needed during decompression
 		if (!(ctx->lzma_data) && op == COMPRESS) {
-			fprintf(stderr,
+			log_msg(LOG_ERR, 0,
 			    "Could not initialize LZMA data for dedupe index, out of memory\n");
 			destroy_dedupe_context(ctx);
 			return (NULL);
@@ -1123,7 +1123,7 @@ process_blocks:
 						offset = U64_P(sim_ck);
 						if (db_segcache_map(cfg, ctx->id, &o_blks, &offset,
 						    (uchar_t **)&seg_blocks) == -1) {
-							fprintf(stderr, "** Segment cache mmap failed.\n");
+							log_msg(LOG_ERR, 0, "** Segment cache mmap failed.\n");
 							ctx->valid = 0;
 							return (0);
 						}
@@ -1575,7 +1575,7 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size)
 			len &= RABIN_INDEX_VALUE;
 
 			if (sz + len > data_sz) {
-				fprintf(stderr, "Dedup data overflows chunk.\n");
+				log_msg(LOG_ERR, 0, "Dedup data overflows chunk.\n");
 				ctx->valid = 0;
 				break;
 			}
@@ -1675,14 +1675,14 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size)
 				newsz = data_sz - sz;
 				rv = bspatch(buf + ctx->blocks[blk]->offset, buf + pos1, len, pos2, &newsz);
 				if (rv == 0) {
-					fprintf(stderr, "Failed to bspatch block.\n");
+					log_msg(LOG_ERR, 0, "Failed to bspatch block.\n");
 					ctx->valid = 0;
 					break;
 				}
 				pos2 += newsz;
 				sz += newsz;
 				if (sz > data_sz) {
-					fprintf(stderr, "Dedup data overflows chunk.\n");
+					log_msg(LOG_ERR, 0, "Dedup data overflows chunk.\n");
 					ctx->valid = 0;
 					break;
 				}
@@ -1696,13 +1696,13 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size)
 		pos2 += len;
 		sz += len;
 		if (sz > data_sz) {
-			fprintf(stderr, "Dedup data overflows chunk.\n");
+			log_msg(LOG_ERR, 0, "Dedup data overflows chunk.\n");
 			ctx->valid = 0;
 			break;
 		}
 	}
 	if (ctx->valid && sz < data_sz) {
-		fprintf(stderr, "Too little dedup data processed.\n");
+		log_msg(LOG_ERR, 0, "Too little dedup data processed.\n");
 		ctx->valid = 0;
 	}
 	*size = data_sz;

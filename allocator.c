@@ -186,10 +186,10 @@ slab_cleanup(int quiet)
 	if (bypass) return;
 
 	if (!quiet) {
-		fprintf(stderr, "Slab Allocation Stats\n");
-		fprintf(stderr, "==================================================================\n");
-		fprintf(stderr, " Slab Size           | Allocations         | Hits                |\n");
-		fprintf(stderr, "==================================================================\n");
+		log_msg(LOG_INFO, 0, "Slab Allocation Stats\n");
+		log_msg(LOG_INFO, 0, "==================================================================\n");
+		log_msg(LOG_INFO, 0, " Slab Size           | Allocations         | Hits                |\n");
+		log_msg(LOG_INFO, 0, "==================================================================\n");
 	}
 
 	for (i=0; i<NUM_SLABS; i++)
@@ -200,7 +200,7 @@ slab_cleanup(int quiet)
 		while (slab) {
 			if (slab->avail) {
 				if (!quiet) {
-					fprintf(stderr, "%21" PRIu64 " %21" PRIu64 " %21" PRIu64 "\n",slab->sz,
+					log_msg(LOG_INFO, 0, "%21" PRIu64 " %21" PRIu64 " %21" PRIu64 "\n",slab->sz,
 					slab->allocs, slab->hits);
 				}
 				slab->allocs = 0;
@@ -217,11 +217,11 @@ slab_cleanup(int quiet)
 	}
 
 	if (!quiet) {
-		fprintf(stderr, "==================================================================\n");
-		fprintf(stderr, "Oversize Allocations  : %" PRIu64 "\n", oversize_allocs);
-		fprintf(stderr, "Total Requests        : %" PRIu64 "\n", total_allocs);
-		fprintf(stderr, "Hash collisions       : %" PRIu64 "\n", hash_collisions);
-		fprintf(stderr, "Leaked allocations    : %" PRIu64 "\n", hash_entries);
+		log_msg(LOG_INFO, 0, "==================================================================\n");
+		log_msg(LOG_INFO, 0, "Oversize Allocations  : %" PRIu64 "\n", oversize_allocs);
+		log_msg(LOG_INFO, 0, "Total Requests        : %" PRIu64 "\n", total_allocs);
+		log_msg(LOG_INFO, 0, "Hash collisions       : %" PRIu64 "\n", hash_collisions);
+		log_msg(LOG_INFO, 0, "Leaked allocations    : %" PRIu64 "\n", hash_entries);
 	}
 
 	if (hash_entries > 0) {
@@ -245,9 +245,9 @@ slab_cleanup(int quiet)
 		free(hbucket_locks);
 
 		if (!quiet) {
-			fprintf(stderr, "==================================================================\n");
-			fprintf(stderr, " Slab Size           | Allocations: leaked |\n");
-			fprintf(stderr, "==================================================================\n");
+			log_msg(LOG_INFO, 0, "==================================================================\n");
+			log_msg(LOG_INFO, 0, " Slab Size           | Allocations: leaked |\n");
+			log_msg(LOG_INFO, 0, "==================================================================\n");
 			for (i=0; i<NUM_SLABS; i++)
 			{
 				struct slabentry *slab;
@@ -255,7 +255,7 @@ slab_cleanup(int quiet)
 				slab = &slabheads[i];
 				do {
 					if (slab->allocs > 0)
-						fprintf(stderr, "%21" PRIu64 " %21" PRIu64 "\n", \
+						log_msg(LOG_INFO, 0, "%21" PRIu64 " %21" PRIu64 "\n", \
 						    slab->sz, slab->allocs);
 					slab = slab->next;
 				} while (slab);
@@ -276,7 +276,7 @@ slab_cleanup(int quiet)
 			j++;
 		} while (slab);
 	}
-	if (!quiet) fprintf(stderr, "\n\n");
+	if (!quiet) log_msg(LOG_INFO, 0, "\n\n");
 }
 
 void *
@@ -461,7 +461,7 @@ slab_free(void *p, void *address)
 	while (buf) {
 		if (buf->ptr == address) {
 			if (hash_entries <=0) {
-				fprintf(stderr, "Inconsistent allocation hash\n");
+				log_msg(LOG_ERR, 0, "Inconsistent allocation hash\n");
 				abort();
 			}
 			if (pbuf)
@@ -490,7 +490,7 @@ slab_free(void *p, void *address)
 	}
 	if (!found) {
 		pthread_mutex_unlock(&hbucket_locks[hindx]);
-		fprintf(stderr, "Freed buf(%p) not in slab allocations!\n", address);
+		log_msg(LOG_ERR, 0, "Freed buf(%p) not in slab allocations!\n", address);
 		free(address);
 		abort();
 		fflush(stderr);

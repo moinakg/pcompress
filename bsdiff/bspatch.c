@@ -134,11 +134,11 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 	newsize = valini32(pbuf+4*6);
 
 	if((ctrllen<0) || (lzdatalen<0) || (newsize<0) || (lzextralen<0)) {
-		fprintf(stderr, "1: Corrupt patch\n");
+		log_msg(LOG_ERR, 0, "1: Corrupt patch\n");
 		return (0);
 	}
 	if (newsize > *_newsize) {
-		fprintf(stderr, "Output buffer too small.\n");
+		log_msg(LOG_ERR, 0, "Output buffer too small.\n");
 		return (0);
 	}
 	*_newsize = newsize;
@@ -147,7 +147,7 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 	diffdata = (u_char *)slab_alloc(NULL, datalen);
 	extradata = (u_char *)slab_alloc(NULL, extralen);
 	if (diffdata == NULL || extradata == NULL) {
-		fprintf(stderr, "bspatch: Out of memory.\n");
+		log_msg(LOG_ERR, 0, "bspatch: Out of memory.\n");
 		if (diffdata) slab_free(NULL, diffdata);
 		if (extradata) slab_free(NULL, extradata);
 		return (0);
@@ -158,7 +158,7 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 		/* Ctrl data will be RLE-d if RLE size is less. */
 		ctrldata = (u_char *)slab_alloc(NULL, ctrllen);
 		if (ctrldata == NULL) {
-			fprintf(stderr, "bspatch: Out of memory.\n");
+			log_msg(LOG_ERR, 0, "bspatch: Out of memory.\n");
 			slab_free(NULL, diffdata);
 			slab_free(NULL, extradata);
 			return (0);
@@ -166,7 +166,7 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 		len = ctrllen;
 		if (zero_rle_decode(pbuf + hdrsz, lzctrllen, ctrldata, &len) == -1 ||
 		    len != ctrllen) {
-			fprintf(stderr, "bspatch: Failed to decompress control data.\n");
+			log_msg(LOG_ERR, 0, "bspatch: Failed to decompress control data.\n");
 			rv = 0;
 			goto out;
 		}
@@ -177,7 +177,7 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 	len = datalen;
 	if (zero_rle_decode(pbuf + hdrsz + lzctrllen, lzdatalen, diffdata, &len) == -1 ||
 	    len != datalen) {
-		fprintf(stderr, "bspatch: Failed to decompress diff data.\n");
+		log_msg(LOG_ERR, 0, "bspatch: Failed to decompress diff data.\n");
 		rv = 0;
 		goto out;
 	}
@@ -190,7 +190,7 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 
 		} else if (zero_rle_decode(pbuf + hdrsz + lzctrllen + lzdatalen, lzextralen, extradata, &len) == -1 ||
 		    len != extralen) {
-			fprintf(stderr, "bspatch: Failed to decompress extra data.\n");
+			log_msg(LOG_ERR, 0, "bspatch: Failed to decompress extra data.\n");
 			rv = 0;
 			goto out;
 		}
@@ -207,7 +207,7 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 		for(i=0;i<=2;i++) {
 			lenread = BUFREAD(&cpf, buf, 4);
 			if (lenread < 4) {
-				fprintf(stderr, "2: Corrupt diff data\n");
+				log_msg(LOG_ERR, 0, "2: Corrupt diff data\n");
 				rv = 0;
 				goto out;
 			}
@@ -216,7 +216,7 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 
 		/* Sanity-check */
 		if(newpos+ctrl[0]>newsize) {
-			fprintf(stderr, "3: Corrupt diff data\n");
+			log_msg(LOG_ERR, 0, "3: Corrupt diff data\n");
 			rv = 0;
 			goto out;
 		}
@@ -224,7 +224,7 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 		/* Read diff string */
 		lenread = BUFREAD(&dpf, newbuf + newpos, ctrl[0]);
 		if (lenread < ctrl[0]) {
-			fprintf(stderr, "4: Corrupt diff data\n");
+			log_msg(LOG_ERR, 0, "4: Corrupt diff data\n");
 			rv = 0;
 			goto out;
 		}
@@ -240,7 +240,7 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 
 		/* Sanity-check */
 		if(newpos+ctrl[1]>newsize) {
-			fprintf(stderr, "5: Corrupt diff data\n");
+			log_msg(LOG_ERR, 0, "5: Corrupt diff data\n");
 			rv = 0;
 			goto out;
 		}
@@ -248,7 +248,7 @@ bspatch(u_char *pbuf, u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t *
 		/* Read extra string */
 		lenread = BUFREAD(&epf, newbuf + newpos, ctrl[1]);
 		if (lenread < ctrl[1]) {
-			fprintf(stderr, "6: Corrupt diff data\n");
+			log_msg(LOG_ERR, 0, "6: Corrupt diff data\n");
 			rv = 0;
 			goto out;
 		}

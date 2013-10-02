@@ -75,20 +75,20 @@ salsa20_init(salsa20_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int p
 	uint64_t N;
 
 	if (XSALSA20_CRYPTO_NONCEBYTES % 8) {
-		fprintf(stderr, "XSALSA20_CRYPTO_NONCEBYTES is not a multiple of 8!\n");
+		log_msg(LOG_ERR, 0, "XSALSA20_CRYPTO_NONCEBYTES is not a multiple of 8!\n");
 		return (-1);
 	}
 	pickparams(&logN, &r, &p);
 	N = (uint64_t)(1) << logN;
 	if (crypto_scrypt(pwd, pwd_len, salt, saltlen, N, r, p, key, ctx->keylen)) {
-		fprintf(stderr, "Scrypt failed\n");
+		log_msg(LOG_ERR, 0, "Scrypt failed\n");
 		return (-1);
 	}
 #else
 	rv = PKCS5_PBKDF2_HMAC(pwd, pwd_len, salt, saltlen, PBE_ROUNDS, EVP_sha256(),
 			       ctx->keylen, key);
 	if (rv != ctx->keylen) {
-		fprintf(stderr, "Key size is %d bytes - should be %d bits\n", i, ctx->keylen);
+		log_msg(LOG_ERR, 0, "Key size is %d bytes - should be %d bits\n", i, ctx->keylen);
 		return (-1);
 	}
 #endif

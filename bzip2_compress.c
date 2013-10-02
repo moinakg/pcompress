@@ -68,28 +68,28 @@ bzerr(int err)
 {
 	switch (err) {
 	    case BZ_SEQUENCE_ERROR:
-		fprintf(stderr, "Bzip2: Call sequence error, buggy code ?\n");
+		log_msg(LOG_ERR, 0, "Bzip2: Call sequence error, buggy code ?\n");
 		break;
 	    case BZ_PARAM_ERROR:
-		fprintf(stderr, "Bzip2: Invalid parameter\n");
+		log_msg(LOG_ERR, 0, "Bzip2: Invalid parameter\n");
 		break;
 	    case BZ_MEM_ERROR:
-		fprintf(stderr, "Bzip2: Out of memory\n");
+		log_msg(LOG_ERR, 0, "Bzip2: Out of memory\n");
 		break;
 	    case BZ_DATA_ERROR:
-		fprintf(stderr, "Bzip2: Data integrity checksum error\n");
+		log_msg(LOG_ERR, 0, "Bzip2: Data integrity checksum error\n");
 		break;
 	    case BZ_DATA_ERROR_MAGIC:
-		fprintf(stderr, "Bzip2: Invalid magic number in compressed buf\n");
+		log_msg(LOG_ERR, 0, "Bzip2: Invalid magic number in compressed buf\n");
 		break;
 	    case BZ_OUTBUFF_FULL:
-		fprintf(stderr, "Bzip2: Output buffer overflow\n");
+		log_msg(LOG_ERR, 0, "Bzip2: Output buffer overflow\n");
 		break;
 	    case BZ_CONFIG_ERROR:
-		fprintf(stderr, "Bzip2: Improper library config on platform\n");
+		log_msg(LOG_ERR, 0, "Bzip2: Improper library config on platform\n");
 		break;
 	    default:
-		fprintf(stderr, "Bzip2: Unknown error code: %d\n", err);
+		log_msg(LOG_ERR, 0, "Bzip2: Unknown error code: %d\n", err);
 	}
 }
 

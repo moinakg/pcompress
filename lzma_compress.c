@@ -152,36 +152,36 @@ lzerr(int err, int cmp)
 {
 	switch (err) {
 	    case SZ_ERROR_MEM:
-		fprintf(stderr, "LZMA: Memory allocation error\n");
+		log_msg(LOG_ERR, 0, "LZMA: Memory allocation error\n");
 		break;
 	    case SZ_ERROR_PARAM:
-		fprintf(stderr, "LZMA: Incorrect paramater\n");
+		log_msg(LOG_ERR, 0, "LZMA: Incorrect paramater\n");
 		break;
 	    case SZ_ERROR_WRITE:
-		fprintf(stderr, "LZMA: Write callback error\n");
+		log_msg(LOG_ERR, 0, "LZMA: Write callback error\n");
 		break;
 	    case SZ_ERROR_PROGRESS:
-		fprintf(stderr, "LZMA: Progress callback errored\n");
+		log_msg(LOG_ERR, 0, "LZMA: Progress callback errored\n");
 		break;
 	    case SZ_ERROR_INPUT_EOF:
-		fprintf(stderr, "LZMA: More compressed input bytes expected\n");
+		log_msg(LOG_ERR, 0, "LZMA: More compressed input bytes expected\n");
 		break;
 	    case SZ_ERROR_OUTPUT_EOF:
 		/* This error is non-fatal during compression */
 		if (!cmp)
-			fprintf(stderr, "LZMA: Output buffer overflow\n");
+			log_msg(LOG_ERR, 0, "LZMA: Output buffer overflow\n");
 		break;
 	    case SZ_ERROR_UNSUPPORTED:
-		fprintf(stderr, "LZMA: Unsupported properties\n");
+		log_msg(LOG_ERR, 0, "LZMA: Unsupported properties\n");
 		break;
 	    case SZ_ERROR_DESTLEN:
-		fprintf(stderr, "LZMA: Output chunk size too small\n");
+		log_msg(LOG_ERR, 0, "LZMA: Output chunk size too small\n");
 		break;
 	    case SZ_ERROR_DATA:
-		fprintf(stderr, "LZMA: Data Error\n");
+		log_msg(LOG_ERR, 0, "LZMA: Data Error\n");
 		break;
 	    default:
-		fprintf(stderr, "LZMA: Unknown error code: %d\n", err);
+		log_msg(LOG_ERR, 0, "LZMA: Unknown error code: %d\n", err);
 	}
 }
 

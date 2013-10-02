@@ -48,6 +48,8 @@
 #include "utils.h"
 
 processor_info_t proc_info;
+static int cur_log_level = 1;
+static log_dest_t ldest = {LOG_OUTPUT, LOG_INFO, NULL};
 
 void
 init_pcompress() {
@@ -55,6 +57,7 @@ init_pcompress() {
 	XXH32_module_init();
 }
 
+/*
 void
 err_exit(int show_errno, const char *format, ...)
 {
@@ -83,6 +86,7 @@ err_print(int show_errno, const char *format, ...)
 	if (show_errno)
 		fprintf(stderr, "\nError: %s\n", strerror(err));
 }
+*/
 
 /*
  * Fetch the command name that started the current process.
@@ -447,4 +451,47 @@ chk_dir(char *dir)
 		return (0);
 	}
 	return (1);
+}
+
+void DLL_EXPORT
+set_log_dest(log_dest_t *dest)
+{
+	ldest.type = dest->type;
+	ldest.fd = dest->fd;
+	ldest.cb = dest->cb;
+}
+
+void DLL_EXPORT
+set_log_level(int level)
+{
+	if (level >= 0 && level < 10)
+		cur_log_level = level;
+}
+
+void DLL_EXPORT
+log_msg(log_level_t log_level, int show_errno, const char *format, ...)
+{
+	int err = errno, written;
+	va_list args;
+	char msg[1024];
+
+	if (log_level <= cur_log_level) return;
+
+	va_start(args, format);
+	written = vsnprintf(msg, 1024, format, args);
+	va_end(args);
+
+	if (written < 1024 && show_errno) {
+		snprintf(msg + written, 1024 - written, "\nError: %s\n", strerror(err));
+	}
+
+	if (ldest.type == LOG_OUTPUT) {
+		fputs(msg, stderr);
+
+	} else if (ldest.type == LOG_FILE) {
+		int rv;
+		rv = write(ldest.fd, msg, strlen(msg));
+	} else {
+		ldest.cb(msg);
+	}
 }

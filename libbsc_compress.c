@@ -46,19 +46,19 @@ static void
 libbsc_err(int err) {
 	switch (err) {
 	    case LIBBSC_BAD_PARAMETER:
-		fprintf(stderr, "LIBBSC: Bad Parameter.\n");
+		log_msg(LOG_ERR, 0, "LIBBSC: Bad Parameter.\n");
 		break;
 	    case LIBBSC_NOT_ENOUGH_MEMORY:
-		fprintf(stderr, "LIBBSC: Out of memory.\n");
+		log_msg(LOG_ERR, 0, "LIBBSC: Out of memory.\n");
 		break;
 	    case LIBBSC_NOT_SUPPORTED:
-		fprintf(stderr, "LIBBSC: Using unsupported feature.\n");
+		log_msg(LOG_ERR, 0, "LIBBSC: Using unsupported feature.\n");
 		break;
 	    case LIBBSC_UNEXPECTED_EOB:
-		fprintf(stderr, "LIBBSC: Unexpected end of block.\n");
+		log_msg(LOG_ERR, 0, "LIBBSC: Unexpected end of block.\n");
 		break;
 	    case LIBBSC_DATA_CORRUPT:
-		fprintf(stderr, "LIBBSC: Corrupt data.\n");
+		log_msg(LOG_ERR, 0, "LIBBSC: Corrupt data.\n");
 		break;
 	}
 }
@@ -96,7 +96,7 @@ libbsc_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	int rv;
 
 	if (chunksize > BSC_MAX_CHUNK) {
-		fprintf(stderr, "Max allowed chunk size for LIBBSC is: %s \n",
+		log_msg(LOG_ERR, 0, "Max allowed chunk size for LIBBSC is: %s \n",
 		    bytes_to_size(BSC_MAX_CHUNK));
 		return (1);
 	}

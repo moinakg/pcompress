@@ -116,27 +116,27 @@ void zerr(int ret, int cmp)
 		perror(" ");
 		break;
 	    case Z_STREAM_ERROR:
-		fprintf(stderr, "Zlib: Invalid stream structure\n");
+		log_msg(LOG_ERR, 0, "Zlib: Invalid stream structure\n");
 		break;
 	    case Z_DATA_ERROR:
-		fprintf(stderr, "Zlib: Invalid or incomplete deflate data\n");
+		log_msg(LOG_ERR, 0, "Zlib: Invalid or incomplete deflate data\n");
 		break;
 	    case Z_MEM_ERROR:
-		fprintf(stderr, "Zlib: Out of memory\n");
+		log_msg(LOG_ERR, 0, "Zlib: Out of memory\n");
 		break;
 	    case Z_VERSION_ERROR:
-		fprintf(stderr, "Zlib: Version mismatch!\n");
+		log_msg(LOG_ERR, 0, "Zlib: Version mismatch!\n");
 		break;
 	    case Z_BUF_ERROR:
 		/* This error is non-fatal during compression. */
 		if (!cmp)
-			fprintf(stderr, "Zlib: Buffer error decompression failed.\n");
+			log_msg(LOG_ERR, 0, "Zlib: Buffer error decompression failed.\n");
 		break;
 	    case Z_NEED_DICT:
-		fprintf(stderr, "Zlib: Need present dictionary.\n");
+		log_msg(LOG_ERR, 0, "Zlib: Need present dictionary.\n");
 		break;
 	    default:
-		fprintf(stderr, "Zlib: Unknown error code: %d\n", ret);
+		log_msg(LOG_ERR, 0, "Zlib: Unknown error code: %d\n", ret);
 	}
 }
 

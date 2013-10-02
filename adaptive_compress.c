@@ -85,13 +85,13 @@ adapt_stats(int show)
 {
 	if (show) {
 		if (bzip2_count > 0 || bsc_count > 0 || ppmd_count > 0 || lzma_count > 0) {
-			fprintf(stderr, "Adaptive mode stats:\n");
-			fprintf(stderr, "	BZIP2 chunk count: %u\n", bzip2_count);
-			fprintf(stderr, "	LIBBSC chunk count: %u\n", bsc_count);
-			fprintf(stderr, "	PPMd chunk count: %u\n", ppmd_count);
-			fprintf(stderr, "	LZMA chunk count: %u\n\n", lzma_count);
+			log_msg(LOG_INFO, 0, "Adaptive mode stats:\n");
+			log_msg(LOG_INFO, 0, "	BZIP2 chunk count: %u\n", bzip2_count);
+			log_msg(LOG_INFO, 0, "	LIBBSC chunk count: %u\n", bsc_count);
+			log_msg(LOG_INFO, 0, "	PPMd chunk count: %u\n", ppmd_count);
+			log_msg(LOG_INFO, 0, "	LZMA chunk count: %u\n\n", lzma_count);
 		} else {
-			fprintf(stderr, "\n");
+			log_msg(LOG_INFO, 0, "\n");
 		}
 	}
 	lzma_count = 0;
@@ -276,12 +276,12 @@ adapt_decompress(void *src, uint64_t srclen, void *dst,
 #ifdef ENABLE_PC_LIBBSC
 		return (libbsc_decompress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data));
 #else
-		fprintf(stderr, "Cannot decompress chunk. Libbsc support not present.\n");
+		log_msg(LOG_ERR, 0, "Cannot decompress chunk. Libbsc support not present.\n");
 		return (-1);
 #endif
 
 	} else {
-		fprintf(stderr, "Unrecognized compression mode: %d, file corrupt.\n", cmp_flags);
+		log_msg(LOG_ERR, 0, "Unrecognized compression mode: %d, file corrupt.\n", cmp_flags);
 	}
 	return (-1);
 }

@@ -222,7 +222,7 @@ read_config(char *configfile, archive_config_t *cfg)
 		if (strncmp(line, "CHUNKSZ", 7) == 0) {
 			int ck = atoi(pos);
 			if (ck < MIN_CK || ck > MAX_CK) {
-				fprintf(stderr, "Invalid Chunk Size: %d\n", ck);
+				log_msg(LOG_ERR, 0, "Invalid Chunk Size: %d\n", ck);
 				fclose(fh);
 				return (1);
 			}
@@ -233,7 +233,7 @@ read_config(char *configfile, archive_config_t *cfg)
 			if (stat(pos, &sb) == -1) {
 				if (errno != ENOENT) {
 					perror(" ");
-					fprintf(stderr, "Invalid ROOTDIR.\n");
+					log_msg(LOG_ERR, 0, "Invalid ROOTDIR.\n");
 					fclose(fh);
 					return (1);
 				} else {
@@ -241,7 +241,7 @@ read_config(char *configfile, archive_config_t *cfg)
 					strncpy(cfg->rootdir, pos, PATH_MAX);
 				}
 			} else {
-				fprintf(stderr, "Invalid ROOTDIR. It already exists.\n");
+				log_msg(LOG_ERR, 0, "Invalid ROOTDIR. It already exists.\n");
 				fclose(fh);
 				return (1);
 			}
@@ -250,12 +250,12 @@ read_config(char *configfile, archive_config_t *cfg)
 			ssize_t arch_sz;
 			ovr = parse_numeric(&arch_sz, pos);
 			if (ovr == 1) {
-				fprintf(stderr, "ARCHIVESZ value too large.\n");
+				log_msg(LOG_ERR, 0, "ARCHIVESZ value too large.\n");
 				fclose(fh);
 				return (1);
 			}
 			if (ovr == 2) {
-				fprintf(stderr, "Invalid ARCHIVESZ value.\n");
+				log_msg(LOG_ERR, 0, "Invalid ARCHIVESZ value.\n");
 				fclose(fh);
 				return (1);
 			}
@@ -268,21 +268,21 @@ read_config(char *configfile, archive_config_t *cfg)
 			} else if (strcmp(pos, "yes") == 0) {
 				cfg->verify_chunks = 1;
 			} else {
-				fprintf(stderr, "Invalid VERIFY setting. Must be either yes or no.\n");
+				log_msg(LOG_ERR, 0, "Invalid VERIFY setting. Must be either yes or no.\n");
 				fclose(fh);
 				return (1);
 			}
 		} else if (strncmp(line, "COMPRESS", 8) == 0) {
 			cfg->algo = get_compress_algo(pos);
 			if (cfg->algo == COMPRESS_INVALID) {
-				fprintf(stderr, "Invalid COMPRESS setting.\n");
+				log_msg(LOG_ERR, 0, "Invalid COMPRESS setting.\n");
 				fclose(fh);
 				return (1);
 			}
 		} else if (strncmp(line, "CHUNK_CKSUM", 11) == 0) {
 			cfg->chunk_cksum_type = get_cksum_type(pos);
 			if (cfg->chunk_cksum_type == CKSUM_INVALID) {
-				fprintf(stderr, "Invalid CHUNK_CKSUM setting.\n");
+				log_msg(LOG_ERR, 0, "Invalid CHUNK_CKSUM setting.\n");
 				fclose(fh);
 				return (1);
 			}

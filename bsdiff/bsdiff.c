@@ -280,7 +280,7 @@ bsdiff(u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t newsize,
 
 	if(((db=(u_char *)slab_alloc(NULL, newsize+1))==NULL) ||
 		((eb=(u_char *)slab_alloc(NULL, newsize+1))==NULL)) {
-		fprintf(stderr, "bsdiff: Memory allocation error.\n");
+		log_msg(LOG_ERR, 0, "bsdiff: Memory allocation error.\n");
 		slab_free(NULL, I);
 		slab_free(NULL, V);
 		return (0);
@@ -310,7 +310,7 @@ bsdiff(u_char *oldbuf, bsize_t oldsize, u_char *newbuf, bsize_t newsize,
 	valouti32(0, header + 4*5);
 	valouti32(newsize, header + 4*6);
 	if (BUFWRITE(&pf, header, 4*7) != 4*7) {
-		fprintf(stderr, "bsdiff: Write to compressed buffer failed.\n");
+		log_msg(LOG_ERR, 0, "bsdiff: Write to compressed buffer failed.\n");
 		rv = 0;
 		goto out;
 	}

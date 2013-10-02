@@ -86,7 +86,7 @@ ppmd_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	_ppmd->Base = 0;
 	_ppmd->Size = 0;
 	if (!Ppmd8_Alloc(_ppmd, ppmd8_mem_sz[*level], &g_Alloc)) {
-		fprintf(stderr, "PPMD: Out of memory.\n");
+		log_msg(LOG_ERR, 0, "PPMD: Out of memory.\n");
 		return (-1);
 	}
 	Ppmd8_Construct(_ppmd);

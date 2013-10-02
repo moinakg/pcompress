@@ -170,18 +170,18 @@ usage(pc_ctx_t *pctx)
 static void
 show_compression_stats(pc_ctx_t *pctx)
 {
-	fprintf(stderr, "\nCompression Statistics\n");
-	fprintf(stderr, "======================\n");
-	fprintf(stderr, "Total chunks           : %u\n", pctx->chunk_num);
+	log_msg(LOG_INFO, 0, "\nCompression Statistics\n");
+	log_msg(LOG_INFO, 0, "======================\n");
+	log_msg(LOG_INFO, 0, "Total chunks           : %u\n", pctx->chunk_num);
 	if (pctx->chunk_num == 0) {
-		fprintf(stderr, "No statistics to display.\n");
+		log_msg(LOG_INFO, 0, "No statistics to display.\n");
 	} else {
-		fprintf(stderr, "Best compressed chunk  : %s(%.2f%%)\n",
+		log_msg(LOG_INFO, 0, "Best compressed chunk  : %s(%.2f%%)\n",
 		    bytes_to_size(pctx->smallest_chunk), (double)pctx->smallest_chunk/(double)pctx->chunksize*100);
-		fprintf(stderr, "Worst compressed chunk : %s(%.2f%%)\n",
+		log_msg(LOG_INFO, 0, "Worst compressed chunk : %s(%.2f%%)\n",
 		    bytes_to_size(pctx->largest_chunk), (double)pctx->largest_chunk/(double)pctx->chunksize*100);
 		pctx->avg_chunk /= pctx->chunk_num;
-		fprintf(stderr, "Avg compressed chunk   : %s(%.2f%%)\n\n",
+		log_msg(LOG_INFO, 0, "Avg compressed chunk   : %s(%.2f%%)\n\n",
 		    bytes_to_size(pctx->avg_chunk), (double)pctx->avg_chunk/(double)pctx->chunksize*100);
 	}
 }
@@ -272,7 +272,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		/*
 		 * Execution won't come here but just in case ...
 		 */
-		fprintf(stderr, "Invalid preprocessing mode\n");
+		log_msg(LOG_ERR, 0, "Invalid preprocessing mode\n");
 		return (-1);
 	}
 
@@ -360,14 +360,14 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 		result = lzp_decompress((const uchar_t *)src, (uchar_t *)dst, srclen,
 					hashsize, LZP_DEFAULT_LZPMINLEN, 0);
 		if (result < 0) {
-			fprintf(stderr, "LZP decompression failed.\n");
+			log_msg(LOG_ERR, 0, "LZP decompression failed.\n");
 			return (-1);
 		}
 		*dstlen = result;
 	}
 
 	if (!(type & (PREPROC_COMPRESSED | PREPROC_TYPE_DELTA2 | PREPROC_TYPE_LZP)) && type > 0) {
-		fprintf(stderr, "Invalid preprocessing flags: %d\n", type);
+		log_msg(LOG_ERR, 0, "Invalid preprocessing flags: %d\n", type);
 		return (-1);
 	}
 	return (0);
@@ -447,7 +447,7 @@ redo:
 			/*
 			 * HMAC verification failure is fatal.
 			 */
-			fprintf(stderr, "Chunk %d, HMAC verification failed\n", tdat->id);
+			log_msg(LOG_ERR, 0, "Chunk %d, HMAC verification failed\n", tdat->id);
 			pctx->main_cancel = 1;
 			tdat->len_cmp = 0;
 			pctx->t_errored = 1;
@@ -497,7 +497,7 @@ redo:
 			/*
 			 * Header CRC32 verification failure is fatal.
 			 */
-			fprintf(stderr, "Chunk %d, Header CRC verification failed\n", tdat->id);
+			log_msg(LOG_ERR, 0, "Chunk %d, Header CRC verification failed\n", tdat->id);
 			pctx->main_cancel = 1;
 			tdat->len_cmp = 0;
 			pctx->t_errored = 1;
@@ -545,7 +545,7 @@ redo:
 			}
 			if (rv == -1) {
 				tdat->len_cmp = 0;
-				fprintf(stderr, "ERROR: Chunk %d, decompression failed.\n", tdat->id);
+				log_msg(LOG_ERR, 0, "ERROR: Chunk %d, decompression failed.\n", tdat->id);
 				pctx->t_errored = 1;
 				goto cont;
 			}
@@ -595,7 +595,7 @@ redo:
 
 	if (rv == -1) {
 		tdat->len_cmp = 0;
-		fprintf(stderr, "ERROR: Chunk %d, decompression failed.\n", tdat->id);
+		log_msg(LOG_ERR, 0, "ERROR: Chunk %d, decompression failed.\n", tdat->id);
 		pctx->t_errored = 1;
 		goto cont;
 	}
@@ -609,7 +609,7 @@ redo:
 		rctx->cbuf = tdat->compressed_chunk;
 		dedupe_decompress(rctx, tdat->uncompressed_chunk, &(tdat->len_cmp));
 		if (!rctx->valid) {
-			fprintf(stderr, "ERROR: Chunk %d, dedup recovery failed.\n", tdat->id);
+			log_msg(LOG_ERR, 0, "ERROR: Chunk %d, dedup recovery failed.\n", tdat->id);
 			rv = -1;
 			tdat->len_cmp = 0;
 			pctx->t_errored = 1;
@@ -641,7 +641,7 @@ redo:
 		compute_checksum(checksum, pctx->cksum, tdat->uncompressed_chunk, _chunksize, tdat->cksum_mt, 1);
 		if (memcmp(checksum, tdat->checksum, pctx->cksum_bytes) != 0) {
 			tdat->len_cmp = 0;
-			fprintf(stderr, "ERROR: Chunk %d, checksums do not match.\n", tdat->id);
+			log_msg(LOG_ERR, 0, "ERROR: Chunk %d, checksums do not match.\n", tdat->id);
 			pctx->t_errored = 1;
 		}
 	}
@@ -723,12 +723,12 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 			sbuf.st_size = 0;
 		} else {
 			if ((compfd = open(filename, O_RDONLY, 0)) == -1) {
-				err_print(1, "Cannot open: %s", filename);
+				log_msg(LOG_ERR, 1, "Cannot open: %s", filename);
 				return (1);
 			}
 
 			if (fstat(compfd, &sbuf) == -1) {
-				err_print(1, "Cannot stat: %s", filename);
+				log_msg(LOG_ERR, 1, "Cannot stat: %s", filename);
 				return (1);
 			}
 			if (sbuf.st_size == 0)
@@ -737,7 +737,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 
 		if ((uncompfd = open(to_filename, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1) {
 			close(compfd);
-			err_print(1, "Cannot open: %s", to_filename);
+			log_msg(LOG_ERR, 1, "Cannot open: %s", to_filename);
 			return (1);
 		}
 	} else {
@@ -762,9 +762,9 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 	}
 	if (init_algo(pctx, algorithm, 0) != 0) {
 		if (pctx->pipe_mode || filename == NULL)
-			fprintf(stderr, "Input stream is not pcompressed.\n");
+			log_msg(LOG_ERR, 0, "Input stream is not pcompressed.\n");
 		else
-			fprintf(stderr, "%s is not a pcompressed file.\n", filename);
+			log_msg(LOG_ERR, 0, "%s is not a pcompressed file.\n", filename);
 		UNCOMP_BAIL;
 	}
 	pctx->algo = algorithm;
@@ -786,23 +786,23 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 	 * Check for ridiculous values (malicious tampering or otherwise).
 	 */
 	if (version > VERSION) {
-		fprintf(stderr, "Cannot handle newer archive version %d, capability %d\n",
+		log_msg(LOG_ERR, 0, "Cannot handle newer archive version %d, capability %d\n",
 			version, VERSION);
 		err = 1;
 		goto uncomp_done;
 	}
 	if (chunksize > EIGHTY_PCT(get_total_ram())) {
-		fprintf(stderr, "Chunk size must not exceed 80%% of total RAM.\n");
+		log_msg(LOG_ERR, 0, "Chunk size must not exceed 80%% of total RAM.\n");
 		err = 1;
 		goto uncomp_done;
 	}
 	if (level > MAX_LEVEL || level < 0) {
-		fprintf(stderr, "Invalid compression level in header: %d\n", level);
+		log_msg(LOG_ERR, 0, "Invalid compression level in header: %d\n", level);
 		err = 1;
 		goto uncomp_done;
 	}
 	if (version < VERSION-3) {
-		fprintf(stderr, "Unsupported version: %d\n", version);
+		log_msg(LOG_ERR, 0, "Unsupported version: %d\n", version);
 		err = 1;
 		goto uncomp_done;
 	}
@@ -825,14 +825,14 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		if (flags & FLAG_DEDUP_FIXED) {
 			if (version > 7) {
 				if (pctx->pipe_mode) {
-					fprintf(stderr, "Global Deduplication is not supported with pipe mode.\n");
+					log_msg(LOG_ERR, 0, "Global Deduplication is not supported with pipe mode.\n");
 					err = 1;
 					goto uncomp_done;
 				}
 				pctx->enable_rabin_global = 1;
 				dedupe_flag = RABIN_DEDUPE_FILE_GLOBAL;
 			} else {
-				fprintf(stderr, "Invalid file deduplication flags.\n");
+				log_msg(LOG_ERR, 0, "Invalid file deduplication flags.\n");
 				err = 1;
 				goto uncomp_done;
 			}
@@ -857,7 +857,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		if (pctx->cksum == CKSUM_BLAKE512) pctx->cksum = CKSUM_SKEIN512;
 	}
 	if (get_checksum_props(NULL, &(pctx->cksum), &(pctx->cksum_bytes), &(pctx->mac_bytes), 1) == -1) {
-		fprintf(stderr, "Invalid checksum algorithm code: %d. File corrupt ?\n", pctx->cksum);
+		log_msg(LOG_ERR, 0, "Invalid checksum algorithm code: %d. File corrupt ?\n", pctx->cksum);
 		UNCOMP_BAIL;
 	}
 
@@ -899,7 +899,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		} else if (pctx->encrypt_type == CRYPTO_ALG_SALSA20) {
 			noncelen = XSALSA20_CRYPTO_NONCEBYTES;
 		} else {
-			fprintf(stderr, "Invalid Encryption algorithm code: %d. File corrupt ?\n",
+			log_msg(LOG_ERR, 0, "Invalid Encryption algorithm code: %d. File corrupt ?\n",
 				pctx->encrypt_type);
 			UNCOMP_BAIL;
 		}
@@ -963,7 +963,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 				free(salt2);
 				memset(salt1, 0, saltlen);
 				free(salt1);
-				err_print(0, "Failed to get password.\n");
+				log_msg(LOG_ERR, 0, "Failed to get password.\n");
 				UNCOMP_BAIL;
 			}
 		} else if (!pctx->user_pw) {
@@ -1001,7 +1001,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 				memset(salt1, 0, saltlen);
 				free(salt1);
 				close(uncompfd); unlink(to_filename);
-				err_print(0, "Failed to get password.\n");
+				log_msg(LOG_ERR, 0, "Failed to get password.\n");
 				UNCOMP_BAIL;
 			}
 			close(fd);
@@ -1016,7 +1016,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 				free(salt1);
 				memset(pctx->user_pw, 0, pctx->user_pw_len);
 				close(uncompfd); unlink(to_filename);
-				err_print(0, "Failed to initialize crypto\n");
+				log_msg(LOG_ERR, 0, "Failed to initialize crypto\n");
 				UNCOMP_BAIL;
 			}
 			memset(pctx->user_pw, 0, pctx->user_pw_len);
@@ -1031,7 +1031,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 				free(salt1);
 				memset(pw, 0, MAX_PW_LEN);
 				close(uncompfd); unlink(to_filename);
-				err_print(0, "Failed to initialize crypto\n");
+				log_msg(LOG_ERR, 0, "Failed to initialize crypto\n");
 				UNCOMP_BAIL;
 			}
 			memset(pw, 0, MAX_PW_LEN);
@@ -1045,7 +1045,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		 */
 		if (hmac_init(&hdr_mac, pctx->cksum, &(pctx->crypto_ctx)) == -1) {
 			close(uncompfd); unlink(to_filename);
-			err_print(0, "Cannot initialize header hmac.\n");
+			log_msg(LOG_ERR, 0, "Cannot initialize header hmac.\n");
 			UNCOMP_BAIL;
 		}
 		hmac_update(&hdr_mac, (uchar_t *)pctx->algo, ALGO_SZ);
@@ -1072,7 +1072,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		memset(n1, 0, noncelen);
 		if (memcmp(hdr_hash2, hdr_hash1, pctx->mac_bytes) != 0) {
 			close(uncompfd); unlink(to_filename);
-			err_print(0, "Header verification failed! File tampered or wrong password.\n");
+			log_msg(LOG_ERR, 0, "Header verification failed! File tampered or wrong password.\n");
 			UNCOMP_BAIL;
 		}
 	} else if (version >= 5) {
@@ -1102,7 +1102,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		crc2 = lzma_crc32((uchar_t *)&d2, sizeof (level), crc2);
 		if (crc1 != crc2) {
 			close(uncompfd); unlink(to_filename);
-			err_print(0, "Header verification failed! File tampered or wrong password.\n");
+			log_msg(LOG_ERR, 0, "Header verification failed! File tampered or wrong password.\n");
 			UNCOMP_BAIL;
 		}
 	}
@@ -1116,9 +1116,9 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 	set_threadcounts(&props, &(pctx->nthreads), nprocs, DECOMPRESS_THREADS);
 	if (props.is_single_chunk)
 		pctx->nthreads = 1;
-	fprintf(stderr, "Scaling to %d thread", pctx->nthreads * props.nthreads);
-	if (pctx->nthreads * props.nthreads > 1) fprintf(stderr, "s");
-	fprintf(stderr, "\n");
+	log_msg(LOG_INFO, 0, "Scaling to %d thread", pctx->nthreads * props.nthreads);
+	if (pctx->nthreads * props.nthreads > 1) log_msg(LOG_INFO, 0, "s");
+	log_msg(LOG_INFO, 0, "\n");
 	nprocs = pctx->nthreads;
 	slab_cache_add(compressed_chunksize);
 	slab_cache_add(chunksize);
@@ -1128,7 +1128,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 	for (i = 0; i < nprocs; i++) {
 		dary[i] = (struct cmp_data *)slab_alloc(NULL, sizeof (struct cmp_data));
 		if (!dary[i]) {
-			fprintf(stderr, "1: Out of memory\n");
+			log_msg(LOG_ERR, 0, "1: Out of memory\n");
 			UNCOMP_BAIL;
 		}
 		tdat = dary[i];
@@ -1182,7 +1182,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 
 		if (pctx->encrypt_type) {
 			if (hmac_init(&tdat->chunk_hmac, pctx->cksum, &(pctx->crypto_ctx)) == -1) {
-				fprintf(stderr, "Cannot initialize chunk hmac.\n");
+				log_msg(LOG_ERR, 0, "Cannot initialize chunk hmac.\n");
 				UNCOMP_BAIL;
 			}
 		}
@@ -1246,7 +1246,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 			if (rb != sizeof (tdat->len_cmp)) {
 				if (rb < 0) perror("Read: ");
 				else
-					fprintf(stderr, "Incomplete chunk %d header,"
+					log_msg(LOG_ERR, 0, "Incomplete chunk %d header,"
 					    "file corrupt\n", pctx->chunk_num);
 				UNCOMP_BAIL;
 			}
@@ -1257,7 +1257,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 			 * Check for ridiculous length.
 			 */
 			if (tdat->len_cmp > chunksize + 256) {
-				fprintf(stderr, "Compressed length too big for chunk: %d\n",
+				log_msg(LOG_ERR, 0, "Compressed length too big for chunk: %d\n",
 				    pctx->chunk_num);
 				UNCOMP_BAIL;
 			}
@@ -1287,7 +1287,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 					tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
 					    chunksize);
 				if (!tdat->compressed_chunk || !tdat->uncompressed_chunk) {
-					fprintf(stderr, "2: Out of memory\n");
+					log_msg(LOG_ERR, 0, "2: Out of memory\n");
 					UNCOMP_BAIL;
 				}
 				tdat->cmp_seg = tdat->uncompressed_chunk;
@@ -1310,7 +1310,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 					perror("Read: ");
 					UNCOMP_BAIL;
 				} else {
-					fprintf(stderr, "Incomplete chunk %d, file corrupt.\n",
+					log_msg(LOG_ERR, 0, "Incomplete chunk %d, file corrupt.\n",
 					    pctx->chunk_num);
 					UNCOMP_BAIL;
 				}
@@ -1739,7 +1739,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			pw_len = get_pw_string(pw,
 				"Please enter encryption password", 1);
 			if (pw_len == -1) {
-				err_print(0, "Failed to get password.\n");
+				log_msg(LOG_ERR, 0, "Failed to get password.\n");
 				return (1);
 			}
 		} else if (!pctx->user_pw) {
@@ -1769,7 +1769,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 				}
 			}
 			if (pw_len == -1) {
-				err_print(1, "Failed to get password.\n");
+				log_msg(LOG_ERR, 1, "Failed to get password.\n");
 				return (1);
 			}
 			close(fd);
@@ -1778,7 +1778,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			if (init_crypto(&(pctx->crypto_ctx), pctx->user_pw, pctx->user_pw_len, pctx->encrypt_type,
 			    NULL, 0, pctx->keylen, 0, ENCRYPT_FLAG) == -1) {
 				memset(pctx->user_pw, 0, pctx->user_pw_len);
-				err_print(0, "Failed to initialize crypto\n");
+				log_msg(LOG_ERR, 0, "Failed to initialize crypto\n");
 				return (1);
 			}
 			memset(pctx->user_pw, 0, pctx->user_pw_len);
@@ -1788,7 +1788,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			if (init_crypto(&(pctx->crypto_ctx), pw, pw_len, pctx->encrypt_type, NULL,
 			    0, pctx->keylen, 0, ENCRYPT_FLAG) == -1) {
 				memset(pw, 0, MAX_PW_LEN);
-				err_print(0, "Failed to initialize crypto\n");
+				log_msg(LOG_ERR, 0, "Failed to initialize crypto\n");
 				return (1);
 			}
 			memset(pw, 0, MAX_PW_LEN);
@@ -1808,19 +1808,19 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	if (!pctx->pipe_mode) {
 		char *tmp;
 		if ((uncompfd = open(filename, O_RDONLY, 0)) == -1) {
-			err_print(1, "Cannot open: %s", filename);
+			log_msg(LOG_ERR, 1, "Cannot open: %s", filename);
 			return (1);
 		}
 
 		if (fstat(uncompfd, &sbuf) == -1) {
 			close(uncompfd);
-			err_print(1, "Cannot stat: %s", filename);
+			log_msg(LOG_ERR, 1, "Cannot stat: %s", filename);
 			return (1);
 		}
 
 		if (!S_ISREG(sbuf.st_mode)) {
 			close(uncompfd);
-			err_print(0, "File %s is not a regular file.\n", filename);
+			log_msg(LOG_ERR, 0, "File %s is not a regular file.\n", filename);
 			return (1);
 		}
 
@@ -1991,24 +1991,24 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		flags |= pctx->encrypt_type;
 
 	set_threadcounts(&props, &(pctx->nthreads), nprocs, COMPRESS_THREADS);
-	fprintf(stderr, "Scaling to %d thread", pctx->nthreads * props.nthreads);
-	if (pctx->nthreads * props.nthreads > 1) fprintf(stderr, "s");
+	log_msg(LOG_INFO, 0, "Scaling to %d thread", pctx->nthreads * props.nthreads);
+	if (pctx->nthreads * props.nthreads > 1) log_msg(LOG_INFO, 0, "s");
 	nprocs = pctx->nthreads;
-	fprintf(stderr, "\n");
+	log_msg(LOG_INFO, 0, "\n");
 	dary = (struct cmp_data **)slab_calloc(NULL, nprocs, sizeof (struct cmp_data *));
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan))
 		cread_buf = (uchar_t *)slab_alloc(NULL, compressed_chunksize);
 	else
 		cread_buf = (uchar_t *)slab_alloc(NULL, chunksize);
 	if (!cread_buf) {
-		fprintf(stderr, "3: Out of memory\n");
+		log_msg(LOG_ERR, 0, "3: Out of memory\n");
 		COMP_BAIL;
 	}
 
 	for (i = 0; i < nprocs; i++) {
 		dary[i] = (struct cmp_data *)slab_alloc(NULL, sizeof (struct cmp_data));
 		if (!dary[i]) {
-			fprintf(stderr, "4: Out of memory\n");
+			log_msg(LOG_ERR, 0, "4: Out of memory\n");
 			COMP_BAIL;
 		}
 		tdat = dary[i];
@@ -2042,7 +2042,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 
 		if (pctx->encrypt_type) {
 			if (hmac_init(&tdat->chunk_hmac, pctx->cksum, &(pctx->crypto_ctx)) == -1) {
-				fprintf(stderr, "Cannot initialize chunk hmac.\n");
+				log_msg(LOG_ERR, 0, "Cannot initialize chunk hmac.\n");
 				COMP_BAIL;
 			}
 		}
@@ -2146,7 +2146,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		unsigned int hlen;
 
 		if (hmac_init(&hdr_mac, pctx->cksum, &(pctx->crypto_ctx)) == -1) {
-			fprintf(stderr, "Cannot initialize header hmac.\n");
+			log_msg(LOG_ERR, 0, "Cannot initialize header hmac.\n");
 			COMP_BAIL;
 		}
 		hmac_update(&hdr_mac, cread_buf, pos - cread_buf);
@@ -2240,7 +2240,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 				tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ +
 				    pctx->cksum_bytes + pctx->mac_bytes;
 				if (!tdat->cmp_seg || !tdat->uncompressed_chunk) {
-					fprintf(stderr, "5: Out of memory\n");
+					log_msg(LOG_ERR, 0, "5: Out of memory\n");
 					COMP_BAIL;
 				}
 			}
@@ -2344,9 +2344,9 @@ comp_done:
 			rm_fname(tmpfile1);
 		}
 		if (filename)
-			fprintf(stderr, "Error compressing file: %s\n", filename);
+			log_msg(LOG_ERR, 0, "Error compressing file: %s\n", filename);
 		else
-			fprintf(stderr, "Error compressing\n");
+			log_msg(LOG_ERR, 0, "Error compressing\n");
 	} else {
 		/*
 		* Write a trailer of zero chunk length.
@@ -2613,7 +2613,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			pctx->do_compress = 1;
 			pctx->algo = optarg;
 			if (init_algo(pctx, pctx->algo, 1) != 0) {
-				err_print(0, "Invalid algorithm %s\n", optarg);
+				log_msg(LOG_ERR, 0, "Invalid algorithm %s\n", optarg);
 				return (1);
 			}
 			break;
@@ -2621,21 +2621,21 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		    case 's':
 			ovr = parse_numeric(&chunksize, optarg);
 			if (ovr == 1) {
-				err_print(0, "Chunk size too large %s\n", optarg);
+				log_msg(LOG_ERR, 0, "Chunk size too large %s\n", optarg);
 				return (1);
 
 			} else if (ovr == 2) {
-				err_print(0, "Invalid number %s\n", optarg);
+				log_msg(LOG_ERR, 0, "Invalid number %s\n", optarg);
 				return (1);
 			}
 			pctx->chunksize = chunksize;
 
 			if (pctx->chunksize < MIN_CHUNK) {
-				err_print(0, "Minimum chunk size is %ld\n", MIN_CHUNK);
+				log_msg(LOG_ERR, 0, "Minimum chunk size is %ld\n", MIN_CHUNK);
 				return (1);
 			}
 			if (pctx->chunksize > EIGHTY_PCT(get_total_ram())) {
-				err_print(0, "Chunk size must not exceed 80%% of total RAM.\n");
+				log_msg(LOG_ERR, 0, "Chunk size must not exceed 80%% of total RAM.\n");
 				return (1);
 			}
 			break;
@@ -2643,7 +2643,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		    case 'l':
 			pctx->level = atoi(optarg);
 			if (pctx->level < 0 || pctx->level > MAX_LEVEL) {
-				err_print(0, "Compression level should be in range 0 - 14\n");
+				log_msg(LOG_ERR, 0, "Compression level should be in range 0 - 14\n");
 				return (1);
 			}
 			break;
@@ -2651,7 +2651,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		    case 'B':
 			pctx->rab_blk_size = atoi(optarg);
 			if (pctx->rab_blk_size < 0 || pctx->rab_blk_size > 5) {
-				err_print(0, "Average Dedupe block size must be in range 0 (2k), 1 (4k) .. 5 (64k)\n");
+				log_msg(LOG_ERR, 0, "Average Dedupe block size must be in range 0 (2k), 1 (4k) .. 5 (64k)\n");
 				return (1);
 			}
 			break;
@@ -2663,7 +2663,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		    case 't':
 			pctx->nthreads = atoi(optarg);
 			if (pctx->nthreads < 1 || pctx->nthreads > 256) {
-				err_print(0, "Thread count should be in range 1 - 256\n");
+				log_msg(LOG_ERR, 0, "Thread count should be in range 1 - 256\n");
 				return (1);
 			}
 			break;
@@ -2695,7 +2695,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		    case 'e':
 			pctx->encrypt_type = get_crypto_alg(optarg);
 			if (pctx->encrypt_type == 0) {
-				err_print(0, "Invalid encryption algorithm. Should be AES or SALSA20.\n", optarg);
+				log_msg(LOG_ERR, 0, "Invalid encryption algorithm. Should be AES or SALSA20.\n", optarg);
 				return (1);
 			}
 			break;
@@ -2720,7 +2720,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		    case 'k':
 			pctx->keylen = atoi(optarg);
 			if ((pctx->keylen != 16 && pctx->keylen != 32) || pctx->keylen > MAX_KEYLEN) {
-				err_print(0, "Encryption KEY length should be 16 or 32.\n", optarg);
+				log_msg(LOG_ERR, 0, "Encryption KEY length should be 16 or 32.\n", optarg);
 				return (1);
 			}
 			break;
@@ -2728,7 +2728,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		    case 'S':
 			if (get_checksum_props(optarg, &(pctx->cksum), &(pctx->cksum_bytes),
 			    &(pctx->mac_bytes), 0) == -1) {
-				err_print(0, "Invalid checksum type %s\n", optarg);
+				log_msg(LOG_ERR, 0, "Invalid checksum type %s\n", optarg);
 				return (1);
 			}
 			break;
@@ -2766,28 +2766,28 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	 */
 	num_rem = argc - my_optind;
 	if (pctx->pipe_mode && num_rem > 0 ) {
-		fprintf(stderr, "Filename(s) unexpected for pipe mode\n");
+		log_msg(LOG_ERR, 0, "Filename(s) unexpected for pipe mode\n");
 		return (1);
 	}
 
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan) && !pctx->do_compress) {
-		fprintf(stderr, "Deduplication is only used during compression.\n");
+		log_msg(LOG_ERR, 0, "Deduplication is only used during compression.\n");
 		return (1);
 	}
 	if (!pctx->enable_rabin_scan)
 		pctx->enable_rabin_split = 0;
 
 	if (pctx->enable_fixed_scan && (pctx->enable_rabin_scan || pctx->enable_delta_encode || pctx->enable_rabin_split)) {
-		fprintf(stderr, "Rabin Deduplication and Fixed block Deduplication are mutually exclusive\n");
+		log_msg(LOG_ERR, 0, "Rabin Deduplication and Fixed block Deduplication are mutually exclusive\n");
 		return (1);
 	}
 
 	if (!pctx->do_compress && pctx->encrypt_type) {
-		fprintf(stderr, "Encryption only makes sense when compressing!\n");
+		log_msg(LOG_ERR, 0, "Encryption only makes sense when compressing!\n");
 		return (1);
 
 	} else if (pctx->pipe_mode && pctx->encrypt_type && !pctx->pwd_file) {
-		fprintf(stderr, "Pipe mode requires password to be provided in a file.\n");
+		log_msg(LOG_ERR, 0, "Pipe mode requires password to be provided in a file.\n");
 		return (1);
 	}
 
@@ -2801,12 +2801,12 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	}
 
 	if (pctx->enable_rabin_global && pctx->enable_delta_encode) {
-		fprintf(stderr, "Global Deduplication does not support Delta Compression.\n");
+		log_msg(LOG_ERR, 0, "Global Deduplication does not support Delta Compression.\n");
 		return (1);
 	}
 
 	if (num_rem == 0 && !pctx->pipe_mode) {
-		fprintf(stderr, "Expected at least one filename.\n");
+		log_msg(LOG_ERR, 0, "Expected at least one filename.\n");
 		return (1);
 
 	} else if (num_rem == 1 || num_rem == 2) {
@@ -2814,7 +2814,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			char apath[MAXPATHLEN];
 
 			if ((pctx->filename = realpath(argv[my_optind], NULL)) == NULL) {
-				err_print(1, "%s", argv[my_optind]);
+				log_msg(LOG_ERR, 1, "%s", argv[my_optind]);
 				return (1);
 			}
 
@@ -2833,7 +2833,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 			/* Check if compressed file exists */
 			if (pctx->to_filename != NULL) {
-				err_print(0, "Compressed file %s exists\n", pctx->to_filename);
+				log_msg(LOG_ERR, 0, "Compressed file %s exists\n", pctx->to_filename);
 				free((void *)(pctx->to_filename));
 				return (1);
 			}
@@ -2845,14 +2845,14 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 				pctx->filename = NULL;
 			} else {
 				if ((pctx->filename = realpath(argv[my_optind], NULL)) == NULL) {
-					err_print(1, "%s", argv[my_optind]);
+					log_msg(LOG_ERR, 1, "%s", argv[my_optind]);
 					return (1);
 				}
 			}
 			my_optind++;
 			if ((pctx->to_filename = realpath(argv[my_optind], NULL)) != NULL) {
 				free((void *)(pctx->to_filename));
-				err_print(0, "File %s exists\n", argv[my_optind]);
+				log_msg(LOG_ERR, 0, "File %s exists\n", argv[my_optind]);
 				return (1);
 			}
 			pctx->to_filename = argv[my_optind];
@@ -2860,7 +2860,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			return (1);
 		}
 	} else if (num_rem > 2) {
-		fprintf(stderr, "Too many filenames.\n");
+		log_msg(LOG_ERR, 0, "Too many filenames.\n");
 		return (1);
 	}
 	pctx->main_cancel = 0;
@@ -2869,7 +2869,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		get_checksum_props(DEFAULT_CKSUM, &(pctx->cksum), &(pctx->cksum_bytes), &(pctx->mac_bytes), 0);
 
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan) && pctx->cksum == CKSUM_CRC64) {
-		fprintf(stderr, "CRC64 checksum is not suitable for Deduplication.\n");
+		log_msg(LOG_ERR, 0, "CRC64 checksum is not suitable for Deduplication.\n");
 		return (1);
 	}
 

@@ -342,6 +342,7 @@ $(LIB): $(OBJS)
 
 $(PROG): $(LIB) $(PROGOBJS)
 	$(LINK.PROG) -o $@ $(PROGOBJS) $(LDLIBS) -L. -l$(LINKLIB)
+	mkdir -p buildtmp
 	cp $@ buildtmp
 	cat utils/pcompress.sh | sed "s#<PC_PATH>#`pwd`#" > pcompress
 	chmod +x pcompress

@@ -260,6 +260,32 @@ typedef int (*deinit_func_ptr)(void **data);
 typedef void (*stats_func_ptr)(int show);
 typedef void (*props_func_ptr)(algo_props_t *data, int level, uint64_t chunksize);
 
+/*
+ * Logging definitions.
+ */
+typedef enum {
+	LOG_OUTPUT,
+	LOG_FILE,
+	LOG_CALLBACK
+} log_dest_type_t;
+
+typedef enum {
+	LOG_ERR,
+	LOG_WARN,
+	LOG_INFO
+} log_level_t;	
+
+typedef void (*log_callback_ptr)(char *msg);
+
+typedef struct {
+	log_dest_type_t type;
+	int fd;
+	log_callback_ptr cb;
+} log_dest_t;
+
+void set_log_dest(log_dest_t *dest);
+void set_log_level(int level);
+void log_msg(log_level_t log_level, int show_errno, const char *format, ...);
 
 /*
  * Roundup v to the nearest power of 2. From Bit Twiddling Hacks:

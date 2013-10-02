@@ -37,6 +37,7 @@
 #include <libgen.h>
 #include <pcompress.h>
 #include <ctype.h>
+#include <utils.h>
 
 int
 main(int argc, char *argv[])
@@ -49,8 +50,8 @@ main(int argc, char *argv[])
 
 	err = init_pc_context(pctx, argc, argv);
 	if (err != 0 && err != 2) {
-		fprintf(stderr, "Invalid arguments to pcompress.\n");
-		fprintf(stderr, "Please see usage.\n");
+		log_msg(LOG_ERR, 0, "Invalid arguments to pcompress.\n");
+		log_msg(LOG_ERR, 0, "Please see usage.\n");
 		destroy_pc_context(pctx);
 		return (err);
 

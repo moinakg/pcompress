@@ -110,18 +110,18 @@ zero_rle_decode(const void* ibuf, unsigned int ilen,
 		if (count & ZERO_MASK) {
 			count &= DATA_MASK;
 			if (pos2 + count > *olen) {
-				fprintf(stderr, "Output buffer overflow in Zero RLE decode.\n");
+				log_msg(LOG_ERR, 0, "Output buffer overflow in Zero RLE decode.\n");
 				return (-1);
 			}
 			memset(ob+pos2, 0, count);
 			pos2 += count;
 		} else {
 			if (pos1 + count > ilen) {
-				fprintf(stderr, "Input underflow in Zero RLE decode.\n");
+				log_msg(LOG_ERR, 0, "Input underflow in Zero RLE decode.\n");
 				return (-1);
 			}
 			if (pos2 + count > *olen) {
-				fprintf(stderr, "Output buffer overflow in Zero RLE decode.\n");
+				log_msg(LOG_ERR, 0, "Output buffer overflow in Zero RLE decode.\n");
 				return (-1);
 			}
 			memcpy(ob+pos2, ib+pos1, count);

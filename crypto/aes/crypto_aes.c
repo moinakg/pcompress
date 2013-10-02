@@ -113,14 +113,14 @@ aes_init(aes_ctx_t *ctx, uchar_t *salt, int saltlen, uchar_t *pwd, int pwd_len,
 	pickparams(&logN, &r, &p);
 	N = (uint64_t)(1) << logN;
 	if (crypto_scrypt(pwd, pwd_len, salt, saltlen, N, r, p, key, ctx->keylen)) {
-		fprintf(stderr, "Scrypt failed\n");
+		log_msg(LOG_ERR, 0, "Scrypt failed\n");
 		return (-1);
 	}
 #else
 	rv = PKCS5_PBKDF2_HMAC(pwd, pwd_len, salt, saltlen, PBE_ROUNDS, EVP_sha256(),
 			       ctx->keylen, key);
 	if (rv != ctx->keylen) {
-		fprintf(stderr, "Key size is %d bytes - should be %d bits\n", i, ctx->keylen);
+		log_msg(LOG_ERR, 0, "Key size is %d bytes - should be %d bits\n", i, ctx->keylen);
 		return (-1);
 	}
 #endif
@@ -177,7 +177,7 @@ aes_encrypt(aes_ctx_t *ctx, uchar_t *plaintext, uchar_t *ciphertext, uint64_t le
 	// Init counter mode AES from scrypt
 	strm = crypto_aesctr_init(&key, ctx->nonce + id);
 	if (!strm) {
-		fprintf(stderr, "Failed to init counter mode AES\n");
+		log_msg(LOG_ERR, 0, "Failed to init counter mode AES\n");
 		return (-1);
 	}
 	crypto_aesctr_stream(strm, plaintext, ciphertext, len);
@@ -204,7 +204,7 @@ aes_decrypt(aes_ctx_t *ctx, uchar_t *ciphertext, uchar_t *plaintext, uint64_t le
 	// Init counter mode AES from scrypt
 	strm = crypto_aesctr_init(&key, ctx->nonce + id);
 	if (!strm) {
-		fprintf(stderr, "Failed to init counter mode AES\n");
+		log_msg(LOG_ERR, 0, "Failed to init counter mode AES\n");
 		return (-1);
 	}
 	crypto_aesctr_stream(strm, ciphertext, plaintext, len);

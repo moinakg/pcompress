@@ -449,7 +449,7 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 	last = pos + srclen;
 	olen = LE64(U64_P(pos));
 	if (*dstlen < olen) {
-		fprintf(stderr, "DELTA2 Decode: Destination buffer too small.\n");
+		log_msg(LOG_ERR, 0, "DELTA2 Decode: Destination buffer too small.\n");
 		return (-1);
 	}
 
@@ -468,7 +468,7 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 			rcnt = val & MSB_SETZERO_MASK;
 			pos += sizeof (rcnt);
 			if (out + rcnt > *dstlen) {
-				fprintf(stderr, "DELTA2 Decode(lit): Destination buffer overflow. Corrupt data.\n");
+				log_msg(LOG_ERR, 0, "DELTA2 Decode(lit): Destination buffer overflow. Corrupt data.\n");
 				return (-1);
 			}
 			memcpy(pos1, pos, rcnt);
@@ -485,7 +485,7 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 			delta = LE64(U64_P(pos));
 			pos += sizeof (delta);
 			if (out + rcnt > *dstlen) {
-				fprintf(stderr, "DELTA2 Decode(delta): Destination buffer overflow. Corrupt data.\n");
+				log_msg(LOG_ERR, 0, "DELTA2 Decode(delta): Destination buffer overflow. Corrupt data.\n");
 				return (-1);
 			}
 
