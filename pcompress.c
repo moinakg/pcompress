@@ -85,7 +85,7 @@ usage(pc_ctx_t *pctx)
 	    "\nPcompress Version %s\n\n"
 	    "Usage:\n"
 	    "1) To compress a file:\n"
-	    "   %s -c <algorithm> [-l <compress level>] [-s <chunk size>] <file>\n"
+	    "   %s -c <algorithm> [-l <compress level>] [-s <chunk size>] <file> [<target file>]\n"
 	    "   Where <algorithm> can be the folowing:\n"
 	    "   lzfx   - Very fast and small algorithm based on LZF.\n"
 	    "   lz4    - Ultra fast, high-throughput algorithm reaching RAM B/W at level1.\n"
@@ -115,6 +115,10 @@ usage(pc_ctx_t *pctx)
 	    "            Larger chunks produce better compression at the cost of memory.\n"
 	    "   <compress_level> - Can be a number from 0 meaning minimum and 14 meaning\n"
 	    "            maximum compression.\n\n"
+	    "   <target file>    - Optional argument specifying the destination compressed\n"
+	    "            file. The '.pz' extension is appended. If this is '-' then\n"
+	    "            compressed output goes to stdout. If this argument is omitted then\n"
+	    "            source filename is used with the extension '.pz' appended.\n"
 	    "2) To decompress a file compressed using above command:\n"
 	    "   %s -d <compressed file> <target file>\n"
 	    "3) To operate as a pipe, read from stdin and write to stdout:\n"
@@ -1882,13 +1886,22 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 				COMP_BAIL;
 			}
 		} else {
-			strcat(tmpfile1, "/.pcompXXXXXX");
-			snprintf(to_filename, sizeof (to_filename), "%s" COMP_EXTN, filename);
-			if ((compfd = mkstemp(tmpfile1)) == -1) {
-				perror("mkstemp ");
-				COMP_BAIL;
+			if (pctx->to_filename == NULL) {
+				strcat(tmpfile1, "/.pcompXXXXXX");
+				snprintf(to_filename, sizeof (to_filename), "%s" COMP_EXTN, filename);
+				if ((compfd = mkstemp(tmpfile1)) == -1) {
+					perror("mkstemp ");
+					COMP_BAIL;
+				}
+				add_fname(tmpfile1);
+			} else {
+				snprintf(to_filename, sizeof (to_filename), "%s" COMP_EXTN, pctx->to_filename);
+				if ((compfd = open(to_filename, O_CREAT|O_RDWR, S_IRUSR|S_IWUSR)) == -1) {
+					perror("open ");
+					COMP_BAIL;
+				}
+				add_fname(to_filename);
 			}
-			add_fname(tmpfile1);
 		}
 		signal(SIGINT, Int_Handler);
 		signal(SIGTERM, Int_Handler);
@@ -2369,12 +2382,17 @@ comp_done:
 			fchmod(compfd, sbuf.st_mode);
 			if (fchown(compfd, sbuf.st_uid, sbuf.st_gid) == -1)
 				perror("chown ");
+			close(compfd);
 
-			if (rename(tmpfile1, to_filename) == -1) {
-				perror("Cannot rename temporary file ");
-				unlink(tmpfile1);
+			if (pctx->to_filename == NULL) {
+				if (rename(tmpfile1, to_filename) == -1) {
+					perror("Cannot rename temporary file ");
+					unlink(tmpfile1);
+				}
+				rm_fname(tmpfile1);
+			} else {
+				rm_fname(to_filename);
 			}
-			rm_fname(tmpfile1);
 		}
 	}
 	if (dary != NULL) {
@@ -2823,19 +2841,31 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 				if (*(argv[my_optind]) == '-') {
 					pctx->to_filename = "-";
 					pctx->pipe_out = 1;
+					pctx->to_filename = NULL;
+				} else {
+					strcpy(apath, argv[my_optind]);
+					strcat(apath, COMP_EXTN);
+					pctx->to_filename = realpath(apath, NULL);
+
+					/* Check if compressed file exists */
+					if (pctx->to_filename != NULL) {
+						log_msg(LOG_ERR, 0, "Compressed file %s exists\n", pctx->to_filename);
+						free((void *)(pctx->to_filename));
+						return (1);
+					}
+					pctx->to_filename = argv[my_optind];
 				}
-				pctx->to_filename = realpath(argv[my_optind], NULL);
 			} else {
 				strcpy(apath, pctx->filename);
 				strcat(apath, COMP_EXTN);
 				pctx->to_filename = realpath(apath, NULL);
-			}
 
-			/* Check if compressed file exists */
-			if (pctx->to_filename != NULL) {
-				log_msg(LOG_ERR, 0, "Compressed file %s exists\n", pctx->to_filename);
-				free((void *)(pctx->to_filename));
-				return (1);
+				/* Check if compressed file exists */
+				if (pctx->to_filename != NULL) {
+					log_msg(LOG_ERR, 0, "Compressed file %s exists\n", pctx->to_filename);
+					free((void *)(pctx->to_filename));
+					return (1);
+				}
 			}
 		} else if (pctx->do_uncompress && num_rem == 2) {
 			/*

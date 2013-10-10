@@ -56,7 +56,7 @@ Usage
 =====
 
     To compress a file:
-       pcompress -c <algorithm> [-l <compress level>] [-s <chunk size>] <file> [-]
+       pcompress -c <algorithm> [-l <compress level>] [-s <chunk size>] <file> [<target file>]
 
        Where <algorithm> can be the folowing:
        lzfx   - Very fast and small algorithm based on LZF.
@@ -90,8 +90,10 @@ Usage
                 just a hint and may get automatically adjusted.
        <compress_level> - Can be a number from 0 meaning minimum and 14 meaning
                 maximum compression.
-       '-'    - If '-' is given as the final argument then it specifies that
-                compressed output should go to stdout.
+       <target file>    - Optional argument specifying the destination compressed
+                file. The '.pz' extension is appended. If this is '-' then
+                compressed output goes to stdout. If this argument is omitted then
+                source filename is used with the extension '.pz' appended.
 
 NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
       from http://libbsc.com/ . It is only available if pcompress in built with

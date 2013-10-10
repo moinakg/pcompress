@@ -58,37 +58,6 @@ init_pcompress() {
 }
 
 /*
-void
-err_exit(int show_errno, const char *format, ...)
-{
-	int err = errno;
-	va_list args;
-
-	va_start(args, format);
-	vfprintf(stderr, format, args);
-	va_end(args);
-
-	if (show_errno)
-		fprintf(stderr, "\nError: %s\n", strerror(err));
-	exit(1);
-}
-
-void
-err_print(int show_errno, const char *format, ...)
-{
-	int err = errno;
-	va_list args;
-
-	va_start(args, format);
-	vfprintf(stderr, format, args);
-	va_end(args);
-
-	if (show_errno)
-		fprintf(stderr, "\nError: %s\n", strerror(err));
-}
-*/
-
-/*
  * Fetch the command name that started the current process.
  * The returned string must be freed by the caller.
  */
@@ -475,7 +444,7 @@ log_msg(log_level_t log_level, int show_errno, const char *format, ...)
 	va_list args;
 	char msg[1024];
 
-	if (log_level <= cur_log_level) return;
+	if (log_level > cur_log_level) return;
 
 	va_start(args, format);
 	written = vsnprintf(msg, 1024, format, args);
