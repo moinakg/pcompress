@@ -285,7 +285,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 		for (i = 0; i < nthreads; i++) {
 			cfg->seg_fd_r[i].fd = open(cfg->rootdir, O_RDONLY);
 			if (cfg->seg_fd_r[i].fd == -1) {
-				perror(" ");
+				log_msg(LOG_ERR, 1, " ");
 				errored = 1;
 				break;
 			}
@@ -394,7 +394,7 @@ db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offs
 	db_segcache_unmap(cfg, tid);
 	fd = cfg->seg_fd_r[tid].fd;
 	if (lseek(fd, *offset, SEEK_SET) != *offset) {
-		perror(" ");
+		log_msg(LOG_ERR, 1, " ");
 		return (-1);
 	}
 
@@ -410,7 +410,7 @@ db_segcache_map(archive_config_t *cfg, int tid, uint32_t *blknum, uint64_t *offs
 
 	mapbuf = mmap(NULL, len + adj, PROT_READ, MAP_SHARED, fd, *offset - adj);
 	if (mapbuf == MAP_FAILED) {
-		perror(" ");
+		log_msg(LOG_ERR, 1, " ");
 		return (-1);
 	}
 

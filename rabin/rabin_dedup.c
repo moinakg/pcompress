@@ -1609,7 +1609,7 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size)
 					adj = pos1 % ctx->pagesize;
 					src2 = mmap(NULL, len + adj, PROT_READ, MAP_SHARED, ctx->out_fd, pos1 - adj);
 					if (src2 == NULL) {
-						perror("MMAP failed ");
+						log_msg(LOG_ERR, 1, "MMAP failed ");
 						ctx->valid = 0;
 						break;
 					}

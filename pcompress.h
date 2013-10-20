@@ -197,9 +197,14 @@ typedef struct pc_ctx {
 	int enable_fixed_scan;
 	int lzp_preprocess;
 	int encrypt_type;
+	int archive_mode;
+	char archive_members_file[MAXPATHLEN];
+	int archive_members_fd, archive_data_fd;
+	void *archive_ctx;
+	int uncompfd, compfd;
 	unsigned int chunk_num;
 	uint64_t largest_chunk, smallest_chunk, avg_chunk;
-	uint64_t chunksize;
+	uint64_t chunksize, archive_size;
 	const char *algo, *filename, *to_filename;
 	char *exec_name;
 	int do_compress, level;

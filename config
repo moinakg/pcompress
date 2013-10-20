@@ -41,6 +41,8 @@ ${prog} [<options>]
 			Enable building against an alternate Zlib installation.
 --with-bzlib=<path to Bzip2 library installation tree> (Default: System)
 			Enable building against an alternate Bzip2 and library installation.
+--with-libarchive=<path to libarchive installation tree> (Default: System)
+			Enable building against an alternate libarchive installation.
 --no-sse-detect		Do NOT attempt to probe the system's SSE/AVX capability for build flags. 
 --no-1.3-archive-compat Disable compatibility with compressed archives created with Pcompress
 			version 1.3 (default: retain compatibility). Hash formats changed from
@@ -69,6 +71,7 @@ openssl_libdir=
 openssl_incdir=
 libbz2_libdir=
 libz_libdir=
+libarchive_libdir=
 sha256asmobjs=
 sha256objs=
 keylen=
@@ -79,6 +82,7 @@ keccak_srcs_asm=
 extra_opt_flags=
 zlib_prefix=
 bzlib_prefix=
+libarchive_prefix=
 sse_detect=1
 sse_opt_flags="-msse2"
 crypto_compat_objs='\$\(CRYPTO_COMPAT_OBJS\)'
@@ -90,6 +94,7 @@ salsa20_debug=
 rm -rf ./buildtmp
 mkdir ./buildtmp
 
+echo "Checking for GCC ..."
 # Try a simple compilation
 cat << _EOF > tst.c
 #include <stdio.h>
@@ -115,6 +120,7 @@ then
 fi
 
 # Check bitness of system/toolchain
+echo "Checking for 32-bit/64-bit platform ..."
 bitness=`./tst`
 if [ $bitness -lt 8 ]
 then
@@ -168,6 +174,9 @@ do
 	--with-bzlib=*)
 		bzlib_prefix=`echo ${arg1} | cut -f2 -d"="`
 	;;
+	--with-libarchive=*)
+		libarchive_prefix=`echo ${arg1} | cut -f2 -d"="`
+	;;
 	--use-key256)
 		keylen='-DDEFAULT_KEYLEN=16'
 	;;
@@ -198,6 +207,7 @@ else
 	typ="RELEASE"
 fi
 
+echo "Checking OS ..."
 OS=$(uname)
 skeinblock='\$\(SKEIN_BLOCK_C\)'
 if [ "$OS" = "Linux" ]
@@ -212,6 +222,7 @@ else
 fi
 
 # Check GCC version
+echo "Checking GCC version ..."
 vers=`gcc -dumpversion`
 OIFS="$IFS"
 IFS=.
@@ -227,6 +238,7 @@ then
 fi
 
 # SSE Detection
+echo -n "Checking for CPU SSE version ... "
 if [ $sse_detect -eq 1 ]
 then
 	gcc -o sse_level ./utils/sse_level.c ./utils/cpuid.c -I./utils
@@ -246,6 +258,7 @@ then
 		echo ""
 		exit 1
 	fi
+	echo $sse_ver
 	rm -f sse_level
 	sse_opt_flags="-m${sse_ver}"
 fi
@@ -260,6 +273,7 @@ then
 	#
 	# Detect Yasm
 	#
+	echo "Checking for Yasm ..."
 	for bindir in /bin /usr/bin /usr/local/bin
 	do
 		if [ -x ${bindir}/yasm ]
@@ -297,6 +311,7 @@ else
 fi
 
 # Detect OpenSSL library
+echo "Checking for OpenSSL ..."
 for lib in "${openssl_prefix}/lib64" "${openssl_prefix}/usr/lib64" \
 	"${openssl_prefix}/lib" "${openssl_prefix}/usr/lib" \
 	"${openssl_prefix}/ssl/lib64" "${openssl_prefix}/ssl/lib" \
@@ -354,6 +369,7 @@ fi
 
 
 # Check for OpenSSL version
+echo "Checking OpenSSL version ..."
 cat << __EOF > tst.c
 #include <stdlib.h>
 #include <openssl/opensslv.h>
@@ -381,6 +397,7 @@ then
 fi
 
 # Check for HMAC_CTX_copy function
+echo -n "Checking if the OpenSSL library provides HMAC_CTX_copy function ... "
 cat << __EOF > tst.c
 #include <stdlib.h>
 #include <openssl/sha.h>
@@ -407,13 +424,16 @@ gcc ${extra_opt_flags} -I${openssl_incdir} -L${openssl_libdir} -O0 -g tst.c -o t
 if [ $? -ne 0 ]
 then
 	openssl_incdir="${openssl_incdir} -D__OSSL_OLD__"
+	echo "No. Using internal variant."
+else
+	echo "Yes."
 fi
 
 rm -f tst*
 openssl_libdir="${openssl_libdir},--enable-new-dtags"
 
 # Detect other library packages
-for libspec in "libbz2:${bzlib_prefix}" "libz:${zlib_prefix}"
+for libspec in "libbz2:${bzlib_prefix}" "libz:${zlib_prefix}" "libarchive:${libarchive_prefix}"
 do
 	_OIFS="$IFS"
 	IFS=":"
@@ -422,6 +442,7 @@ do
 	pref=$2
 	IFS="$_OIFS"
 
+	echo "Checking for $libname ..."
 	use_prefix="${pref}"
 	if [ "x${pref}" = "x" ]
 	then
@@ -477,10 +498,24 @@ then
 	exit 1
 fi
 
+if [ "x${libarchive_libdir}" = "x" ]
+then
+	if [ "x$libarchive_prefix" = "x" ]
+	then
+		echo "ERROR: Libarchive not detected."
+		echo "       You may have to install libarchive-devel or libarchive-dev"
+	else
+		echo "ERROR: Libarchive not detected in given prefix."
+	fi
+	exit 1
+fi
+
 libbz2_inc=
 libz_inc=
+libarchive_inc=
 # Detect other library headers
-for hdr in "libbz2_inc:bzlib.h:${bzlib_prefix}" "libz_inc:zlib.h:${zlib_prefix}"
+for hdr in "libbz2_inc:bzlib.h:${bzlib_prefix}" "libz_inc:zlib.h:${zlib_prefix}" \
+	"libarchive_inc:archive.h:${libarchive_prefix}"
 do
 	_OIFS="$IFS"
 	IFS=":"
@@ -490,6 +525,7 @@ do
 	pref=$3
 	IFS="$_OIFS"
 
+	echo "Checking for $hdrf ..."
 	use_prefix="${pref}"
 	if [ "x${pref}" = "x" ]
 	then
@@ -510,6 +546,7 @@ do
 	done
 done
 
+echo "Generating Makefile ..."
 linkvar="LINK"
 compilevar="COMPILE"
 compilecppvar="COMPILE_cpp"
@@ -542,6 +579,8 @@ libbz2libdirvar="LIBBZ2_DIR"
 libzlibdirvar="LIBZ_DIR"
 libbz2incvar="LIBBZ2_INC"
 libzincvar="LIBZ_INC"
+libarchivedirvar="LIBARCHIVE_DIR"
+libarchiveincvar="LIBARCHIVE_INC"
 
 keccak_srcs_var="KECCAK_SRCS"
 keccak_hdrs_var="KECCAK_HDRS"
@@ -599,5 +638,7 @@ s#@${crypto_compat_flags_var}@#${crypto_compat_flags}#g
 s#@${salsa20_stream_c_var}@#${salsa20_stream_c}#g
 s#@${salsa20_stream_asm_var}@#${salsa20_stream_asm}#g
 s#@${salsa20_debug_var}@#${salsa20_debug}#g
+s#@${libarchivedirvar}@#${libarchive_libdir}#g
+s#@${libarchiveincvar}@#${libarchive_inc}#g
 " > Makefile
 

@@ -38,6 +38,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <link.h>
+#include <signal.h>
 #include <rabin_dedup.h>
 #include <cpuid.h>
 #include <xxhash.h>
@@ -48,8 +49,11 @@
 #include "utils.h"
 
 processor_info_t proc_info;
+pthread_mutex_t f_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int cur_log_level = 1;
 static log_dest_t ldest = {LOG_OUTPUT, LOG_INFO, NULL};
+static char *f_name_list[512];
+static int f_count = 512, f_inited = 0;
 
 void
 init_pcompress() {
@@ -213,13 +217,13 @@ Read_Adjusted(int fd, uchar_t *buf, uint64_t count, int64_t *rabin_count, void *
         int64_t rcount;
         dedupe_context_t *rctx = (dedupe_context_t *)ctx;
 
-        if (!ctx)  return (Read(fd, buf, count));
+        if (!ctx) return (Read(fd, buf, count));
         buf2 = buf;
         if (*rabin_count) {
                 buf2 = buf + *rabin_count;
                 count -= *rabin_count;
         }
-        rcount = Read(fd, buf2, count);
+	rcount = Read(fd, buf2, count);
         if (rcount > 0) {
                 rcount += *rabin_count;
 		if (rcount == count) {
@@ -422,6 +426,10 @@ chk_dir(char *dir)
 	return (1);
 }
 
+/*
+ * Simple logging functions. Used for all error and info messages.
+ * Default log destination is STDOUT.
+ */
 void DLL_EXPORT
 set_log_dest(log_dest_t *dest)
 {
@@ -463,4 +471,87 @@ log_msg(log_level_t log_level, int show_errno, const char *format, ...)
 	} else {
 		ldest.cb(msg);
 	}
+}
+
+char *
+get_temp_dir()
+{
+	char *tmp;
+	char tmpdir[MAXPATHLEN];
+
+	tmp = getenv("PCOMPRESS_CACHE_DIR");
+	if (tmp == NULL || !chk_dir(tmp)) {
+		tmp = getenv("TMPDIR");
+		if (tmp == NULL || !chk_dir(tmp)) {
+			tmp = getenv("HOME");
+			if (tmp == NULL || !chk_dir(tmp)) {
+				if (getcwd(tmpdir, MAXPATHLEN) == NULL) {
+					tmp = "/tmp";
+				} else {
+					tmp = tmpdir;
+				}
+			}
+		}
+	}
+	return (strdup(tmp));
+}
+
+/*
+ * Temporary file cleanup routines for SIGINT. Maintain a list of
+ * filenames to be removed in the signal handler.
+ */
+void
+Int_Handler(int signo)
+{
+	int i;
+
+	for (i = 0; i < f_count; i++) {
+		if (f_name_list[i] != NULL) {
+			unlink(f_name_list[i]);
+			f_name_list[i] = NULL;
+		}
+	}
+	exit(1);
+}
+
+void
+handle_signals()
+{
+	pthread_mutex_lock(&f_mutex);
+	if (!f_inited) {
+		memset(f_name_list, 0, sizeof (f_name_list));
+	}
+	pthread_mutex_unlock(&f_mutex);
+	signal(SIGINT, Int_Handler);
+	signal(SIGTERM, Int_Handler);
+}
+
+void
+add_fname(char *fn)
+{
+	int i;
+
+	pthread_mutex_lock(&f_mutex);
+	for (i = 0; i < f_count; i++) {
+		if (f_name_list[i] == NULL) {
+			f_name_list[i] = fn;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&f_mutex);
+}
+
+void
+rm_fname(char *fn)
+{
+	int i;
+
+	pthread_mutex_lock(&f_mutex);
+	for (i = 0; i < f_count; i++) {
+		if (f_name_list[i] != NULL) {
+			f_name_list[i] = fn;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&f_mutex);
 }

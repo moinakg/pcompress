@@ -32,9 +32,6 @@ Pcompress also supports encryption via AES and uses Scrypt from Tarsnap
 for Password Based Key generation. A unique key is generated per session
 even if the same password is used and HMAC is used to do authentication.
 
-NOTE: This utility is Not an archiver. It compresses only single files or
-      datastreams. To archive use something else like tar, cpio or pax.
-
 Links of Interest
 =================
 

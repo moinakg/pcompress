@@ -35,6 +35,7 @@
 #endif
 
 #include <inttypes.h>
+#include <sys/param.h>
 #include <stdint.h>
 #include <assert.h>
 #include <cpuid.h>
@@ -57,7 +58,7 @@ extern "C" {
 #define	SIXTEEN_GB (EIGHT_GB * 2)
 
 #if !defined(sun) && !defined(__sun)
-#define uchar_t u_char
+typedef unsigned char uchar_t ;
 #endif
 
 #if ULONG_MAX == 4294967295UL
@@ -243,6 +244,7 @@ extern void get_sys_limits(my_sysinfo *msys_info);
 extern int chk_dir(char *dir);
 extern void init_algo_props(algo_props_t *props);
 extern void init_pcompress();
+extern char *get_temp_dir();
 
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, uint64_t srclen, void *dst,
@@ -286,6 +288,14 @@ typedef struct {
 void set_log_dest(log_dest_t *dest);
 void set_log_level(int level);
 void log_msg(log_level_t log_level, int show_errno, const char *format, ...);
+
+/*
+ * Tempfile cleanup handlers and tempfile registration routines.
+ */
+void Int_Handler(int signo);
+void handle_signals();
+void add_fname(char *fn);
+void rm_fname(char *fn);
 
 /*
  * Roundup v to the nearest power of 2. From Bit Twiddling Hacks:

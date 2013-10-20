@@ -37,7 +37,6 @@
 #include <strings.h>
 #include <limits.h>
 #include <unistd.h>
-#include <signal.h>
 #if defined(sun) || defined(__sun)
 #include <sys/byteorder.h>
 #else
@@ -54,6 +53,7 @@
 #include <crypto/crypto_utils.h>
 #include <crypto_xsalsa20.h>
 #include <ctype.h>
+#include <pc_archive.h>
 
 /*
  * We use 8MB chunks by default.
@@ -70,9 +70,6 @@ struct wdata {
 };
 
 pthread_mutex_t opt_parse = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t f_mutex = PTHREAD_MUTEX_INITIALIZER;
-static char *f_name_list[512];
-static int f_count = 512, f_inited = 0;
 
 static void * writer_thread(void *dat);
 static int init_algo(pc_ctx_t *pctx, const char *algo, int bail);
@@ -188,52 +185,6 @@ show_compression_stats(pc_ctx_t *pctx)
 		log_msg(LOG_INFO, 0, "Avg compressed chunk   : %s(%.2f%%)\n\n",
 		    bytes_to_size(pctx->avg_chunk), (double)pctx->avg_chunk/(double)pctx->chunksize*100);
 	}
-}
-
-/*
- * Temporary file cleanup routines for SIGINT. Maintain a list of
- * filenames to be removed in the signal handler.
- */
-void
-Int_Handler(int signo)
-{
-	int i;
-
-	for (i = 0; i < f_count; i++) {
-		if (f_name_list[i] != NULL) {
-			unlink(f_name_list[i]);
-			f_name_list[i] = NULL;
-		}
-	}
-	exit(1);
-}
-
-static void
-add_fname(char *fn) {
-	int i;
-
-	pthread_mutex_lock(&f_mutex);
-	for (i = 0; i < f_count; i++) {
-		if (f_name_list[i] == NULL) {
-			f_name_list[i] = fn;
-			break;
-		}
-	}
-	pthread_mutex_unlock(&f_mutex);
-}
-
-static void
-rm_fname(char *fn) {
-	int i;
-
-	pthread_mutex_lock(&f_mutex);
-	for (i = 0; i < f_count; i++) {
-		if (f_name_list[i] != NULL) {
-			f_name_list[i] = fn;
-			break;
-		}
-	}
-	pthread_mutex_unlock(&f_mutex);
 }
 
 /*
@@ -721,7 +672,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		if (filename == NULL) {
 			compfd = fileno(stdin);
 			if (compfd == -1) {
-				perror("fileno ");
+				log_msg(LOG_ERR, 1, "fileno ");
 				UNCOMP_BAIL;
 			}
 			sbuf.st_size = 0;
@@ -747,12 +698,12 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 	} else {
 		compfd = fileno(stdin);
 		if (compfd == -1) {
-			perror("fileno ");
+			log_msg(LOG_ERR, 1, "fileno ");
 			UNCOMP_BAIL;
 		}
 		uncompfd = fileno(stdout);
 		if (uncompfd == -1) {
-			perror("fileno ");
+			log_msg(LOG_ERR, 1, "fileno ");
 			UNCOMP_BAIL;
 		}
 	}
@@ -761,7 +712,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 	 * Read file header pieces and verify.
 	 */
 	if (Read(compfd, algorithm, ALGO_SZ) < ALGO_SZ) {
-		perror("Read: ");
+		log_msg(LOG_ERR, 1, "Read: ");
 		UNCOMP_BAIL;
 	}
 	if (init_algo(pctx, algorithm, 0) != 0) {
@@ -777,7 +728,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 	    Read(compfd, &flags, sizeof (flags)) < sizeof (flags) ||
 	    Read(compfd, &chunksize, sizeof (chunksize)) < sizeof (chunksize) ||
 	    Read(compfd, &level, sizeof (level)) < sizeof (level)) {
-		perror("Read: ");
+		log_msg(LOG_ERR, 1, "Read: ");
 		UNCOMP_BAIL;
 	}
 
@@ -908,7 +859,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 			UNCOMP_BAIL;
 		}
 		if (Read(compfd, &saltlen, sizeof (saltlen)) < sizeof (saltlen)) {
-			perror("Read: ");
+			log_msg(LOG_ERR, 1, "Read: ");
 			UNCOMP_BAIL;
 		}
 		saltlen = ntohl(saltlen);
@@ -916,7 +867,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		salt2 = (uchar_t *)malloc(saltlen);
 		if (Read(compfd, salt1, saltlen) < saltlen) {
 			free(salt1);  free(salt2);
-			perror("Read: ");
+			log_msg(LOG_ERR, 1, "Read: ");
 			UNCOMP_BAIL;
 		}
 		deserialize_checksum(salt2, salt1, saltlen);
@@ -926,7 +877,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 			free(salt2);
 			memset(salt1, 0, saltlen);
 			free(salt1);
-			perror("Read: ");
+			log_msg(LOG_ERR, 1, "Read: ");
 			UNCOMP_BAIL;
 		}
 
@@ -943,7 +894,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 				free(salt2);
 				memset(salt1, 0, saltlen);
 				free(salt1);
-				perror("Read: ");
+				log_msg(LOG_ERR, 1, "Read: ");
 				UNCOMP_BAIL;
 			}
 			pctx->keylen = ntohl(pctx->keylen);
@@ -954,7 +905,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 			free(salt2);
 			memset(salt1, 0, saltlen);
 			free(salt1);
-			perror("Read: ");
+			log_msg(LOG_ERR, 1, "Read: ");
 			UNCOMP_BAIL;
 		}
 		deserialize_checksum(hdr_hash2, hdr_hash1, pctx->mac_bytes);
@@ -999,7 +950,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 				}
 			}
 			if (pw_len == -1) {
-				perror(" ");
+				log_msg(LOG_ERR, 1, " ");
 				memset(salt2, 0, saltlen);
 				free(salt2);
 				memset(salt1, 0, saltlen);
@@ -1089,7 +1040,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		 * Verify file header CRC32 in non-crypto mode.
 		 */
 		if (Read(compfd, &crc1, sizeof (crc1)) < sizeof (crc1)) {
-			perror("Read: ");
+			log_msg(LOG_ERR, 1, "Read: ");
 			UNCOMP_BAIL;
 		}
 		crc1 = htonl(crc1);
@@ -1175,7 +1126,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 			}
 			if (pctx->enable_rabin_global) {
 				if ((tdat->rctx->out_fd = open(to_filename, O_RDONLY, 0)) == -1) {
-					perror("Unable to get new read handle to output file");
+					log_msg(LOG_ERR, 1, "Unable to get new read handle to output file");
 					UNCOMP_BAIL;
 				}
 			}
@@ -1192,7 +1143,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		}
 		if (pthread_create(&(tdat->thr), NULL, perform_decompress,
 		    (void *)tdat) != 0) {
-			perror("Error in thread creation: ");
+			log_msg(LOG_ERR, 1, "Error in thread creation: ");
 			UNCOMP_BAIL;
 		}
 	}
@@ -1218,7 +1169,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 	w.chunksize = chunksize;
 	w.pctx = pctx;
 	if (pthread_create(&writer_thr, NULL, writer_thread, (void *)(&w)) != 0) {
-		perror("Error in thread creation: ");
+		log_msg(LOG_ERR, 1, "Error in thread creation: ");
 		UNCOMP_BAIL;
 	}
 
@@ -1248,7 +1199,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 			 */
 			rb = Read(compfd, &tdat->len_cmp, sizeof (tdat->len_cmp));
 			if (rb != sizeof (tdat->len_cmp)) {
-				if (rb < 0) perror("Read: ");
+				if (rb < 0) log_msg(LOG_ERR, 1, "Read: ");
 				else
 					log_msg(LOG_ERR, 0, "Incomplete chunk %d header,"
 					    "file corrupt\n", pctx->chunk_num);
@@ -1311,7 +1262,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 			if (pctx->main_cancel) break;
 			if (tdat->rbytes < tdat->len_cmp + pctx->cksum_bytes + pctx->mac_bytes + CHUNK_FLAG_SZ) {
 				if (tdat->rbytes < 0) {
-					perror("Read: ");
+					log_msg(LOG_ERR, 1, "Read: ");
 					UNCOMP_BAIL;
 				} else {
 					log_msg(LOG_ERR, 0, "Incomplete chunk %d, file corrupt.\n",
@@ -1352,7 +1303,7 @@ uncomp_done:
 	if (filename != NULL) {
 		fchmod(uncompfd, sbuf.st_mode);
 		if (fchown(uncompfd, sbuf.st_uid, sbuf.st_gid) == -1)
-			perror("Chown ");
+			log_msg(LOG_ERR, 1, "Chown ");
 	}
 	if (dary != NULL) {
 		for (i = 0; i < nprocs; i++) {
@@ -1679,7 +1630,7 @@ repeat:
 
 		wbytes = Write(w->wfd, tdat->cmp_seg, tdat->len_cmp);
 		if (unlikely(wbytes != tdat->len_cmp)) {
-			perror("Chunk Write: ");
+			log_msg(LOG_ERR, 1, "Chunk Write: ");
 do_cancel:
 			pctx->main_cancel = 1;
 			tdat->cancel = 1;
@@ -1811,26 +1762,40 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	/* A host of sanity checks. */
 	if (!pctx->pipe_mode) {
 		char *tmp;
-		if ((uncompfd = open(filename, O_RDONLY, 0)) == -1) {
-			log_msg(LOG_ERR, 1, "Cannot open: %s", filename);
-			return (1);
-		}
+		if (!(pctx->archive_mode)) {
+			if ((uncompfd = open(filename, O_RDONLY, 0)) == -1) {
+				log_msg(LOG_ERR, 1, "Cannot open: %s", filename);
+				return (1);
+			}
 
-		if (fstat(uncompfd, &sbuf) == -1) {
-			close(uncompfd);
-			log_msg(LOG_ERR, 1, "Cannot stat: %s", filename);
-			return (1);
-		}
+			if (fstat(uncompfd, &sbuf) == -1) {
+				close(uncompfd);
+				log_msg(LOG_ERR, 1, "Cannot stat: %s", filename);
+				return (1);
+			}
 
-		if (!S_ISREG(sbuf.st_mode)) {
-			close(uncompfd);
-			log_msg(LOG_ERR, 0, "File %s is not a regular file.\n", filename);
-			return (1);
-		}
+			if (!S_ISREG(sbuf.st_mode)) {
+				close(uncompfd);
+				log_msg(LOG_ERR, 0, "File %s is not a regular file.\n", filename);
+				return (1);
+			}
 
-		if (sbuf.st_size == 0) {
-			close(uncompfd);
-			return (1);
+			if (sbuf.st_size == 0) {
+				close(uncompfd);
+				return (1);
+			}
+		} else {
+			if (setup_archive(pctx, &sbuf) == -1) {
+				log_msg(LOG_ERR, 0, "Setup archive failed for %s\n", pctx->filename);
+				return (1);
+			}
+
+			/*
+			 * This is a pipe between the libarchive based archiving process and
+			 * the rest of the compression stuff.
+			 */
+			uncompfd = pctx->uncompfd;
+			exit(0);
 		}
 
 		/*
@@ -1882,7 +1847,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		if (pctx->pipe_out) {
 			compfd = fileno(stdout);
 			if (compfd == -1) {
-				perror("fileno ");
+				log_msg(LOG_ERR, 1, "fileno ");
 				COMP_BAIL;
 			}
 		} else {
@@ -1890,21 +1855,19 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 				strcat(tmpfile1, "/.pcompXXXXXX");
 				snprintf(to_filename, sizeof (to_filename), "%s" COMP_EXTN, filename);
 				if ((compfd = mkstemp(tmpfile1)) == -1) {
-					perror("mkstemp ");
+					log_msg(LOG_ERR, 1, "mkstemp ");
 					COMP_BAIL;
 				}
 				add_fname(tmpfile1);
 			} else {
 				snprintf(to_filename, sizeof (to_filename), "%s" COMP_EXTN, pctx->to_filename);
 				if ((compfd = open(to_filename, O_CREAT|O_RDWR, S_IRUSR|S_IWUSR)) == -1) {
-					perror("open ");
+					log_msg(LOG_ERR, 1, "open ");
 					COMP_BAIL;
 				}
 				add_fname(to_filename);
 			}
 		}
-		signal(SIGINT, Int_Handler);
-		signal(SIGTERM, Int_Handler);
 	} else {
 		char *tmp;
 
@@ -1913,33 +1876,21 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		 */
 		compfd = fileno(stdout);
 		if (compfd == -1) {
-			perror("fileno ");
+			log_msg(LOG_ERR, 1, "fileno ");
 			COMP_BAIL;
 		}
 		uncompfd = fileno(stdin);
 		if (uncompfd == -1) {
-			perror("fileno ");
+			log_msg(LOG_ERR, 1, "fileno ");
 			COMP_BAIL;
 		}
 
 		/*
 		 * Get a workable temporary dir. Required if global dedupe is enabled.
 		 */
-		tmp = getenv("PCOMPRESS_CACHE_DIR");
-		if (tmp == NULL || !chk_dir(tmp)) {
-			tmp = getenv("TMPDIR");
-			if (tmp == NULL || !chk_dir(tmp)) {
-				tmp = getenv("HOME");
-				if (tmp == NULL || !chk_dir(tmp)) {
-					if (getcwd(tmpdir, MAXPATHLEN) == NULL) {
-						tmp = "/tmp";
-					} else {
-						tmp = tmpdir;
-					}
-				}
-			}
-		}
+		tmp = get_temp_dir();
 		strcpy(tmpdir, tmp);
+		free(tmp);
 	}
 
 	if (pctx->enable_rabin_global) {
@@ -2061,7 +2012,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		}
 		if (pthread_create(&(tdat->thr), NULL, perform_compress,
 		    (void *)tdat) != 0) {
-			perror("Error in thread creation: ");
+			log_msg(LOG_ERR, 1, "Error in thread creation: ");
 			COMP_BAIL;
 		}
 	}
@@ -2099,7 +2050,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	w.nprocs = nprocs;
 	w.pctx = pctx;
 	if (pthread_create(&writer_thr, NULL, writer_thread, (void *)(&w)) != 0) {
-		perror("Error in thread creation: ");
+		log_msg(LOG_ERR, 1, "Error in thread creation: ");
 		COMP_BAIL;
 	}
 	wthread = 1;
@@ -2146,7 +2097,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		pos += sizeof (int);
 	}
 	if (Write(compfd, cread_buf, pos - cread_buf) != pos - cread_buf) {
-		perror("Write ");
+		log_msg(LOG_ERR, 1, "Write ");
 		COMP_BAIL;
 	}
 
@@ -2173,7 +2124,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		serialize_checksum(hdr_hash, pos, hlen);
 		pos += hlen;
 		if (Write(compfd, cread_buf, pos - cread_buf) != pos - cread_buf) {
-			perror("Write ");
+			log_msg(LOG_ERR, 1, "Write ");
 			COMP_BAIL;
 		}
 	} else {
@@ -2183,7 +2134,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		uint32_t crc = lzma_crc32(cread_buf, pos - cread_buf, 0);
 		U32_P(cread_buf) = htonl(crc);
 		if (Write(compfd, cread_buf, sizeof (uint32_t)) != sizeof (uint32_t)) {
-			perror("Write ");
+			log_msg(LOG_ERR, 1, "Write ");
 			COMP_BAIL;
 		}
 	}
@@ -2298,7 +2249,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			if (rbytes < chunksize) {
 				if (rbytes < 0) {
 					bail = 1;
-					perror("Read: ");
+					log_msg(LOG_ERR, 1, "Read: ");
 					COMP_BAIL;
 				}
 			}
@@ -2367,7 +2318,7 @@ comp_done:
 		compressed_chunksize = 0;
 		if (Write(compfd, &compressed_chunksize,
 		    sizeof (compressed_chunksize)) < 0) {
-			perror("Write ");
+			log_msg(LOG_ERR, 1, "Write ");
 			err = 1;
 		}
 
@@ -2381,12 +2332,12 @@ comp_done:
 			 */
 			fchmod(compfd, sbuf.st_mode);
 			if (fchown(compfd, sbuf.st_uid, sbuf.st_gid) == -1)
-				perror("chown ");
+				log_msg(LOG_ERR, 1, "chown ");
 			close(compfd);
 
 			if (pctx->to_filename == NULL) {
 				if (rename(tmpfile1, to_filename) == -1) {
-					perror("Cannot rename temporary file ");
+					log_msg(LOG_ERR, 1, "Cannot rename temporary file ");
 					unlink(tmpfile1);
 				}
 				rm_fname(tmpfile1);
@@ -2553,11 +2504,6 @@ create_pc_context(void)
 {
 	pc_ctx_t *ctx = (pc_ctx_t *)malloc(sizeof (pc_ctx_t));
 
-	pthread_mutex_lock(&f_mutex);
-	if (!f_inited) {
-		memset(f_name_list, 0, sizeof (f_name_list));
-	}
-	pthread_mutex_unlock(&f_mutex);
 	slab_init();
 	init_pcompress();
 
@@ -2779,6 +2725,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		else
 			pctx->rab_blk_size = RAB_BLK_DEFAULT;
 	}
+
 	/*
 	 * Remaining mandatory arguments are the filenames.
 	 */
@@ -2915,6 +2862,16 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		 */
 		pctx->cksum_bytes = 0;
 	}
+
+	if (pctx->do_compress) {
+		struct stat sbuf;
+
+		if (stat(pctx->filename, &sbuf) == -1) {
+			log_msg(LOG_ERR, 1, "Cannot stat: %s", pctx->filename);
+			return (1);
+		}
+		if (S_ISDIR(sbuf.st_mode)) pctx->archive_mode = 1;
+	}
 	pctx->inited = 1;
 
 	return (0);
@@ -2927,6 +2884,8 @@ start_pcompress(pc_ctx_t *pctx)
 
 	if (!pctx->inited)
 		return (1);
+
+	handle_signals();
 	err = 0;
 	if (pctx->do_compress)
 		err = start_compress(pctx, pctx->filename, pctx->chunksize, pctx->level);

@@ -76,7 +76,7 @@ __FBSDID("$FreeBSD: src/usr.bin/bsdiff/bsdiff/bsdiff.c,v 1.1 2005/08/06 01:59:05
 #define	__IN_BSDIFF__
 #include "bscommon.h"
 
-#define MIN(x,y) (((x)<(y)) ? (x) : (y))
+#define BDIFF_MIN(x,y) (((x)<(y)) ? (x) : (y))
 
 static void split(bsize_t *I,bsize_t *V,bsize_t start,bsize_t len,bsize_t h)
 {
@@ -237,7 +237,7 @@ static bsize_t search(bsize_t *I,u_char *oldbuf,bsize_t oldsize,
 	};
 
 	x=st+(en-st)/2;
-	if(memcmp(oldbuf+I[x],newbuf,MIN(oldsize-I[x],newsize))<0) {
+	if(memcmp(oldbuf+I[x],newbuf,BDIFF_MIN(oldsize-I[x],newsize))<0) {
 		return search(I,oldbuf,oldsize,newbuf,newsize,x,en,pos);
 	} else {
 		return search(I,oldbuf,oldsize,newbuf,newsize,st,x,pos);

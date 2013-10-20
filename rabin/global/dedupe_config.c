@@ -204,7 +204,7 @@ read_config(char *configfile, archive_config_t *cfg)
 
 	fh = fopen(configfile, "r");
 	if (fh == NULL) {
-		perror(" ");
+		log_msg(LOG_ERR, 1, " ");
 		return (1);
 	}
 	while (fgets(line, 255, fh) != NULL) {
@@ -232,7 +232,7 @@ read_config(char *configfile, archive_config_t *cfg)
 			struct stat sb;
 			if (stat(pos, &sb) == -1) {
 				if (errno != ENOENT) {
-					perror(" ");
+					log_msg(LOG_ERR, 1, " ");
 					log_msg(LOG_ERR, 0, "Invalid ROOTDIR.\n");
 					fclose(fh);
 					return (1);
@@ -336,7 +336,7 @@ write_config(char *configfile, archive_config_t *cfg)
 
 	fh = fopen(configfile, "w");
 	if (fh == NULL) {
-		perror(" ");
+		log_msg(LOG_ERR, 1, " ");
 		return (1);
 	}
 

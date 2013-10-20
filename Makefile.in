@@ -28,9 +28,9 @@ LINKLIB=pcompress
 LIBVER=1
 MAINSRCS = utils/utils.c allocator.c lzma_compress.c ppmd_compress.c \
 	adaptive_compress.c lzfx_compress.c lz4_compress.c none_compress.c \
-	utils/xxhash_base.c utils/heap.c utils/cpuid.c pcompress.c
+	utils/xxhash_base.c utils/heap.c utils/cpuid.c archive/pc_archive.c pcompress.c
 MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heap.h \
-	utils/cpuid.h utils/xxhash.h
+	utils/cpuid.h utils/xxhash.h archive/pc_archive.h 
 MAINOBJS = $(MAINSRCS:.c=.o)
 
 PROGSRCS = main.c
@@ -182,7 +182,8 @@ KECCAK_OBJS_ASM = $(KECCAK_SRCS_ASM:.s=.o)
 
 BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~ utils/*~ crypto/sha2/*~ \
 	crypto/sha2/intel/*~ crypto/aes/*~ crypto/scrypt/*~ crypto/*~ rabin/global/*~ \
-	delta2/*~ crypto/keccak/*~ transpose/*~ crypto/skein/*~ crypto/keccak/*.o
+	delta2/*~ crypto/keccak/*~ transpose/*~ crypto/skein/*~ crypto/keccak/*.o \
+	archive/*~
 
 RM = rm -f
 RM_RF = rm -rf
@@ -191,14 +192,14 @@ COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT
 	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I./crypto/sha2 \
 	-I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ -I./rabin/global \
 	-I./crypto/keccak -I./transpose -I./crypto/blake2 $(EXTRA_CPPFLAGS) \
-	-I./crypto/xsalsa20 -pedantic -Wall -std=gnu99 \
+	-I./crypto/xsalsa20 -I./archive -pedantic -Wall -std=gnu99 \
 	-fno-strict-aliasing -Wno-unused-but-set-variable -Wno-enum-compare \
-	@COMPAT_CPPFLAGS@ @XSALSA20_DEBUG@
+	@COMPAT_CPPFLAGS@ @XSALSA20_DEBUG@ -I@LIBARCHIVE_INC@
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -L./buildtmp -Wl,-R@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,-R@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
-	-L./buildtmp -Wl,-R@OPENSSL_LIBDIR@ -lcrypto -lrt $(EXTRA_LDFLAGS) -Wl,-R/usr/lib,--enable-new-dtags \
-	-Wl,-R/usr/lib64,--enable-new-dtags
+	-L./buildtmp -Wl,-R@OPENSSL_LIBDIR@ -lcrypto -lrt -Wl,-R@LIBARCHIVE_DIR@ -larchive $(EXTRA_LDFLAGS) \
+	-Wl,-R/usr/lib,--enable-new-dtags -Wl,-R/usr/lib64,--enable-new-dtags
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
 $(SKEIN_BLOCK_OBJ) @SHA2ASM_OBJS@ @SHA2_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
