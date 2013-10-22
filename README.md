@@ -26,7 +26,7 @@ repeated allocation of similar chunks. It can work in pipe mode, reading
 from stdin and writing to stdout. It also provides adaptive compression
 modes in which data analysis heuristics are used to identify near-optimal
 algorithms per chunk. Finally it supports 14 compression levels to allow
-for ultra compression modes in some algorithms.
+for ultra compression parameters in some algorithms.
 
 Pcompress also supports encryption via AES and uses Scrypt from Tarsnap
 for Password Based Key generation. A unique key is generated per session

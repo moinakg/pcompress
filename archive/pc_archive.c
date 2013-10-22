@@ -41,6 +41,16 @@
 #include <ftw.h>
 #include <stdint.h>
 
+/*
+AE_IFREG   Regular file
+AE_IFLNK   Symbolic link
+AE_IFSOCK  Socket
+AE_IFCHR   Character device
+AE_IFBLK   Block device
+AE_IFDIR   Directory
+AE_IFIFO   Named pipe (fifo)
+*/
+
 #define	ARC_ENTRY_OVRHEAD	500
 static struct arc_list_state {
 	uchar_t *pbuf;
@@ -58,6 +68,7 @@ add_pathname(const char *fpath, const struct stat *sb,
 {
 	short len;
 	uchar_t *buf;
+	struct hdr ehdr;
 
 	if (tflag == FTW_DP) return (0);
 	if (tflag == FTW_DNR || tflag == FTW_NS) {
@@ -78,11 +89,7 @@ add_pathname(const char *fpath, const struct stat *sb,
 	*((short *)buf) = len;
 	buf += 2;
 	memcpy(buf, fpath, len);
-	buf += len;
-	*((int *)buf) = tflag;
-	buf += 4;
-	*((uint64_t *)buf) = sb->st_size;
-	a_state.bufpos += (len + 14);
+	a_state.bufpos += (len + 2);
 	return (0);
 }
 
@@ -162,6 +169,7 @@ setup_archive(pc_ctx_t *pctx, struct stat *sbuf)
 	archive_write_set_format_pax_restricted(arc);
 	archive_write_open_fd(arc, pctx->archive_data_fd);
 	pctx->archive_ctx = arc;
+	pctx->archive_members_fd = fd;
 
 	return (0);
 }
@@ -170,8 +178,76 @@ setup_archive(pc_ctx_t *pctx, struct stat *sbuf)
  * Thread function. Archive members and write to pipe. The dispatcher thread
  * reads from the other end and compresses.
  */
-void *
-run_archiver(void *dat) {
+static void *
+archiver_thread(void *dat) {
+	pc_ctx_t *pctx = (pc_ctx_t *)dat;
+	char fpath[PATH_MAX], *name;
+	ssize_t rbytes;
+	short namelen;
+	int warn;
+	struct stat sbuf;
+	struct archive_entry *entry;
+	struct archive *arc, *ard;
+	struct archive_entry_linkresolver *resolver;
+
+	warn = 1;
+	entry = archive_entry_new();
+	arc = (struct archive *)(pctx->archive_ctx);
+
+	if ((resolver = archive_entry_linkresolver_new()) != NULL) {
+		archive_entry_linkresolver_set_strategy(resolver, archive_format(arc));
+	} else {
+		log_msg(LOG_WARN, 0, "Cannot create link resolver, hardlinks will be duplicated.");
+	}
+
+	ard = archive_read_disk_new();
+	archive_read_disk_set_standard_lookup(ard);
+	archive_read_disk_set_symlink_physical(ard);
+
+	/*
+	 * Read next path entry from list file.
+	 */
+	while ((rbytes = Read(pctx->archive_members_fd, &namelen, sizeof(namelen))) != 0) {
+		int fd;
+
+		if (rbytes < 2) break;
+		rbytes = Read(pctx->archive_members_fd, fpath, namelen);
+		if (rbytes < namelen) break;
+		archive_entry_copy_sourcepath(entry, fpath);
+		if (archive_read_disk_entry_from_file(ard, entry, 0, NULL) != ARCHIVE_OK) {
+			log_msg(LOG_WARN, 0, "%s", archive_error_string(ard);
+			archive_entry_clear(entry);
+			continue;
+		}
+
+		/*
+		 * Strip leading '/' or '../' or '/../' from member name.
+		 */
+		name = fpath;
+		while (name[0] == '/' || name[0] == '\\') {
+			if (warn) {
+				log_msg(LOG_WARN, 0, "Converting absolute paths.");
+				warn = 0;
+			}
+			if (name[1] == '.' && name[2] == '.' && (name[3] == '/' || name[3] == '\\')) {
+				name += 4; /* /.. is removed here and / is removed next. */
+			} else {
+				name += 1;
+			}
+		}
+		if (name != archive_entry_pathname(entry))
+			archive_entry_copy_pathname(entry, name);
+
+		if (archive_entry_filetype(entry) != AE_IFREG)
+			archive_entry_set_size(entry, 0);
+		archive_entry_linkify(bsdtar->resolver, &entry, &spare_entry);
+		archive_entry_write_header(arc, entry);
+		archive_entry_clear(entry);
+	}
 	return (NULL);
 }
 
+int
+start_archiver(pc_ctx_t *pctx) {
+	return (0);
+}

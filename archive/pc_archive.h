@@ -42,6 +42,7 @@ typedef struct {
  * Archiving related functions.
  */
 int setup_archive(pc_ctx_t *pctx, struct stat *sbuf);
+int start_archiver(pc_ctx_t *pctx);
 
 #ifdef	__cplusplus
 }

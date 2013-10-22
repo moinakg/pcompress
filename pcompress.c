@@ -2056,6 +2056,15 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	wthread = 1;
 
 	/*
+	 * Start the archiver thread if needed.
+	 */
+	if (pctx->archive_mode) {
+		if (start_archiver(pctx) != 0) {
+			COMP_BAIL;
+		}
+	}
+
+	/*
 	 * Write out file header. First insert hdr elements into mem buffer
 	 * then write out the full hdr in one shot.
 	 */
