@@ -458,6 +458,7 @@ log_msg(log_level_t log_level, int show_errno, const char *format, ...)
 	written = vsnprintf(msg, 1024, format, args);
 	va_end(args);
 
+	written += snprintf(msg + written, 1024 - written, "\n");
 	if (written < 1024 && show_errno) {
 		snprintf(msg + written, 1024 - written, "\nError: %s\n", strerror(err));
 	}

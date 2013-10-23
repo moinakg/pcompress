@@ -33,7 +33,10 @@
 #include <errno.h>
 #include <limits.h>
 #include <utils.h>
+#include <pthread.h>
+#include <sys/mman.h>
 #include <archive.h>
+#include <archive_entry.h>
 #include "pc_archive.h"
 
 #undef _FEATURES_H
@@ -52,6 +55,10 @@ AE_IFIFO   Named pipe (fifo)
 */
 
 #define	ARC_ENTRY_OVRHEAD	500
+#define	ARC_SCRATCH_BUFF_SIZE	(64 *1024)
+#define	DATA_BLOCK_SIZE		(8 * 1024)
+#define	MMAP_SIZE		(1024 * 1024)
+
 static struct arc_list_state {
 	uchar_t *pbuf;
 	uint64_t bufsiz, bufpos, arc_size;
@@ -68,7 +75,6 @@ add_pathname(const char *fpath, const struct stat *sb,
 {
 	short len;
 	uchar_t *buf;
-	struct hdr ehdr;
 
 	if (tflag == FTW_DP) return (0);
 	if (tflag == FTW_DNR || tflag == FTW_NS) {
@@ -150,6 +156,8 @@ setup_archive(pc_ctx_t *pctx, struct stat *sbuf)
 	pthread_mutex_unlock(&nftw_mutex);
 	lseek(fd, 0, SEEK_SET);
 	free(pbuf);
+	sbuf->st_uid = geteuid();
+	sbuf->st_gid = getegid();
 
 	if (pipe(pipefd) == -1) {
 		log_msg(LOG_ERR, 1, "Unable to create archiver pipe.\n");
@@ -175,18 +183,107 @@ setup_archive(pc_ctx_t *pctx, struct stat *sbuf)
 }
 
 /*
+ * Routines to archive members and write the archive to pipe. Most of the following
+ * code is adapted from some of the Libarchive bsdtar code.
+ */
+static int
+copy_file_data(pc_ctx_t *pctx, struct archive *arc,
+	       struct archive *in_arc, struct archive_entry *entry)
+{
+	size_t sz, offset, len;
+	ssize_t bytes_to_write;
+	uchar_t *mapbuf;
+	int rv, fd;
+	const char *fpath;
+
+	offset = 0;
+	rv = 0;
+	sz = archive_entry_size(entry);
+	bytes_to_write = sz;
+	fpath = archive_entry_sourcepath(entry);
+	fd = open(fpath, O_RDONLY);
+	if (fd == -1) {
+		log_msg(LOG_ERR, 1, "Failed to open %s.", fpath);
+		return (-1);
+	}
+
+	while (bytes_to_write > 0) {
+		uchar_t *src;
+		size_t wlen, w;
+		ssize_t wrtn;
+
+		if (bytes_to_write < MMAP_SIZE)
+			len = bytes_to_write;
+		else
+			len = MMAP_SIZE;
+		mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, offset);
+		offset += len;
+		src = mapbuf;
+		wlen = len;
+
+		/*
+		 * Write data in blocks.
+		 */
+		while (wlen > 0) {
+			if (wlen < DATA_BLOCK_SIZE)
+				w = wlen;
+			else
+				w = DATA_BLOCK_SIZE;
+			wrtn = archive_write_data(arc, src, w);
+			if (wrtn < w) {
+				/* Write failed; this is bad */
+				log_msg(LOG_ERR, 0, "Data write error: %s", archive_error_string(arc));
+				rv = -1;
+				break;
+			}
+			bytes_to_write -= wrtn;
+			wlen -= wrtn;
+		}
+		if (rv == -1) break;
+		munmap(mapbuf, len);
+	}
+	close(fd);
+
+	return (rv);
+}
+
+static int
+write_entry(pc_ctx_t *pctx, struct archive *arc, struct archive *in_arc,
+	    struct archive_entry *entry)
+{
+	int rv;
+
+	rv = archive_write_header(arc, entry);
+	if (rv != ARCHIVE_OK) {
+		if (rv == ARCHIVE_FATAL || rv == ARCHIVE_FAILED) {
+			log_msg(LOG_ERR, 0, "%s: %s",
+			    archive_entry_sourcepath(entry), archive_error_string(arc));
+			return (-1);
+		} else {
+			log_msg(LOG_WARN, 0, "%s: %s",
+			    archive_entry_sourcepath(entry), archive_error_string(arc));
+		}
+	}
+
+	if (archive_entry_size(entry) > 0) {
+		return (copy_file_data(pctx, arc, in_arc, entry));
+	}
+
+	return (0);
+}
+
+/*
  * Thread function. Archive members and write to pipe. The dispatcher thread
  * reads from the other end and compresses.
  */
 static void *
-archiver_thread(void *dat) {
+archive_thread_func(void *dat) {
 	pc_ctx_t *pctx = (pc_ctx_t *)dat;
 	char fpath[PATH_MAX], *name;
 	ssize_t rbytes;
 	short namelen;
 	int warn;
-	struct stat sbuf;
-	struct archive_entry *entry;
+	struct archive_entry *entry, *spare_entry, *ent;
 	struct archive *arc, *ard;
 	struct archive_entry_linkresolver *resolver;
 
@@ -208,14 +305,19 @@ archiver_thread(void *dat) {
 	 * Read next path entry from list file.
 	 */
 	while ((rbytes = Read(pctx->archive_members_fd, &namelen, sizeof(namelen))) != 0) {
-		int fd;
-
-		if (rbytes < 2) break;
+		if (rbytes < 2) {
+			log_msg(LOG_ERR, 1, "Error reading archive members file.");
+			break;
+		}
 		rbytes = Read(pctx->archive_members_fd, fpath, namelen);
-		if (rbytes < namelen) break;
+		if (rbytes < namelen) {
+			log_msg(LOG_ERR, 1, "Error reading archive members file.");
+			break;
+		}
+		fpath[namelen] = '\0';
 		archive_entry_copy_sourcepath(entry, fpath);
-		if (archive_read_disk_entry_from_file(ard, entry, 0, NULL) != ARCHIVE_OK) {
-			log_msg(LOG_WARN, 0, "%s", archive_error_string(ard);
+		if (archive_read_disk_entry_from_file(ard, entry, -1, NULL) != ARCHIVE_OK) {
+			log_msg(LOG_WARN, 1, "archive_read_disk_entry_from_file:\n  %s", archive_error_string(ard));
 			archive_entry_clear(entry);
 			continue;
 		}
@@ -230,7 +332,7 @@ archiver_thread(void *dat) {
 				warn = 0;
 			}
 			if (name[1] == '.' && name[2] == '.' && (name[3] == '/' || name[3] == '\\')) {
-				name += 4; /* /.. is removed here and / is removed next. */
+				name += 3; /* /.. is removed here and / is removed next. */
 			} else {
 				name += 1;
 			}
@@ -238,16 +340,33 @@ archiver_thread(void *dat) {
 		if (name != archive_entry_pathname(entry))
 			archive_entry_copy_pathname(entry, name);
 
-		if (archive_entry_filetype(entry) != AE_IFREG)
+		if (archive_entry_filetype(entry) != AE_IFREG) {
 			archive_entry_set_size(entry, 0);
-		archive_entry_linkify(bsdtar->resolver, &entry, &spare_entry);
-		archive_entry_write_header(arc, entry);
+		}
+		archive_entry_linkify(resolver, &entry, &spare_entry);
+		ent = entry;
+		while (ent != NULL) {
+			if (write_entry(pctx, arc, ard, ent) != 0) {
+				goto done;
+			}
+			ent = spare_entry;
+			spare_entry = NULL;
+		}
 		archive_entry_clear(entry);
 	}
+
+done:
+	archive_entry_free(entry);
+	archive_entry_linkresolver_free(resolver);
+	archive_read_free(ard);
+	archive_write_free(arc);
+	close(pctx->archive_members_fd);
+	close(pctx->archive_data_fd);
+	unlink(pctx->archive_members_file);
 	return (NULL);
 }
 
 int
 start_archiver(pc_ctx_t *pctx) {
-	return (0);
+	return (pthread_create(&(pctx->archive_thread), NULL, archive_thread_func, (void *)pctx));
 }

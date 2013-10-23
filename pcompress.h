@@ -201,6 +201,7 @@ typedef struct pc_ctx {
 	char archive_members_file[MAXPATHLEN];
 	int archive_members_fd, archive_data_fd;
 	void *archive_ctx;
+	pthread_t archive_thread;
 	int uncompfd, compfd;
 	unsigned int chunk_num;
 	uint64_t largest_chunk, smallest_chunk, avg_chunk;
