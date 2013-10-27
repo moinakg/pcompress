@@ -1071,8 +1071,10 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 	set_threadcounts(&props, &(pctx->nthreads), nprocs, DECOMPRESS_THREADS);
 	if (props.is_single_chunk)
 		pctx->nthreads = 1;
-	log_msg(LOG_INFO, 0, "Scaling to %d thread", pctx->nthreads * props.nthreads);
-	if (pctx->nthreads * props.nthreads > 1) log_msg(LOG_INFO, 0, "s");
+	if (pctx->nthreads * props.nthreads > 1)
+		log_msg(LOG_INFO, 0, "Scaling to %d threads", pctx->nthreads * props.nthreads);
+	else
+		log_msg(LOG_INFO, 0, "Scaling to 1 thread");
 	nprocs = pctx->nthreads;
 	slab_cache_add(compressed_chunksize);
 	slab_cache_add(chunksize);
@@ -1832,8 +1834,19 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		 * the end. The target file name is same as original file with the '.pz'
 		 * extension appended unless '-' was specified to output to stdout.
 		 */
-		strcpy(tmpfile1, filename);
-		strcpy(tmpfile1, dirname(tmpfile1));
+		if (filename) {
+			strcpy(tmpfile1, filename);
+			strcpy(tmpfile1, dirname(tmpfile1));
+		} else {
+			char *tmp1;
+			if (!(pctx->archive_mode)) {
+				log_msg(LOG_ERR, 0, "Inconsistent NULL Filename when Not archiving.");
+				COMP_BAIL;
+			}
+			tmp1 = get_temp_dir();
+			strcpy(tmpfile1, tmp1);
+			free(tmp1);
+		}
 
 		tmp = getenv("PCOMPRESS_CACHE_DIR");
 		if (tmp == NULL || !chk_dir(tmp)) {
@@ -1953,8 +1966,10 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		flags |= pctx->encrypt_type;
 
 	set_threadcounts(&props, &(pctx->nthreads), nprocs, COMPRESS_THREADS);
-	log_msg(LOG_INFO, 0, "Scaling to %d thread", pctx->nthreads * props.nthreads);
-	if (pctx->nthreads * props.nthreads > 1) log_msg(LOG_INFO, 0, "s");
+	if (pctx->nthreads * props.nthreads > 1)
+		log_msg(LOG_INFO, 0, "Scaling to %d threads", pctx->nthreads * props.nthreads);
+	else
+		log_msg(LOG_INFO, 0, "Scaling to 1 thread");
 	nprocs = pctx->nthreads;
 	dary = (struct cmp_data **)slab_calloc(NULL, nprocs, sizeof (struct cmp_data *));
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan))
@@ -2383,7 +2398,17 @@ comp_done:
 		if (compfd != -1) close(compfd);
 	}
 
-	if (pctx->archive_mode) pthread_join(pctx->archive_thread, NULL);
+	if (pctx->archive_mode) {
+		struct fn_list *fn, *fn1;
+
+		pthread_join(pctx->archive_thread, NULL);
+		fn = pctx->fn;
+		while (fn) {
+			fn1 = fn;
+			fn = fn->next;
+			slab_free(NULL, fn1);
+		}
+	}
 	if (!pctx->hide_cmp_stats) show_compression_stats(pctx);
 	pctx->_stats_func(!pctx->hide_cmp_stats);
 
@@ -2578,7 +2603,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	strcpy(pctx->exec_name, pos);
 
 	pthread_mutex_lock(&opt_parse);
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:rLPS:B:Fk:")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:rLPS:B:Fk:av")) != -1) {
 		int ovr;
 		int64_t chunksize;
 
@@ -2711,6 +2736,14 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			}
 			break;
 
+		    case 'a':
+			pctx->archive_mode = 1;
+			break;
+
+		    case 'v':
+			pctx->verbose = 1;
+			break;
+
 		    case '?':
 		    default:
 			return (2);
@@ -2790,17 +2823,60 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		log_msg(LOG_ERR, 0, "Expected at least one filename.");
 		return (1);
 
-	} else if (num_rem == 1 || num_rem == 2) {
+	} else if (num_rem == 1 || num_rem == 2 || (num_rem > 0 && pctx->archive_mode)) {
 		if (pctx->do_compress) {
 			char apath[MAXPATHLEN];
 
-			if ((pctx->filename = realpath(argv[my_optind], NULL)) == NULL) {
-				log_msg(LOG_ERR, 1, "%s", argv[my_optind]);
-				return (1);
+			/*
+			 * If archiving, resolve the list of pathnames on the cmdline.
+			 */
+			if (pctx->archive_mode) {
+				struct fn_list **fn;
+				int valid_paths;
+
+				slab_cache_add(sizeof (struct fn_list));
+				pctx->filename = NULL;
+				fn = &(pctx->fn);
+				valid_paths = 0;
+				while (num_rem > 0) {
+					char *filename;
+
+					if ((filename = realpath(argv[my_optind], NULL)) != NULL) {
+						*fn = slab_alloc(NULL, sizeof (struct fn_list));
+						(*fn)->filename = filename;
+						(*fn)->next = NULL;
+						fn = &((*fn)->next);
+						valid_paths++;
+					} else {
+						log_msg(LOG_WARN, 1, "%s", argv[my_optind]);
+					}
+					num_rem--;
+					my_optind++;
+
+					/*
+					 * If multiple pathnames are provided, last one must be the archive name.
+					 * This check here handles that case. If only one pathname is provided
+					 * then archive name can be derived and num_rem here will be 0 so it
+					 * exits normally in the loop check above.
+					 */
+					if (num_rem == 1) break;
+				}
+				if (valid_paths == 0) {
+					log_msg(LOG_ERR, 0, "No usable paths found to archive.");
+					return (1);
+				}
+				if (valid_paths == 1)
+					pctx->filename = pctx->fn->filename;
+			} else {
+				if ((pctx->filename = realpath(argv[my_optind], NULL)) == NULL) {
+					log_msg(LOG_ERR, 1, "%s", argv[my_optind]);
+					return (1);
+				}
+				num_rem--;
+				my_optind++;
 			}
 
-			if (num_rem == 2) {
-				my_optind++;
+			if (num_rem > 0) {
 				if (*(argv[my_optind]) == '-') {
 					pctx->to_filename = "-";
 					pctx->pipe_out = 1;
@@ -2882,11 +2958,10 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	if (pctx->do_compress) {
 		struct stat sbuf;
 
-		if (stat(pctx->filename, &sbuf) == -1) {
+		if (pctx->filename && stat(pctx->filename, &sbuf) == -1) {
 			log_msg(LOG_ERR, 1, "Cannot stat: %s", pctx->filename);
 			return (1);
 		}
-		if (S_ISDIR(sbuf.st_mode)) pctx->archive_mode = 1;
 	}
 	pctx->inited = 1;
 

@@ -198,6 +198,7 @@ typedef struct pc_ctx {
 	int lzp_preprocess;
 	int encrypt_type;
 	int archive_mode;
+	int verbose;
 	char archive_members_file[MAXPATHLEN];
 	int archive_members_fd, archive_data_fd;
 	void *archive_ctx;
@@ -207,6 +208,7 @@ typedef struct pc_ctx {
 	uint64_t largest_chunk, smallest_chunk, avg_chunk;
 	uint64_t chunksize, archive_size;
 	const char *algo, *filename, *to_filename;
+	struct fn_list *fn;
 	char *exec_name;
 	int do_compress, level;
 	int do_uncompress;

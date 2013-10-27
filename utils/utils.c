@@ -50,7 +50,7 @@
 
 processor_info_t proc_info;
 pthread_mutex_t f_mutex = PTHREAD_MUTEX_INITIALIZER;
-static int cur_log_level = 1;
+static int cur_log_level = 2;
 static log_dest_t ldest = {LOG_OUTPUT, LOG_INFO, NULL};
 static char *f_name_list[512];
 static int f_count = 512, f_inited = 0;

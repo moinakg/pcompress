@@ -56,7 +56,6 @@ AE_IFIFO   Named pipe (fifo)
 
 #define	ARC_ENTRY_OVRHEAD	500
 #define	ARC_SCRATCH_BUFF_SIZE	(64 *1024)
-#define	DATA_BLOCK_SIZE		(8 * 1024)
 #define	MMAP_SIZE		(1024 * 1024)
 
 static struct arc_list_state {
@@ -111,6 +110,7 @@ setup_archive(pc_ctx_t *pctx, struct stat *sbuf)
 	int err, fd, pipefd[2];
 	uchar_t *pbuf;
 	struct archive *arc;
+	struct fn_list *fn;
 
 	tmpfile = pctx->archive_members_file;
 	tmp = get_temp_dir();
@@ -135,24 +135,50 @@ setup_archive(pc_ctx_t *pctx, struct stat *sbuf)
 	 * nftw requires using global state variable. So we lock to be mt-safe.
 	 * This means only one directory tree scan can happen at a time.
 	 */
+	log_msg(LOG_INFO, 0, "Scanning files.");
+	sbuf->st_size = 0;
+	pctx->archive_size = 0;
 	pthread_mutex_lock(&nftw_mutex);
+	fn = pctx->fn;
 	a_state.pbuf = pbuf;
 	a_state.bufsiz = pctx->chunksize;
 	a_state.bufpos = 0;
 	a_state.arc_size = 0;
 	a_state.fd = fd;
-	err = nftw(pctx->filename, add_pathname, 1024, FTW_PHYS); // 'pctx->filename' has dir name here
-	if (a_state.bufpos > 0) {
-		ssize_t wrtn = Write(a_state.fd, a_state.pbuf, a_state.bufpos);
-		if (wrtn < a_state.bufpos) {
-			log_msg(LOG_ERR, 1, "Write failed.");
-			close(fd);  unlink(tmpfile);
-			return (-1);
+
+	while (fn) {
+		struct stat sb;
+
+		if (lstat(fn->filename, &sb) == -1) {
+			log_msg(LOG_ERR, 1, "Ignoring %s.", fn->filename);
+			fn = fn->next;
+			continue;
 		}
-		a_state.bufpos = 0;
+
+		if (S_ISDIR(sb.st_mode)) {
+			err = nftw(fn->filename, add_pathname, 1024, FTW_PHYS);
+		} else {
+			int tflag;
+
+			if (S_ISLNK(sb.st_mode))
+				tflag = FTW_SL;
+			else
+				tflag = FTW_F;
+			add_pathname(fn->filename, &sb, tflag, NULL);
+		}
+		if (a_state.bufpos > 0) {
+			ssize_t wrtn = Write(a_state.fd, a_state.pbuf, a_state.bufpos);
+			if (wrtn < a_state.bufpos) {
+				log_msg(LOG_ERR, 1, "Write failed.");
+				close(fd);  unlink(tmpfile);
+				return (-1);
+			}
+			a_state.bufpos = 0;
+		}
+		pctx->archive_size += a_state.arc_size;
+		sbuf->st_size += a_state.arc_size;
+		fn = fn->next;
 	}
-	pctx->archive_size = a_state.arc_size;
-	sbuf->st_size = a_state.arc_size;
 	pthread_mutex_unlock(&nftw_mutex);
 	lseek(fd, 0, SEEK_SET);
 	free(pbuf);
@@ -209,7 +235,7 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc,
 
 	while (bytes_to_write > 0) {
 		uchar_t *src;
-		size_t wlen, w;
+		size_t wlen;
 		ssize_t wrtn;
 
 		if (bytes_to_write < MMAP_SIZE)
@@ -222,23 +248,16 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc,
 		wlen = len;
 
 		/*
-		 * Write data in blocks.
+		 * Write the entire mmap-ed buffer. Since we are writing to the compressor
+		 * stage pipe there is no need for blocking.
 		 */
-		while (wlen > 0) {
-			if (wlen < DATA_BLOCK_SIZE)
-				w = wlen;
-			else
-				w = DATA_BLOCK_SIZE;
-			wrtn = archive_write_data(arc, src, w);
-			if (wrtn < w) {
-				/* Write failed; this is bad */
-				log_msg(LOG_ERR, 0, "Data write error: %s", archive_error_string(arc));
-				rv = -1;
-				break;
-			}
-			bytes_to_write -= wrtn;
-			wlen -= wrtn;
+		wrtn = archive_write_data(arc, src, wlen);
+		if (wrtn < wlen) {
+			/* Write failed; this is bad */
+			log_msg(LOG_ERR, 0, "Data write error: %s", archive_error_string(arc));
+			rv = -1;
 		}
+		bytes_to_write -= wrtn;
 		if (rv == -1) break;
 		munmap(mapbuf, len);
 	}
@@ -343,6 +362,9 @@ archive_thread_func(void *dat) {
 		if (archive_entry_filetype(entry) != AE_IFREG) {
 			archive_entry_set_size(entry, 0);
 		}
+		if (pctx->verbose)
+			log_msg(LOG_INFO, 0, "%10d %s", archive_entry_size(entry), name);
+
 		archive_entry_linkify(resolver, &entry, &spare_entry);
 		ent = entry;
 		while (ent != NULL) {

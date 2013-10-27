@@ -222,6 +222,11 @@ typedef struct{
 	int64_t sharedram;
 } my_sysinfo;
 
+struct fn_list {
+	char *filename;
+	struct fn_list *next;
+};
+
 #ifndef _IN_UTILS_
 extern processor_info_t proc_info;
 #endif
