@@ -53,6 +53,7 @@
 #include <crypto/crypto_utils.h>
 #include <crypto_xsalsa20.h>
 #include <ctype.h>
+#include <errno.h>
 #include <pc_archive.h>
 
 /*
@@ -644,7 +645,7 @@ cont:
 #define UNCOMP_BAIL err = 1; goto uncomp_done
 
 int DLL_EXPORT
-start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
+start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 {
 	char algorithm[ALGO_SZ];
 	struct stat sbuf;
@@ -689,20 +690,9 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 			if (sbuf.st_size == 0)
 				return (1);
 		}
-
-		if ((uncompfd = open(to_filename, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1) {
-			close(compfd);
-			log_msg(LOG_ERR, 1, "Cannot open: %s", to_filename);
-			return (1);
-		}
 	} else {
 		compfd = fileno(stdin);
 		if (compfd == -1) {
-			log_msg(LOG_ERR, 1, "fileno ");
-			UNCOMP_BAIL;
-		}
-		uncompfd = fileno(stdout);
-		if (uncompfd == -1) {
 			log_msg(LOG_ERR, 1, "fileno ");
 			UNCOMP_BAIL;
 		}
@@ -761,6 +751,76 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		err = 1;
 		goto uncomp_done;
 	}
+
+	/*
+	 * First check for archive mode. In that case the to_filename must be a directory.
+	 */
+	if (flags & FLAG_ARCHIVE) {
+		/*
+		 * If to_filename is not set, we just use the current directory.
+		 */
+		if (to_filename == NULL) {
+			to_filename = ".";
+			pctx->to_filename = ".";
+		}
+		pctx->archive_mode = 1;
+		if (stat(to_filename, &sbuf) == -1) {
+			if (errno != ENOENT) {
+				log_msg(LOG_ERR, 1, "Target path is not a directory.");
+				err = 1;
+				goto uncomp_done;
+			}
+			if (mkdir(to_filename, S_IRUSR|S_IWUSR) == -1) {
+				log_msg(LOG_ERR, 1, "Unable to create target directory %s.", to_filename);
+				err = 1;
+				goto uncomp_done;
+			}
+		}
+		if (!S_ISDIR(sbuf.st_mode)) {
+			log_msg(LOG_ERR, 0, "Target path is not a directory.", to_filename);
+			err = 1;
+			goto uncomp_done;
+		}
+	} else {
+		const char *origf;
+
+		if (to_filename == NULL) {
+			char *pos;
+
+			/*
+			 * Use unused space in archive_members_file buffer to hold generated
+			 * filename so that it need not be explicitly freed at the end.
+			 */
+			to_filename = pctx->archive_members_file;
+			pctx->to_filename = pctx->archive_members_file;
+			pos = strrchr(filename, '.');
+			if (pos != NULL) {
+				if ((pos[0] == 'p' || pos[0] == 'P') && (pos[1] == 'z' || pos[1] == 'Z')) {
+					memcpy(to_filename, filename, pos - filename);
+				} else {
+					pos = NULL;
+				}
+			}
+
+			/*
+			 * If no .pz extension is found then use <filename>.out as the
+			 * decompressed file name.
+			 */
+			if (pos == NULL) {
+				strcpy(to_filename, filename);
+				strcat(to_filename, ".out");
+				log_msg(LOG_WARN, 0, "Using %s for output file name.", to_filename);
+			}
+		}
+		origf = to_filename;
+		if ((to_filename = realpath(origf, NULL)) != NULL) {
+			free((void *)(to_filename));
+			log_msg(LOG_ERR, 0, "File %s exists", origf);
+			err = 1;
+			goto uncomp_done;
+		}
+	}
+
 
 	compressed_chunksize = chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
 
@@ -955,7 +1015,6 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 				free(salt2);
 				memset(salt1, 0, saltlen);
 				free(salt1);
-				close(uncompfd); unlink(to_filename);
 				log_msg(LOG_ERR, 0, "Failed to get password.");
 				UNCOMP_BAIL;
 			}
@@ -970,7 +1029,6 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 				memset(salt1, 0, saltlen);
 				free(salt1);
 				memset(pctx->user_pw, 0, pctx->user_pw_len);
-				close(uncompfd); unlink(to_filename);
 				log_msg(LOG_ERR, 0, "Failed to initialize crypto");
 				UNCOMP_BAIL;
 			}
@@ -985,7 +1043,6 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 				memset(salt1, 0, saltlen);
 				free(salt1);
 				memset(pw, 0, MAX_PW_LEN);
-				close(uncompfd); unlink(to_filename);
 				log_msg(LOG_ERR, 0, "Failed to initialize crypto");
 				UNCOMP_BAIL;
 			}
@@ -999,7 +1056,6 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		 * Verify file header HMAC.
 		 */
 		if (hmac_init(&hdr_mac, pctx->cksum, &(pctx->crypto_ctx)) == -1) {
-			close(uncompfd); unlink(to_filename);
 			log_msg(LOG_ERR, 0, "Cannot initialize header hmac.");
 			UNCOMP_BAIL;
 		}
@@ -1026,7 +1082,6 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		free(salt1);
 		memset(n1, 0, noncelen);
 		if (memcmp(hdr_hash2, hdr_hash1, pctx->mac_bytes) != 0) {
-			close(uncompfd); unlink(to_filename);
 			log_msg(LOG_ERR, 0, "Header verification failed! File tampered or wrong password.");
 			UNCOMP_BAIL;
 		}
@@ -1056,9 +1111,45 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 		d2 = htonl(level);
 		crc2 = lzma_crc32((uchar_t *)&d2, sizeof (level), crc2);
 		if (crc1 != crc2) {
-			close(uncompfd); unlink(to_filename);
 			log_msg(LOG_ERR, 0, "Header verification failed! File tampered or wrong password.");
 			UNCOMP_BAIL;
+		}
+	}
+
+	if (flags & FLAG_ARCHIVE) {
+		if (pctx->enable_rabin_global) {
+			strcpy(pctx->archive_temp_file, to_filename);
+			strcat(pctx->archive_temp_file, "/.data");
+			if ((pctx->archive_temp_fd = open(pctx->archive_temp_file,
+			O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1) {
+				log_msg(LOG_ERR, 1, "Cannot open temporary data file in target directory.");
+				UNCOMP_BAIL;
+			}
+			add_fname(pctx->archive_temp_file);
+		}
+		if (setup_extractor(pctx) == -1) {
+			log_msg(LOG_ERR, 0, "Setup of extraction context failed.");
+			UNCOMP_BAIL;
+		}
+		uncompfd = pctx->uncompfd;
+
+		if (start_extractor(pctx) == -1) {
+			log_msg(LOG_ERR, 0, "Unable to start extraction thread.");
+			UNCOMP_BAIL;
+		}
+	} else {
+		if (!pctx->pipe_mode) {
+			if ((uncompfd = open(to_filename, O_WRONLY|O_CREAT|O_TRUNC,
+			    S_IRUSR|S_IWUSR)) == -1) {
+				log_msg(LOG_ERR, 1, "Cannot open: %s", to_filename);
+				UNCOMP_BAIL;
+			}
+		} else {
+			uncompfd = fileno(stdout);
+			if (uncompfd == -1) {
+				log_msg(LOG_ERR, 1, "fileno ");
+				UNCOMP_BAIL;
+			}
 		}
 	}
 
@@ -1126,9 +1217,19 @@ start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename)
 				UNCOMP_BAIL;
 			}
 			if (pctx->enable_rabin_global) {
-				if ((tdat->rctx->out_fd = open(to_filename, O_RDONLY, 0)) == -1) {
-					log_msg(LOG_ERR, 1, "Unable to get new read handle to output file");
-					UNCOMP_BAIL;
+				if (pctx->archive_mode) {
+					if ((tdat->rctx->out_fd = open(pctx->archive_temp_file,
+					    O_RDONLY, 0)) == -1) {
+						log_msg(LOG_ERR, 1, "Unable to get new read handle"
+						    " to output file");
+						UNCOMP_BAIL;
+					}
+				} else {
+					if ((tdat->rctx->out_fd = open(to_filename, O_RDONLY, 0)) == -1) {
+						log_msg(LOG_ERR, 1, "Unable to get new read handle"
+						    " to output file");
+						UNCOMP_BAIL;
+					}
 				}
 			}
 			tdat->rctx->index_sem = &(tdat->index_sem);
@@ -1325,6 +1426,13 @@ uncomp_done:
 	if (!pctx->pipe_mode) {
 		if (filename && compfd != -1) close(compfd);
 		if (uncompfd != -1) close(uncompfd);
+	}
+	if (pctx->archive_mode) {
+		pthread_join(pctx->archive_thread, NULL);
+		if (pctx->enable_rabin_global) {
+			close(pctx->archive_temp_fd);
+			unlink(pctx->archive_temp_file);
+		}
 	}
 
 	if (!pctx->hide_cmp_stats) show_compression_stats(pctx);
@@ -1630,6 +1738,9 @@ repeat:
 		}
 
 		wbytes = Write(w->wfd, tdat->cmp_seg, tdat->len_cmp);
+		if (pctx->archive_temp_fd != -1 && wbytes == tdat->len_cmp) {
+			wbytes = Write(pctx->archive_temp_fd, tdat->cmp_seg, tdat->len_cmp);
+		}
 		if (unlikely(wbytes != tdat->len_cmp)) {
 			log_msg(LOG_ERR, 1, "Chunk Write: ");
 do_cancel:
@@ -1786,8 +1897,8 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 				return (1);
 			}
 		} else {
-			if (setup_archive(pctx, &sbuf) == -1) {
-				log_msg(LOG_ERR, 0, "Setup archive failed for %s", pctx->filename);
+			if (setup_archiver(pctx, &sbuf) == -1) {
+				log_msg(LOG_ERR, 0, "Setup archiver failed.");
 				return (1);
 			}
 
@@ -2074,6 +2185,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		if (start_archiver(pctx) != 0) {
 			COMP_BAIL;
 		}
+		flags |= FLAG_ARCHIVE;
 	}
 
 	/*
@@ -2552,6 +2664,7 @@ create_pc_context(void)
 	ctx->hide_cmp_stats = 1;
 	ctx->enable_rabin_split = 1;
 	ctx->rab_blk_size = -1;
+	ctx->archive_temp_fd = -1;
 
 	return (ctx);
 }
@@ -2906,7 +3019,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 					return (1);
 				}
 			}
-		} else if (pctx->do_uncompress && num_rem == 2) {
+		} else if (pctx->do_uncompress) {
 			/*
 			 * While decompressing, input can be stdin and output a physical file.
 			 */
@@ -2918,13 +3031,12 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 					return (1);
 				}
 			}
-			my_optind++;
-			if ((pctx->to_filename = realpath(argv[my_optind], NULL)) != NULL) {
-				free((void *)(pctx->to_filename));
-				log_msg(LOG_ERR, 0, "File %s exists", argv[my_optind]);
-				return (1);
+			if (num_rem == 2) {
+				my_optind++;
+				pctx->to_filename = argv[my_optind];
+			} else {
+				pctx->to_filename = NULL;
 			}
-			pctx->to_filename = argv[my_optind];
 		} else {
 			return (1);
 		}

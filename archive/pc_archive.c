@@ -104,7 +104,7 @@ add_pathname(const char *fpath, const struct stat *sb,
  * sets up the libarchive context.
  */
 int
-setup_archive(pc_ctx_t *pctx, struct stat *sbuf)
+setup_archiver(pc_ctx_t *pctx, struct stat *sbuf)
 {
 	char *tmpfile, *tmp;
 	int err, fd, pipefd[2];
@@ -176,14 +176,15 @@ setup_archive(pc_ctx_t *pctx, struct stat *sbuf)
 			a_state.bufpos = 0;
 		}
 		pctx->archive_size += a_state.arc_size;
-		sbuf->st_size += a_state.arc_size;
 		fn = fn->next;
 	}
 	pthread_mutex_unlock(&nftw_mutex);
+	sbuf->st_size = pctx->archive_size;
 	lseek(fd, 0, SEEK_SET);
 	free(pbuf);
 	sbuf->st_uid = geteuid();
 	sbuf->st_gid = getegid();
+	sbuf->st_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 
 	if (pipe(pipefd) == -1) {
 		log_msg(LOG_ERR, 1, "Unable to create archiver pipe.\n");
@@ -204,6 +205,32 @@ setup_archive(pc_ctx_t *pctx, struct stat *sbuf)
 	archive_write_open_fd(arc, pctx->archive_data_fd);
 	pctx->archive_ctx = arc;
 	pctx->archive_members_fd = fd;
+
+	return (0);
+}
+
+int
+setup_extractor(pc_ctx_t *pctx)
+{
+	int pipefd[2];
+	struct archive *arc;
+
+	if (pipe(pipefd) == -1) {
+		log_msg(LOG_ERR, 1, "Unable to create extractor pipe.\n");
+		return (-1);
+	}
+
+	pctx->uncompfd = pipefd[1]; // Write side
+	pctx->archive_data_fd = pipefd[0]; // Read side
+
+	arc = archive_read_new();
+	if (!arc) {
+		log_msg(LOG_ERR, 1, "Unable to create libarchive context.\n");
+		close(pipefd[0]); close(pipefd[1]);
+		return (-1);
+	}
+	archive_read_support_format_all(arc);
+	pctx->archive_ctx = arc;
 
 	return (0);
 }
@@ -296,7 +323,7 @@ write_entry(pc_ctx_t *pctx, struct archive *arc, struct archive *in_arc,
  * reads from the other end and compresses.
  */
 static void *
-archive_thread_func(void *dat) {
+archiver_thread_func(void *dat) {
 	pc_ctx_t *pctx = (pc_ctx_t *)dat;
 	char fpath[PATH_MAX], *name;
 	ssize_t rbytes;
@@ -390,5 +417,87 @@ done:
 
 int
 start_archiver(pc_ctx_t *pctx) {
-	return (pthread_create(&(pctx->archive_thread), NULL, archive_thread_func, (void *)pctx));
+	return (pthread_create(&(pctx->archive_thread), NULL, archiver_thread_func, (void *)pctx));
+}
+
+/*
+ * Extract Thread function. Read an uncompressed archive from the pipe and extract
+ * members to disk. The decompressor writes to the other end of the pipe.
+ */
+static void *
+extractor_thread_func(void *dat) {
+	pc_ctx_t *pctx = (pc_ctx_t *)dat;
+	char cwd[PATH_MAX], got_cwd;
+	int flags, rv;
+	struct archive_entry *entry;
+	struct archive *awd, *arc;
+
+	flags = ARCHIVE_EXTRACT_TIME;
+	flags |= ARCHIVE_EXTRACT_PERM;
+	flags |= ARCHIVE_EXTRACT_ACL;
+	flags |= ARCHIVE_EXTRACT_FFLAGS;
+
+	got_cwd = 1;
+	if (getcwd(cwd, PATH_MAX) == NULL) {
+		log_msg(LOG_WARN, 1, "Cannot get current directory.");
+		got_cwd = 0;
+	}
+
+	if (chdir(pctx->to_filename) == -1) {
+		log_msg(LOG_ERR, 1, "Cannot change to dir: %s", pctx->to_filename);
+		goto done;
+	}
+
+	awd = archive_write_disk_new();
+	archive_write_disk_set_options(awd, flags);
+	archive_write_disk_set_standard_lookup(awd);
+	arc = (struct archive *)(pctx->archive_ctx);
+	archive_read_open_fd(arc, pctx->archive_data_fd, MMAP_SIZE);
+
+	/*
+	 * Read archive entries and extract to disk.
+	 */
+	while ((rv = archive_read_next_header(arc, &entry)) != ARCHIVE_EOF) {
+		if (rv != ARCHIVE_OK)
+			log_msg(LOG_WARN, 0, "%s", archive_error_string(arc));
+
+		if (rv == ARCHIVE_FATAL) {
+			log_msg(LOG_ERR, 0, "Fatal error aborting extraction.");
+			break;
+		}
+
+		if (rv == ARCHIVE_RETRY) {
+			log_msg(LOG_INFO, 0, "Retrying extractor read ...");
+			continue;
+		}
+
+		rv = archive_read_extract2(arc, entry, awd);
+		if (rv != ARCHIVE_OK) {
+			log_msg(LOG_WARN, 0, "%s: %s", archive_entry_pathname(entry),
+			    archive_error_string(arc));
+
+		} else if (pctx->verbose) {
+			log_msg(LOG_INFO, 0, "%10d %s", archive_entry_size(entry),
+			    archive_entry_pathname(entry));
+		}
+
+		if (rv == ARCHIVE_FATAL) {
+			log_msg(LOG_ERR, 0, "Fatal error aborting extraction.");
+			break;
+		}
+	}
+
+	if (got_cwd) {
+		rv = chdir(cwd);
+	}
+	archive_read_free(arc);
+	archive_write_free(awd);
+done:
+	close(pctx->archive_data_fd);
+	return (NULL);
+}
+
+int
+start_extractor(pc_ctx_t *pctx) {
+	return (pthread_create(&(pctx->archive_thread), NULL, extractor_thread_func, (void *)pctx));
 }

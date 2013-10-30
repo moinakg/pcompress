@@ -44,6 +44,7 @@ extern "C" {
 #define	FLAG_DEDUP	1
 #define	FLAG_DEDUP_FIXED	2
 #define	FLAG_SINGLE_CHUNK	4
+#define	FLAG_ARCHIVE	2048
 #define	UTILITY_VERSION	"2.4"
 #define	MASK_CRYPTO_ALG	0x30
 #define	MAX_LEVEL	14
@@ -204,10 +205,13 @@ typedef struct pc_ctx {
 	void *archive_ctx;
 	pthread_t archive_thread;
 	int uncompfd, compfd;
+	char archive_temp_file[MAXPATHLEN];
+	int archive_temp_fd;
 	unsigned int chunk_num;
 	uint64_t largest_chunk, smallest_chunk, avg_chunk;
 	uint64_t chunksize, archive_size;
-	const char *algo, *filename, *to_filename;
+	const char *algo, *filename;
+	char *to_filename;
 	struct fn_list *fn;
 	char *exec_name;
 	int do_compress, level;
@@ -259,7 +263,7 @@ void pc_set_userpw(pc_ctx_t *pctx, unsigned char *pwdata, int pwlen);
 
 int start_pcompress(pc_ctx_t *pctx);
 int start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int level);
-int start_decompress(pc_ctx_t *pctx, const char *filename, const char *to_filename);
+int start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename);
 
 #ifdef	__cplusplus
 }
