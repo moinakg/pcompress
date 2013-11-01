@@ -200,9 +200,11 @@ typedef struct pc_ctx {
 	int encrypt_type;
 	int archive_mode;
 	int verbose;
+	int enable_archive_sort;
 	char archive_members_file[MAXPATHLEN];
 	int archive_members_fd, archive_data_fd;
-	void *archive_ctx;
+	uint32_t archive_members_count;
+	void *archive_ctx, *archive_sort_buf;
 	pthread_t archive_thread;
 	int uncompfd, compfd;
 	char archive_temp_file[MAXPATHLEN];

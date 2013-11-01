@@ -2716,7 +2716,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	strcpy(pctx->exec_name, pos);
 
 	pthread_mutex_lock(&opt_parse);
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:rLPS:B:Fk:av")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:rLPS:B:Fk:avn")) != -1) {
 		int ovr;
 		int64_t chunksize;
 
@@ -2857,6 +2857,10 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			pctx->verbose = 1;
 			break;
 
+		    case 'n':
+			pctx->enable_archive_sort = -1;
+			break;
+
 		    case '?':
 		    default:
 			return (2);
@@ -2878,6 +2882,15 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			pctx->level = 6;
 		}
 	}
+
+	/*
+	 * Sorting of members when archiving is enabled for compression levels >2, unless
+	 * it is explicitly disabled via '-n'.
+	 */
+	if (pctx->level > 2 && pctx->enable_archive_sort != -1) {
+		pctx->enable_archive_sort = 1;
+	}
+	if (pctx->enable_archive_sort == -1) pctx->enable_archive_sort = 0;
 
 	if (pctx->rab_blk_size == -1) {
 		if (!pctx->enable_rabin_global)
