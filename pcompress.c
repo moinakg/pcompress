@@ -2665,6 +2665,7 @@ create_pc_context(void)
 	ctx->enable_rabin_split = 1;
 	ctx->rab_blk_size = -1;
 	ctx->archive_temp_fd = -1;
+	ctx->pagesize = sysconf(_SC_PAGE_SIZE);
 
 	return (ctx);
 }

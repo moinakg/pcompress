@@ -201,6 +201,7 @@ typedef struct pc_ctx {
 	int archive_mode;
 	int verbose;
 	int enable_archive_sort;
+	int pagesize;
 	char archive_members_file[MAXPATHLEN];
 	int archive_members_fd, archive_data_fd;
 	uint32_t archive_members_count;
@@ -209,6 +210,10 @@ typedef struct pc_ctx {
 	int uncompfd, compfd;
 	char archive_temp_file[MAXPATHLEN];
 	int archive_temp_fd;
+	uint64_t archive_temp_size;
+	uchar_t *temp_mmap_buf;
+	uint64_t temp_mmap_pos, temp_file_pos;
+	uint64_t temp_mmap_len;
 	unsigned int chunk_num;
 	uint64_t largest_chunk, smallest_chunk, avg_chunk;
 	uint64_t chunksize, archive_size;

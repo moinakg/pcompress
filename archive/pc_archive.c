@@ -66,6 +66,7 @@ AE_IFIFO   Named pipe (fifo)
 #define	MMAP_SIZE		(1024 * 1024)
 #define	SORT_BUF_SIZE		(65536)
 #define	NAMELEN			4
+#define	TEMP_MMAP_SIZE		(128 * 1024)
 
 typedef struct member_entry {
 	char name[NAMELEN];
@@ -138,11 +139,12 @@ compare_members_lt(member_entry_t *mem1, member_entry_t *mem2) {
  * Fetch the next entry from the pathlist file. If we are doing sorting then this
  * fetches the next entry in ascending order of the predetermined sort keys.
  */
-int
-read_next(pc_ctx_t *pctx, char *fpath)
+static int
+read_next_path(pc_ctx_t *pctx, char *fpath)
 {
 	short namelen;
 	ssize_t rbytes;
+	uchar_t *buf;
 
 	if (pctx->enable_archive_sort) {
 		member_entry_t *mem1, *mem2;
@@ -170,10 +172,15 @@ read_next(pc_ctx_t *pctx, char *fpath)
 			srt = srt->next;
 		}
 
-		if (lseek(pctx->archive_members_fd, mem1->file_pos, SEEK_SET) == (off_t)-1) {
-			log_msg(LOG_ERR, 1, "Error seeking in archive members file.");
-			return (-1);
+		if (pctx->temp_mmap_len == 0) {
+			if (lseek(pctx->archive_members_fd, mem1->file_pos, SEEK_SET) == (off_t)-1) {
+				log_msg(LOG_ERR, 1, "Error seeking in archive members file.");
+				return (-1);
+			}
+		} else {
+			pctx->temp_file_pos = mem1->file_pos;
 		}
+
 		srt1->pos++;
 		if (srt1->pos > srt1->max) {
 			if (srt1 == pctx->archive_sort_buf) {
@@ -185,6 +192,57 @@ read_next(pc_ctx_t *pctx, char *fpath)
 			}
 		}
 	}
+
+	/*
+	 * Mmap handling. If requested entry is in current mmap region read it. Otherwise attempt
+	 * new mmap.
+	 */
+	if (pctx->temp_mmap_len > 0) {
+		int retried;
+
+		if (pctx->temp_file_pos < pctx->temp_mmap_pos ||
+		    pctx->temp_file_pos - pctx->temp_mmap_pos > pctx->temp_mmap_len ||
+		    pctx->temp_mmap_len - (pctx->temp_file_pos - pctx->temp_mmap_pos) < 3) {
+			uint32_t adj;
+
+do_mmap:
+			munmap(pctx->temp_mmap_buf, pctx->temp_mmap_len);
+			adj = pctx->temp_file_pos % pctx->pagesize;
+			pctx->temp_mmap_pos = pctx->temp_file_pos - adj;
+			pctx->temp_mmap_len = pctx->archive_temp_size - pctx->temp_file_pos;
+
+			if (pctx->temp_mmap_len > TEMP_MMAP_SIZE)
+				pctx->temp_mmap_len = TEMP_MMAP_SIZE;
+			pctx->temp_mmap_buf = mmap(NULL, pctx->temp_mmap_len, PROT_READ,
+			    MAP_SHARED, pctx->archive_members_fd, pctx->temp_mmap_pos);
+			if (pctx->temp_mmap_buf == NULL) {
+				log_msg(LOG_ERR, 1, "Error mmap-ing archive members file.");
+				return (-1);
+			}
+		}
+
+		retried = 0;
+		buf = pctx->temp_mmap_buf + (pctx->temp_file_pos - pctx->temp_mmap_pos);
+		namelen = U32_P(buf);
+		pctx->temp_file_pos += 2;
+		if (pctx->temp_mmap_len - (pctx->temp_file_pos - pctx->temp_mmap_pos) < namelen) {
+			if (!retried) {
+				pctx->temp_file_pos -= 2;
+				retried = 1;
+				goto do_mmap;
+			} else {
+				log_msg(LOG_ERR, 0, "Unable to mmap after retry.");
+				return (-1);
+			}
+		}
+
+		buf = pctx->temp_mmap_buf + (pctx->temp_file_pos - pctx->temp_mmap_pos);
+		memcpy(fpath, buf, namelen);
+		fpath[namelen] = '\0';
+		pctx->temp_file_pos += namelen;
+		return (namelen);
+	}
+
 	if ((rbytes = Read(pctx->archive_members_fd, &namelen, sizeof(namelen))) != 0) {
 		if (rbytes < 2) {
 			log_msg(LOG_ERR, 1, "Error reading archive members file.");
@@ -428,6 +486,7 @@ setup_archiver(pc_ctx_t *pctx, struct stat *sbuf)
 				return (-1);
 			}
 			a_state.bufpos = 0;
+			a_state.pathlist_size += wrtn;
 		}
 		pctx->archive_size += a_state.arc_size;
 		pctx->archive_members_count += a_state.fcount;
@@ -440,6 +499,7 @@ setup_archiver(pc_ctx_t *pctx, struct stat *sbuf)
 		log_msg(LOG_INFO, 0, "Sorting ...");
 		a_state.srt->max = a_state.srt_pos - 1;
 		qsort(a_state.srt->members, a_state.srt_pos, sizeof (member_entry_t), compare_members);
+		pctx->archive_temp_size = a_state.pathlist_size;
 	}
 	pthread_mutex_unlock(&nftw_mutex);
 
@@ -474,6 +534,14 @@ setup_archiver(pc_ctx_t *pctx, struct stat *sbuf)
 	archive_write_open_fd(arc, pctx->archive_data_fd);
 	pctx->archive_ctx = arc;
 	pctx->archive_members_fd = fd;
+	pctx->temp_mmap_len = TEMP_MMAP_SIZE;
+	pctx->temp_mmap_buf = mmap(NULL, pctx->temp_mmap_len, PROT_READ,
+				   MAP_SHARED, pctx->archive_members_fd, 0);
+	if (pctx->temp_mmap_buf == NULL) {
+		log_msg(LOG_WARN, 1, "Unable to mmap pathlist file, switching to slower read().");
+		pctx->temp_mmap_len = 0;
+	}
+	pctx->temp_mmap_pos = 0;
 
 	return (0);
 }
@@ -620,9 +688,9 @@ archiver_thread_func(void *dat) {
 	archive_read_disk_set_symlink_physical(ard);
 
 	/*
-	 * Read next path entry from list file. read_next() also handles sorted reading.
+	 * Read next path entry from list file. read_next_path() also handles sorted reading.
 	 */
-	while ((rbytes = read_next(pctx, fpath)) != 0) {
+	while ((rbytes = read_next_path(pctx, fpath)) != 0) {
 		if (rbytes == -1) break;
 		archive_entry_copy_sourcepath(entry, fpath);
 		if (archive_read_disk_entry_from_file(ard, entry, -1, NULL) != ARCHIVE_OK) {
@@ -670,6 +738,8 @@ archiver_thread_func(void *dat) {
 	}
 
 done:
+	if (pctx->temp_mmap_len > 0)
+		munmap(pctx->temp_mmap_buf, pctx->temp_mmap_len);
 	archive_entry_free(entry);
 	archive_entry_linkresolver_free(resolver);
 	archive_read_free(ard);
