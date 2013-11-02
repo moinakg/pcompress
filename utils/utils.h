@@ -238,7 +238,7 @@ extern int parse_numeric(int64_t *val, const char *str);
 extern char *bytes_to_size(uint64_t bytes);
 extern int64_t Read(int fd, void *buf, uint64_t count);
 extern int64_t Read_Adjusted(int fd, uchar_t *buf, uint64_t count,
-	int64_t *rabin_count, void *ctx);
+	int64_t *rabin_count, void *ctx, void *pctx);
 extern int64_t Write(int fd, const void *buf, uint64_t count);
 extern void set_threadcounts(algo_props_t *props, int *nthreads, int nprocs,
 	algo_threads_type_t typ);

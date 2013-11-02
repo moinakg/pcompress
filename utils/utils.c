@@ -42,6 +42,7 @@
 #include <rabin_dedup.h>
 #include <cpuid.h>
 #include <xxhash.h>
+#include <pc_archive.h>
 
 #include <sys/sysinfo.h>
 
@@ -211,19 +212,27 @@ Read(int fd, void *buf, uint64_t count)
  * after the previous rabin boundary.
  */
 int64_t
-Read_Adjusted(int fd, uchar_t *buf, uint64_t count, int64_t *rabin_count, void *ctx)
+Read_Adjusted(int fd, uchar_t *buf, uint64_t count, int64_t *rabin_count, void *ctx, void *pctx)
 {
         uchar_t *buf2;
         int64_t rcount;
         dedupe_context_t *rctx = (dedupe_context_t *)ctx;
 
-        if (!ctx) return (Read(fd, buf, count));
+        if (!ctx) {
+		if (pctx)
+			return (archiver_read(pctx, buf, count));
+		else
+			return (Read(fd, buf, count));
+	}
         buf2 = buf;
         if (*rabin_count) {
                 buf2 = buf + *rabin_count;
                 count -= *rabin_count;
         }
-	rcount = Read(fd, buf2, count);
+	if (pctx)
+		rcount = archiver_read(pctx, buf2, count);
+	else
+		rcount = Read(fd, buf2, count);
         if (rcount > 0) {
                 rcount += *rabin_count;
 		if (rcount == count) {

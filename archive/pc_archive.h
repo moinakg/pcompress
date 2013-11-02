@@ -45,6 +45,8 @@ int setup_archiver(pc_ctx_t *pctx, struct stat *sbuf);
 int start_archiver(pc_ctx_t *pctx);
 int setup_extractor(pc_ctx_t *pctx);
 int start_extractor(pc_ctx_t *pctx);
+int64_t archiver_read(void *ctx, void *buf, uint64_t count);
+int archiver_close(void *ctx);
 
 #ifdef	__cplusplus
 }

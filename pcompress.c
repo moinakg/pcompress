@@ -1901,12 +1901,6 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 				log_msg(LOG_ERR, 0, "Setup archiver failed.");
 				return (1);
 			}
-
-			/*
-			 * This is a pipe between the libarchive based archiving process and
-			 * the rest of the compression stuff.
-			 */
-			uncompfd = pctx->uncompfd;
 		}
 
 		/*
@@ -2292,9 +2286,12 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		rctx = create_dedupe_context(chunksize, 0, pctx->rab_blk_size, pctx->algo, &props,
 		    pctx->enable_delta_encode, pctx->enable_fixed_scan, VERSION, COMPRESS, 0, NULL,
 		    pctx->pipe_mode, nprocs);
-		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
+		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx, pctx);
 	} else {
-		rbytes = Read(uncompfd, cread_buf, chunksize);
+		if (pctx->archive_mode)
+			rbytes = archiver_read(pctx, cread_buf, chunksize);
+		else
+			rbytes = Read(uncompfd, cread_buf, chunksize);
 	}
 
 	while (!bail) {
@@ -2386,6 +2383,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 					COMP_BAIL;
 				}
 			}
+
 			/* Signal the compression thread to start */
 			sem_post(&tdat->start_sem);
 			++(pctx->chunk_num);
@@ -2400,9 +2398,12 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			 * buffer is in progress.
 			 */
 			if (pctx->enable_rabin_split) {
-				rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx);
+				rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx, pctx);
 			} else {
-				rbytes = Read(uncompfd, cread_buf, chunksize);
+				if (pctx->archive_mode)
+					rbytes = archiver_read(pctx, cread_buf, chunksize);
+				else
+					rbytes = Read(uncompfd, cread_buf, chunksize);
 			}
 		}
 	}
@@ -2425,6 +2426,8 @@ comp_done:
 	 */
 	if (!pctx->pipe_mode) {
 		if (uncompfd != -1) close(uncompfd);
+		if (pctx->archive_mode)
+			archiver_close(pctx);
 	}
 
 	if (pctx->t_errored) err = pctx->t_errored;
