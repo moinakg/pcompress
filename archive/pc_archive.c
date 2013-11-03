@@ -95,7 +95,7 @@ pthread_mutex_t nftw_mutex = PTHREAD_MUTEX_INITIALIZER;
  * Archive writer callback routines for archive creation operation.
  */
 static int
-creat_open_callback(struct archive *arc, void *ctx)
+arc_open_callback(struct archive *arc, void *ctx)
 {
 	pc_ctx_t *pctx = (pc_ctx_t *)ctx;
 
@@ -201,13 +201,79 @@ archiver_close(void *ctx)
 	pc_ctx_t *pctx = (pc_ctx_t *)ctx;
 
 	pctx->arc_closed = 1;
+	pctx->arc_buf = NULL;
+	pctx->arc_buf_size = 0;
 	sem_post(&(pctx->write_sem));
 	sem_post(&(pctx->read_sem));
 	return (0);
 }
 
+static int
+extract_close_callback(struct archive *arc, void *ctx)
+{
+	pc_ctx_t *pctx = (pc_ctx_t *)ctx;
+
+	pctx->arc_closed = 1;
+	if (pctx->arc_buf) {
+		sem_post(&(pctx->write_sem));
+	} else {
+		pctx->arc_buf_size = 0;
+	}
+	return (ARCHIVE_OK);
+}
+
+static ssize_t
+extract_read_callback(struct archive *arc, void *ctx, const void **buf)
+{
+	pc_ctx_t *pctx = (pc_ctx_t *)ctx;
+
+	if (pctx->arc_closed) {
+		pctx->arc_buf_size = 0;
+		archive_set_error(arc, ARCHIVE_EOF, "End of file.");
+		return (0);
+	}
+
+	if (!pctx->arc_writing) {
+		sem_wait(&(pctx->read_sem));
+	} else {
+		sem_post(&(pctx->write_sem));
+		sem_wait(&(pctx->read_sem));
+	}
+
+	if (pctx->arc_buf == NULL || pctx->arc_buf_size == 0) {
+		pctx->arc_buf_size = 0;
+		archive_set_error(arc, ARCHIVE_EOF, "End of file when extracting archive.");
+		return (0);
+	}
+	pctx->arc_writing = 1;
+	*buf = pctx->arc_buf;
+
+	return (pctx->arc_buf_size);
+}
+
+int64_t
+archiver_write(void *ctx, void *buf, uint64_t count)
+{
+	pc_ctx_t *pctx = (pc_ctx_t *)ctx;
+
+	if (pctx->arc_closed)
+		return (0);
+
+	if (pctx->arc_buf != NULL) {
+		log_msg(LOG_ERR, 0, "Incorrect sequencing of archiver_read() call.");
+		return (-1);
+	}
+
+	pctx->arc_buf = buf;
+	pctx->arc_buf_size = count;
+	sem_post(&(pctx->read_sem));
+	sem_wait(&(pctx->write_sem));
+	pctx->arc_buf = NULL;
+	return (pctx->arc_buf_size);
+}
+
 /*
- * Comparison function for sorting pathname mambers. Sort by name/extension and then
+ * Comparison function for sorting pathname members. Sort by name/extension and then
  * by size.
  */
 static int
@@ -255,7 +321,7 @@ compare_members_lt(member_entry_t *mem1, member_entry_t *mem2) {
  * fetches the next entry in ascending order of the predetermined sort keys.
  */
 static int
-read_next_path(pc_ctx_t *pctx, char *fpath)
+read_next_path(pc_ctx_t *pctx, char *fpath, char **namechars)
 {
 	short namelen;
 	ssize_t rbytes;
@@ -300,6 +366,10 @@ read_next_path(pc_ctx_t *pctx, char *fpath)
 			pctx->temp_file_pos = mem1->file_pos;
 		}
 
+		/*
+		 * Increment popped position of the current buffer and check if it is empty.
+		 * The empty buffer is freed and is taken out of the linked list of buffers.
+		 */
 		srt1->pos++;
 		if (srt1->pos > srt1->max) {
 			if (srt1 == pctx->archive_sort_buf) {
@@ -317,7 +387,7 @@ read_next_path(pc_ctx_t *pctx, char *fpath)
 	 * new mmap.
 	 */
 	if (pctx->temp_mmap_len > 0) {
-		int retried;
+		int retried, n;
 
 		if (pctx->temp_file_pos < pctx->temp_mmap_pos ||
 		    pctx->temp_file_pos - pctx->temp_mmap_pos > pctx->temp_mmap_len ||
@@ -364,6 +434,12 @@ do_mmap:
 		buf = pctx->temp_mmap_buf + (pctx->temp_file_pos - pctx->temp_mmap_pos);
 		memcpy(fpath, buf, namelen);
 		fpath[namelen] = '\0';
+
+		n = namelen-1;
+		while (fpath[n] == '/' && n > 0) n--;
+		while (fpath[n] != '/' && fpath[n] != '\\' && n > 0) n--;
+		*namechars = &fpath[n+1];
+
 		pctx->temp_file_pos += namelen;
 		return (namelen);
 	}
@@ -646,7 +722,7 @@ setup_archiver(pc_ctx_t *pctx, struct stat *sbuf)
 		return (-1);
 	}
 	archive_write_set_format_pax_restricted(arc);
-	archive_write_open(arc, pctx, creat_open_callback,
+	archive_write_open(arc, pctx, arc_open_callback,
 			   creat_write_callback, creat_close_callback);
 	pctx->archive_ctx = arc;
 	pctx->archive_members_fd = fd;
@@ -676,9 +752,6 @@ setup_extractor(pc_ctx_t *pctx)
 		log_msg(LOG_ERR, 1, "Unable to create extractor pipe.\n");
 		return (-1);
 	}
-
-	pctx->uncompfd = pipefd[1]; // Write side
-	pctx->archive_data_fd = pipefd[0]; // Read side
 
 	arc = archive_read_new();
 	if (!arc) {
@@ -782,12 +855,13 @@ write_entry(pc_ctx_t *pctx, struct archive *arc, struct archive *in_arc,
 static void *
 archiver_thread_func(void *dat) {
 	pc_ctx_t *pctx = (pc_ctx_t *)dat;
-	char fpath[PATH_MAX], *name;
+	char fpath[PATH_MAX], *name, *bnchars = NULL; // Silence compiler
 	int warn, rbytes;
 	uint32_t ctr;
 	struct archive_entry *entry, *spare_entry, *ent;
 	struct archive *arc, *ard;
 	struct archive_entry_linkresolver *resolver;
+	int readdisk_flags;
 
 	warn = 1;
 	entry = archive_entry_new();
@@ -800,14 +874,18 @@ archiver_thread_func(void *dat) {
 	}
 
 	ctr = 1;
+	readdisk_flags = ARCHIVE_READDISK_NO_TRAVERSE_MOUNTS;
+	readdisk_flags |= ARCHIVE_READDISK_HONOR_NODUMP;
+
 	ard = archive_read_disk_new();
+	archive_read_disk_set_behavior(ard, readdisk_flags);
 	archive_read_disk_set_standard_lookup(ard);
 	archive_read_disk_set_symlink_physical(ard);
 
 	/*
 	 * Read next path entry from list file. read_next_path() also handles sorted reading.
 	 */
-	while ((rbytes = read_next_path(pctx, fpath)) != 0) {
+	while ((rbytes = read_next_path(pctx, fpath, &bnchars)) != 0) {
 		if (rbytes == -1) break;
 		archive_entry_copy_sourcepath(entry, fpath);
 		if (archive_read_disk_entry_from_file(ard, entry, -1, NULL) != ARCHIVE_OK) {
@@ -831,6 +909,29 @@ archiver_thread_func(void *dat) {
 				name += 1;
 			}
 		}
+
+#ifndef	__APPLE__
+		/*
+		 * Workaround for libarchive weirdness on Non MAC OS X platforms. The files
+		 * with names matching pattern: ._* are MAC OS X resource forks which contain
+		 * extended attributes, ACLs etc. They should be handled accordingly on MAC
+		 * platforms and treated as normal files on others. For some reason beyond me
+		 * libarchive refuses to extract these files on Linux, no matter what I try.
+		 * Bug?
+		 * 
+		 * In this case the file basename is changed and a custom extended attribute
+		 * is set to indicate extraction to change it back.
+		 */
+		if (bnchars[0] == '.' && bnchars[1] == '_') {
+			char *pos = strstr(name, "._");
+			char name[] = "@.", value[] = "m";
+			if (pos) {
+				*pos = '|';
+				archive_entry_xattr_add_entry(entry, name, value, strlen(value));
+			}
+		}
+#endif
+
 		if (name != archive_entry_pathname(entry))
 			archive_entry_copy_pathname(entry, name);
 
@@ -862,7 +963,6 @@ done:
 	archive_read_free(ard);
 	archive_write_free(arc);
 	close(pctx->archive_members_fd);
-	close(pctx->archive_data_fd);
 	unlink(pctx->archive_members_file);
 	return (NULL);
 }
@@ -886,9 +986,21 @@ extractor_thread_func(void *dat) {
 	struct archive *awd, *arc;
 
 	flags = ARCHIVE_EXTRACT_TIME;
-	flags |= ARCHIVE_EXTRACT_PERM;
-	flags |= ARCHIVE_EXTRACT_ACL;
-	flags |= ARCHIVE_EXTRACT_FFLAGS;
+	flags |= ARCHIVE_EXTRACT_SECURE_SYMLINKS;
+	flags |= ARCHIVE_EXTRACT_SECURE_NODOTDOT;
+	flags |= ARCHIVE_EXTRACT_SPARSE;
+
+	if (pctx->force_archive_perms || geteuid() == 0) {
+		flags |= ARCHIVE_EXTRACT_OWNER;
+		flags |= ARCHIVE_EXTRACT_PERM;
+		flags |= ARCHIVE_EXTRACT_ACL;
+		flags |= ARCHIVE_EXTRACT_XATTR;
+		flags |= ARCHIVE_EXTRACT_FFLAGS;
+		flags |= ARCHIVE_EXTRACT_MAC_METADATA;
+	}
+
+	if (pctx->no_overwrite_newer)
+		flags |= ARCHIVE_EXTRACT_NO_OVERWRITE_NEWER;
 
 	got_cwd = 1;
 	if (getcwd(cwd, PATH_MAX) == NULL) {
@@ -906,12 +1018,15 @@ extractor_thread_func(void *dat) {
 	archive_write_disk_set_options(awd, flags);
 	archive_write_disk_set_standard_lookup(awd);
 	arc = (struct archive *)(pctx->archive_ctx);
-	archive_read_open_fd(arc, pctx->archive_data_fd, MMAP_SIZE);
+	archive_read_open(arc, pctx, arc_open_callback, extract_read_callback, extract_close_callback);
 
 	/*
 	 * Read archive entries and extract to disk.
 	 */
 	while ((rv = archive_read_next_header(arc, &entry)) != ARCHIVE_EOF) {
+		const char *xt_name, *xt_value;
+		size_t xt_size;
+
 		if (rv != ARCHIVE_OK)
 			log_msg(LOG_WARN, 0, "%s", archive_error_string(arc));
 
@@ -924,6 +1039,29 @@ extractor_thread_func(void *dat) {
 			log_msg(LOG_INFO, 0, "Retrying extractor read ...");
 			continue;
 		}
+
+		/*
+		 * Workaround for libarchive weirdness on Non MAC OS X platforms for filenames
+		 * starting with '._'. See above ...
+		 */
+#ifndef	__APPLE__
+		if (archive_entry_xattr_reset(entry) > 0) {
+			while (archive_entry_xattr_next(entry, &xt_name, (const void **)&xt_value,
+			    &xt_size) == ARCHIVE_OK) {
+				if (xt_name[0] == '@' && xt_name[1] == '.' && xt_value[0] == 'm') {
+					const char *name;
+					char *pos;
+					name = archive_entry_pathname(entry);
+					pos = strstr(name, "|_");
+					if (pos) {
+						*pos = '.';
+						archive_entry_set_pathname(entry, name);
+					}
+					break;
+				}
+			}
+		}
+#endif
 
 		rv = archive_read_extract2(arc, entry, awd);
 		if (rv != ARCHIVE_OK) {
@@ -948,7 +1086,6 @@ extractor_thread_func(void *dat) {
 	archive_read_free(arc);
 	archive_write_free(awd);
 done:
-	close(pctx->archive_data_fd);
 	return (NULL);
 }
 

@@ -1127,11 +1127,11 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 			}
 			add_fname(pctx->archive_temp_file);
 		}
+		uncompfd = -1;
 		if (setup_extractor(pctx) == -1) {
 			log_msg(LOG_ERR, 0, "Setup of extraction context failed.");
 			UNCOMP_BAIL;
 		}
-		uncompfd = pctx->uncompfd;
 
 		if (start_extractor(pctx) == -1) {
 			log_msg(LOG_ERR, 0, "Unable to start extraction thread.");
@@ -1402,7 +1402,7 @@ uncomp_done:
 	/*
 	 * Ownership and mode of target should be same as original.
 	 */
-	if (filename != NULL) {
+	if (filename != NULL && uncompfd != -1) {
 		fchmod(uncompfd, sbuf.st_mode);
 		if (fchown(uncompfd, sbuf.st_uid, sbuf.st_gid) == -1)
 			log_msg(LOG_ERR, 1, "Chown ");
@@ -1737,12 +1737,17 @@ repeat:
 			pctx->avg_chunk += tdat->len_cmp;
 		}
 
-		wbytes = Write(w->wfd, tdat->cmp_seg, tdat->len_cmp);
+		if (pctx->archive_mode && tdat->decompressing) {
+			wbytes = archiver_write(pctx, tdat->cmp_seg, tdat->len_cmp);
+		} else {
+			wbytes = Write(w->wfd, tdat->cmp_seg, tdat->len_cmp);
+		}
 		if (pctx->archive_temp_fd != -1 && wbytes == tdat->len_cmp) {
 			wbytes = Write(pctx->archive_temp_fd, tdat->cmp_seg, tdat->len_cmp);
 		}
 		if (unlikely(wbytes != tdat->len_cmp)) {
-			log_msg(LOG_ERR, 1, "Chunk Write: ");
+			log_msg(LOG_ERR, 1, "Chunk Write (expected: %" PRIu64 ", written: %" PRIu64 ") : ",
+				tdat->len_cmp, wbytes);
 do_cancel:
 			pctx->main_cancel = 1;
 			tdat->cancel = 1;
@@ -2720,7 +2725,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	strcpy(pctx->exec_name, pos);
 
 	pthread_mutex_lock(&opt_parse);
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:rLPS:B:Fk:avn")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avnmK")) != -1) {
 		int ovr;
 		int64_t chunksize;
 
@@ -2865,6 +2870,14 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			pctx->enable_archive_sort = -1;
 			break;
 
+		    case 'm':
+			pctx->force_archive_perms = 1;
+			break;
+
+		    case 'K':
+			pctx->no_overwrite_newer = 1;
+			break;
+
 		    case '?':
 		    default:
 			return (2);
@@ -2972,8 +2985,9 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 					char *filename;
 
 					if ((filename = realpath(argv[my_optind], NULL)) != NULL) {
+						free(filename);
 						*fn = slab_alloc(NULL, sizeof (struct fn_list));
-						(*fn)->filename = filename;
+						(*fn)->filename = strdup(argv[my_optind]);
 						(*fn)->next = NULL;
 						fn = &((*fn)->next);
 						valid_paths++;

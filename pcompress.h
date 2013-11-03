@@ -202,13 +202,14 @@ typedef struct pc_ctx {
 	int verbose;
 	int enable_archive_sort;
 	int pagesize;
-	int uncompfd, compfd;
+	int force_archive_perms;
+	int no_overwrite_newer;
 
 	/*
 	 * Archiving related context data.
 	 */
 	char archive_members_file[MAXPATHLEN];
-	int archive_members_fd, archive_data_fd;
+	int archive_members_fd;
 	uint32_t archive_members_count;
 	void *archive_ctx, *archive_sort_buf;
 	pthread_t archive_thread;
