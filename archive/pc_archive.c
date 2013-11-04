@@ -1057,6 +1057,7 @@ extractor_thread_func(void *dat) {
 						*pos = '.';
 						archive_entry_set_pathname(entry, name);
 					}
+					archive_entry_xattr_clear(entry);
 					break;
 				}
 			}

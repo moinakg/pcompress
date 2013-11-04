@@ -2901,13 +2901,15 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	}
 
 	/*
-	 * Sorting of members when archiving is enabled for compression levels >2, unless
-	 * it is explicitly disabled via '-n'.
+	 * Sorting of members when archiving is enabled for compression levels >6 (>2 for lz4),
+	 * unless it is explicitly disabled via '-n'.
 	 */
-	if (pctx->level > 2 && pctx->enable_archive_sort != -1) {
-		pctx->enable_archive_sort = 1;
+	if (pctx->enable_archive_sort != -1) {
+		if ((memcmp(pctx->algo, "lz4", 3) == 0 && pctx->level > 2) || pctx->level > 6)
+			pctx->enable_archive_sort = 1;
+	} else {
+		pctx->enable_archive_sort = 0;
 	}
-	if (pctx->enable_archive_sort == -1) pctx->enable_archive_sort = 0;
 
 	if (pctx->rab_blk_size == -1) {
 		if (!pctx->enable_rabin_global)
