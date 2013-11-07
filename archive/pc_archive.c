@@ -42,6 +42,7 @@
 #include <utils.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#include <ctype.h>
 #include <archive.h>
 #include <archive_entry.h>
 #include "pc_archive.h"
@@ -102,6 +103,7 @@ static struct arc_list_state {
 pthread_mutex_t nftw_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int detect_type_by_ext(char *path, int pathlen);
+static int detect_type_by_data(uchar_t *buf, size_t len);
 
 /*
  * Archive writer callback routines for archive creation operation.
@@ -847,8 +849,8 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc,
 		src = mapbuf;
 		wlen = len;
 
-/*		if (typ == TYPE_UNKNOWN)
-			pctx->ctype = detect_type_by_data(src, len);*/
+		if (typ == TYPE_UNKNOWN)
+			pctx->ctype = detect_type_by_data(src, len);
 
 		/*
 		 * Write the entire mmap-ed buffer. Since we are writing to the compressor
@@ -1043,6 +1045,9 @@ extractor_thread_func(void *dat) {
 	flags |= ARCHIVE_EXTRACT_SECURE_NODOTDOT;
 	flags |= ARCHIVE_EXTRACT_SPARSE;
 
+	/*
+	 * Extract all security attributes if we are root.
+	 */
 	if (pctx->force_archive_perms || geteuid() == 0) {
 		flags |= ARCHIVE_EXTRACT_OWNER;
 		flags |= ARCHIVE_EXTRACT_PERM;
@@ -1148,6 +1153,11 @@ start_extractor(pc_ctx_t *pctx) {
 	return (pthread_create(&(pctx->archive_thread), NULL, extractor_thread_func, (void *)pctx));
 }
 
+/*
+ * Initialize the hash table of known extensions and types. Bob Jenkins Minimal Perfect Hash
+ * is used to get a perfect hash function for the set of known extensions. See:
+ * http://burtleburtle.net/bob/hash/perfect.html
+ */
 int
 init_archive_mod() {
 	int rv = 0;
@@ -1162,6 +1172,12 @@ init_archive_mod() {
 				uint64_t extnum;
 				ub4 slot = phash(extlist[i].ext, extlist[i].len);
 				extnum = 0;
+
+				/*
+				 * Since extensions are less than 8 bytes (or truncated otherwise),
+				 * each extension string is packed into a 64-bit integer for quick
+				 * comparison.
+				 */
 				for (j = 0; j < extlist[i].len; j++)
 					extnum = (extnum << 1) | extlist[i].ext[j];
 				exthtab[slot].extnum = extnum;
@@ -1176,6 +1192,11 @@ init_archive_mod() {
 	return (rv);
 }
 
+/*
+ * Identify file type based on extension. Lookup is fast as we have a perfect hash function.
+ * If the given extension maps to a slot which has a different extension or maps to a slot
+ * outside the hash table range then the function returns unknown type.
+ */
 static int
 detect_type_by_ext(char *path, int pathlen)
 {
@@ -1185,17 +1206,53 @@ detect_type_by_ext(char *path, int pathlen)
 	uint64_t extnum;
 
 	for (i = pathlen-1; i > 0 && path[i] != '.' && path[i] != PATHSEP_CHAR; i--);
-	if (i == 0 || path[i] != '.') goto out;
+	if (i == 0 || path[i] != '.') goto out; // If extension not found give up
 	len = pathlen - i - 1;
-	if (len == 0) goto out;
+	if (len == 0) goto out; // If extension is empty give up
 	ext = &path[i+1];
 	slot = phash(ext, len);
-	if (slot > NUM_EXT) goto out;
+	if (slot > NUM_EXT) goto out; // Extension maps outside hash table range, give up
 	extnum = 0;
+
+	/*
+	 * Pack given extension into 64-bit integer.
+	 */
 	for (i = 0; i < len; i++)
-		extnum = (extnum << 1) | ext[i];
+		extnum = (extnum << 1) | tolower(ext[i]);
 	if (exthtab[slot].extnum == extnum)
 		return (exthtab[slot].type);
 out:
+	return (TYPE_UNKNOWN);
+}
+
+/* 0x7fELF packed into 32-bit integer. */
+#define	ELFSHORT (0x7f454c46U)
+
+/* TZif packed into 32-bit integer. */
+#define	TZSHORT	(0x545a6966U)
+
+/* PPMZ packed into 32-bit integer. */
+#define	PPMSHORT	(0x50504d5aU)
+
+/*
+ * Detect a few file types from looking at magic signatures.
+ */
+static int
+detect_type_by_data(uchar_t *buf, size_t len)
+{
+	// At least a few bytes.
+	if (len < 16) return (TYPE_UNKNOWN);
+
+	if (U32_P(buf) == ELFSHORT)
+		return (TYPE_EXE); // Regular ELF
+	if ((buf[0] == 'M' || buf[0] == 'L') && buf[1] == 'Z')
+		return (TYPE_EXE); // MSDOS Exe
+	if (buf[0] == 0xe9)
+		return (TYPE_EXE); // MSDOS COM
+	if (U32_P(buf) == TZSHORT)
+		return (TYPE_BINARY); // Timezone data
+	if (U32_P(buf) == PPMSHORT)
+		return (TYPE_COMPRESSED); // PPM Compressed archive
+
 	return (TYPE_UNKNOWN);
 }
