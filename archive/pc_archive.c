@@ -45,11 +45,21 @@
 #include <archive.h>
 #include <archive_entry.h>
 #include "pc_archive.h"
+#include <phash/phash.h>
+#include <phash/extensions.h>
+#include <phash/standard.h>
 
 #undef _FEATURES_H
 #define _XOPEN_SOURCE 700
 #include <ftw.h>
 #include <stdint.h>
+
+static int inited = 0;
+pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
+static struct ext_hash_entry {
+	uint64_t extnum;
+	int type;
+} *exthtab = NULL;
 
 /*
 AE_IFREG   Regular file
@@ -90,6 +100,8 @@ static struct arc_list_state {
 } a_state;
 
 pthread_mutex_t nftw_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static int detect_type_by_ext(char *path, int pathlen);
 
 /*
  * Archive writer callback routines for archive creation operation.
@@ -148,6 +160,28 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 		uchar_t *tbuf;
 
 		tbuf = pctx->arc_buf + pctx->arc_buf_pos;
+		if (pctx->btype != pctx->ctype) {
+			if (pctx->btype == TYPE_UNKNOWN || pctx->arc_buf_pos == 0) {
+				pctx->btype = pctx->ctype;
+			} else {
+				if (pctx->arc_buf_pos < pctx->min_chunk) {
+					uint32_t diff = pctx->min_chunk - pctx->arc_buf_pos;
+					if (len > diff)
+						pctx->btype = pctx->ctype;
+					else
+						pctx->ctype = pctx->btype;
+				} else {
+					pctx->arc_writing = 0;
+					sem_post(&(pctx->read_sem));
+					sem_wait(&(pctx->write_sem));
+					tbuf = pctx->arc_buf + pctx->arc_buf_pos;
+					pctx->arc_writing = 1;
+					if (remaining > 0)
+						pctx->btype = pctx->ctype;
+				}
+			}
+		}
+
 		if (remaining > pctx->arc_buf_size - pctx->arc_buf_pos) {
 			size_t nlen = pctx->arc_buf_size - pctx->arc_buf_pos;
 			memcpy(tbuf, buff, nlen);
@@ -189,9 +223,12 @@ archiver_read(void *ctx, void *buf, uint64_t count)
 	pctx->arc_buf = buf;
 	pctx->arc_buf_size = count;
 	pctx->arc_buf_pos = 0;
+	pctx->btype = TYPE_UNKNOWN;
 	sem_post(&(pctx->write_sem));
 	sem_wait(&(pctx->read_sem));
 	pctx->arc_buf = NULL;
+	if (pctx->btype == TYPE_UNKNOWN)
+		pctx->btype = TYPE_GENERIC;
 	return (pctx->arc_buf_pos);
 }
 
@@ -229,8 +266,9 @@ extract_read_callback(struct archive *arc, void *ctx, const void **buf)
 
 	if (pctx->arc_closed) {
 		pctx->arc_buf_size = 0;
+		log_msg(LOG_WARN, 0, "End of file.");
 		archive_set_error(arc, ARCHIVE_EOF, "End of file.");
-		return (0);
+		return (-1);
 	}
 
 	if (!pctx->arc_writing) {
@@ -242,8 +280,9 @@ extract_read_callback(struct archive *arc, void *ctx, const void **buf)
 
 	if (pctx->arc_buf == NULL || pctx->arc_buf_size == 0) {
 		pctx->arc_buf_size = 0;
+		log_msg(LOG_ERR, 0, "End of file when extracting archive.");
 		archive_set_error(arc, ARCHIVE_EOF, "End of file when extracting archive.");
-		return (0);
+		return (-1);
 	}
 	pctx->arc_writing = 1;
 	*buf = pctx->arc_buf;
@@ -256,8 +295,10 @@ archiver_write(void *ctx, void *buf, uint64_t count)
 {
 	pc_ctx_t *pctx = (pc_ctx_t *)ctx;
 
-	if (pctx->arc_closed)
+	if (pctx->arc_closed) {
+		log_msg(LOG_WARN, 0, "Archive extractor closed unexpectedly");
 		return (0);
+	}
 
 	if (pctx->arc_buf != NULL) {
 		log_msg(LOG_ERR, 0, "Incorrect sequencing of archiver_read() call.");
@@ -321,7 +362,7 @@ compare_members_lt(member_entry_t *mem1, member_entry_t *mem2) {
  * fetches the next entry in ascending order of the predetermined sort keys.
  */
 static int
-read_next_path(pc_ctx_t *pctx, char *fpath, char **namechars)
+read_next_path(pc_ctx_t *pctx, char *fpath, char **namechars, int *fpathlen)
 {
 	short namelen;
 	ssize_t rbytes;
@@ -434,6 +475,7 @@ do_mmap:
 		buf = pctx->temp_mmap_buf + (pctx->temp_file_pos - pctx->temp_mmap_pos);
 		memcpy(fpath, buf, namelen);
 		fpath[namelen] = '\0';
+		*fpathlen = namelen;
 
 		n = namelen-1;
 		while (fpath[n] == '/' && n > 0) n--;
@@ -761,6 +803,7 @@ setup_extractor(pc_ctx_t *pctx)
 	}
 	archive_read_support_format_all(arc);
 	pctx->archive_ctx = arc;
+	pctx->arc_writing = 0;
 
 	return (0);
 }
@@ -771,7 +814,7 @@ setup_extractor(pc_ctx_t *pctx)
  */
 static int
 copy_file_data(pc_ctx_t *pctx, struct archive *arc,
-	       struct archive *in_arc, struct archive_entry *entry)
+	       struct archive *in_arc, struct archive_entry *entry, int typ)
 {
 	size_t sz, offset, len;
 	ssize_t bytes_to_write;
@@ -804,6 +847,9 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc,
 		src = mapbuf;
 		wlen = len;
 
+/*		if (typ == TYPE_UNKNOWN)
+			pctx->ctype = detect_type_by_data(src, len);*/
+
 		/*
 		 * Write the entire mmap-ed buffer. Since we are writing to the compressor
 		 * stage pipe there is no need for blocking.
@@ -825,7 +871,7 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc,
 
 static int
 write_entry(pc_ctx_t *pctx, struct archive *arc, struct archive *in_arc,
-	    struct archive_entry *entry)
+	    struct archive_entry *entry, int typ)
 {
 	int rv;
 
@@ -842,7 +888,7 @@ write_entry(pc_ctx_t *pctx, struct archive *arc, struct archive *in_arc,
 	}
 
 	if (archive_entry_size(entry) > 0) {
-		return (copy_file_data(pctx, arc, in_arc, entry));
+		return (copy_file_data(pctx, arc, in_arc, entry, typ));
 	}
 
 	return (0);
@@ -856,7 +902,7 @@ static void *
 archiver_thread_func(void *dat) {
 	pc_ctx_t *pctx = (pc_ctx_t *)dat;
 	char fpath[PATH_MAX], *name, *bnchars = NULL; // Silence compiler
-	int warn, rbytes;
+	int warn, rbytes, fpathlen = 0; // Silence compiler
 	uint32_t ctr;
 	struct archive_entry *entry, *spare_entry, *ent;
 	struct archive *arc, *ard;
@@ -885,13 +931,20 @@ archiver_thread_func(void *dat) {
 	/*
 	 * Read next path entry from list file. read_next_path() also handles sorted reading.
 	 */
-	while ((rbytes = read_next_path(pctx, fpath, &bnchars)) != 0) {
+	while ((rbytes = read_next_path(pctx, fpath, &bnchars, &fpathlen)) != 0) {
+		int typ;
+
 		if (rbytes == -1) break;
 		archive_entry_copy_sourcepath(entry, fpath);
 		if (archive_read_disk_entry_from_file(ard, entry, -1, NULL) != ARCHIVE_OK) {
 			log_msg(LOG_WARN, 1, "archive_read_disk_entry_from_file:\n  %s", archive_error_string(ard));
 			archive_entry_clear(entry);
 			continue;
+		}
+
+		if (archive_entry_filetype(entry) == AE_IFREG) {
+			if ((typ = detect_type_by_ext(fpath, fpathlen)) != TYPE_UNKNOWN)
+				pctx->ctype = typ;
 		}
 
 		/*
@@ -945,7 +998,7 @@ archiver_thread_func(void *dat) {
 		archive_entry_linkify(resolver, &entry, &spare_entry);
 		ent = entry;
 		while (ent != NULL) {
-			if (write_entry(pctx, arc, ard, ent) != 0) {
+			if (write_entry(pctx, arc, ard, ent, typ) != 0) {
 				goto done;
 			}
 			ent = spare_entry;
@@ -1093,4 +1146,56 @@ done:
 int
 start_extractor(pc_ctx_t *pctx) {
 	return (pthread_create(&(pctx->archive_thread), NULL, extractor_thread_func, (void *)pctx));
+}
+
+int
+init_archive_mod() {
+	int rv = 0;
+
+	pthread_mutex_lock(&init_mutex);
+	if (!inited) {
+		int i, j;
+
+		exthtab = malloc(NUM_EXT * sizeof (struct ext_hash_entry));
+		if (exthtab != NULL) {
+			for (i = 0; i < NUM_EXT; i++) {
+				uint64_t extnum;
+				ub4 slot = phash(extlist[i].ext, extlist[i].len);
+				extnum = 0;
+				for (j = 0; j < extlist[i].len; j++)
+					extnum = (extnum << 1) | extlist[i].ext[j];
+				exthtab[slot].extnum = extnum;
+				exthtab[slot].type = extlist[i].type;
+			}
+			inited = 1;
+		} else {
+			rv = 1;
+		}
+	}
+	pthread_mutex_unlock(&init_mutex);
+	return (rv);
+}
+
+static int
+detect_type_by_ext(char *path, int pathlen)
+{
+	char *ext = NULL;
+	ub4 slot;
+	int i, len;
+	uint64_t extnum;
+
+	for (i = pathlen-1; i > 0 && path[i] != '.' && path[i] != PATHSEP_CHAR; i--);
+	if (i == 0 || path[i] != '.') goto out;
+	len = pathlen - i - 1;
+	if (len == 0) goto out;
+	ext = &path[i+1];
+	slot = phash(ext, len);
+	if (slot > NUM_EXT) goto out;
+	extnum = 0;
+	for (i = 0; i < len; i++)
+		extnum = (extnum << 1) | ext[i];
+	if (exthtab[slot].extnum == extnum)
+		return (exthtab[slot].type);
+out:
+	return (TYPE_UNKNOWN);
 }

@@ -1795,6 +1795,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	props.cksum = pctx->cksum;
 	props.buf_extra = 0;
 	cread_buf = NULL;
+	pctx->btype = TYPE_UNKNOWN;
 	flags = 0;
 	sbuf.st_size = 0;
 	err = 0;
@@ -2355,6 +2356,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			 */
 			tdat->id = pctx->chunk_num;
 			tdat->rbytes = rbytes;
+			tdat->btype = pctx->btype; // Have to copy btype for this buffer as pctx->btype will change
 			if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan || pctx->enable_rabin_global)) {
 				tmp = tdat->cmp_seg;
 				tdat->cmp_seg = cread_buf;
@@ -2665,6 +2667,7 @@ create_pc_context(void)
 
 	slab_init();
 	init_pcompress();
+	init_archive_mod();
 
 	memset(ctx, 0, sizeof (pc_ctx_t));
 	ctx->exec_name = (char *)malloc(NAME_MAX);
@@ -2686,8 +2689,8 @@ destroy_pc_context(pc_ctx_t *pctx)
 	if (pctx->pwd_file)
 		free(pctx->pwd_file);
 	free((void *)(pctx->exec_name));
-	free(pctx);
 	slab_cleanup(pctx->hide_mem_stats);
+	free(pctx);
 }
 
 int DLL_EXPORT
@@ -2904,7 +2907,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	 * Sorting of members when archiving is enabled for compression levels >6 (>2 for lz4),
 	 * unless it is explicitly disabled via '-n'.
 	 */
-	if (pctx->enable_archive_sort != -1) {
+	if (pctx->enable_archive_sort != -1 && pctx->do_compress) {
 		if ((memcmp(pctx->algo, "lz4", 3) == 0 && pctx->level > 2) || pctx->level > 6)
 			pctx->enable_archive_sort = 1;
 	} else {
@@ -2917,6 +2920,12 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		else
 			pctx->rab_blk_size = RAB_BLK_DEFAULT;
 	}
+
+	pctx->min_chunk = MIN_CHUNK;
+	if (pctx->enable_rabin_scan)
+		pctx->min_chunk = RAB_MIN_CHUNK_SIZE;
+	if (pctx->enable_rabin_global)
+		pctx->min_chunk = RAB_MIN_CHUNK_SIZE_GLOBAL;
 
 	/*
 	 * Remaining mandatory arguments are the filenames.

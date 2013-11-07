@@ -1,0 +1,19 @@
+CFLAGS = -O
+
+.cc.o:
+	gcc $(CFLAGS) -c $<
+
+O = lookupa.o recycle.o phash.o testperf.o
+
+foo : $(O)
+	gcc -o foo $(O) -lm
+
+# DEPENDENCIES
+
+lookupa.o  : lookupa.c standard.h lookupa.h
+
+recycle.o  : recycle.c standard.h recycle.h
+
+phash.o    : phash.c standard.h phash.h lookupa.h
+
+testperf.o : testperf.c standard.h recycle.h phash.h

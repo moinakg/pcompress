@@ -28,9 +28,11 @@ LINKLIB=pcompress
 LIBVER=1
 MAINSRCS = utils/utils.c allocator.c lzma_compress.c ppmd_compress.c \
 	adaptive_compress.c lzfx_compress.c lz4_compress.c none_compress.c \
-	utils/xxhash_base.c utils/heap.c utils/cpuid.c archive/pc_archive.c pcompress.c
+	utils/xxhash_base.c utils/heap.c utils/cpuid.c archive/pc_archive.c \
+	utils/phash/phash.c utils/phash/lookupa.c utils/phash/recycle.c pcompress.c
 MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heap.h \
-	utils/cpuid.h utils/xxhash.h archive/pc_archive.h 
+	utils/cpuid.h utils/xxhash.h archive/pc_archive.h utils/phash/standard.h \
+	utils/phash/lookupa.h utils/phash/recycle.h utils/phash/phash.h
 MAINOBJS = $(MAINSRCS:.c=.o)
 
 PROGSRCS = main.c

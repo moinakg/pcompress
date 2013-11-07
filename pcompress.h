@@ -224,6 +224,8 @@ typedef struct pc_ctx {
 	uchar_t *arc_buf;
 	uint64_t arc_buf_size, arc_buf_pos;
 	int arc_closed, arc_writing;
+	uchar_t btype, ctype;
+	int min_chunk;
 
 	unsigned int chunk_num;
 	uint64_t largest_chunk, smallest_chunk, avg_chunk;
@@ -268,6 +270,7 @@ struct cmp_data {
 	mac_ctx_t chunk_hmac;
 	algo_props_t *props;
 	int decompressing;
+	uchar_t btype;
 	pc_ctx_t *pctx;
 };
 

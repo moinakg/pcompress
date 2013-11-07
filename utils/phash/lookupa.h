@@ -23,45 +23,27 @@
  *      
  */
 
-#ifndef	_ARCHIVE_H
-#define	_ARCHIVE_H
-
-#include <pcompress.h>
-
-#ifdef	__cplusplus
-extern "C" {
-#endif
-
-typedef struct {
-	char *fpath;
-	int typeflag;
-	size_t size;
-} archive_list_entry_t;
-
-typedef enum {
-	TYPE_UNKNOWN = 0,
-	TYPE_GENERIC,
-	TYPE_COMPRESSED,
-	TYPE_EXE,
-	TYPE_TEXT,
-	TYPE_BINARY,
-	TYPE_JPEG
-} data_type_t;
-
 /*
- * Archiving related functions.
- */
-int setup_archiver(pc_ctx_t *pctx, struct stat *sbuf);
-int start_archiver(pc_ctx_t *pctx);
-int setup_extractor(pc_ctx_t *pctx);
-int start_extractor(pc_ctx_t *pctx);
-int64_t archiver_read(void *ctx, void *buf, uint64_t count);
-int64_t archiver_write(void *ctx, void *buf, uint64_t count);
-int archiver_close(void *ctx);
-int init_archive_mod();
+------------------------------------------------------------------------------
+By Bob Jenkins, September 1996.
+lookupa.h, a hash function for table lookup, same function as lookup.c.
+Use this code in any way you wish.  Public Domain.  It has no warranty.
+Source is http://burtleburtle.net/bob/c/lookupa.h
+------------------------------------------------------------------------------
+*/
 
-#ifdef	__cplusplus
-}
+#ifndef STANDARD
+#include "standard.h"
 #endif
 
-#endif	
+#ifndef LOOKUPA
+#define LOOKUPA
+
+#define CHECKSTATE 8
+#define hashsize(n) ((ub4)1<<(n))
+#define hashmask(n) (hashsize(n)-1)
+
+ub4  lookup(/*_ ub1 *k, ub4 length, ub4 level _*/);
+void checksum(/*_ ub1 *k, ub4 length, ub4 *state _*/);
+
+#endif /* LOOKUPA */
