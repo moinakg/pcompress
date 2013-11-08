@@ -148,10 +148,14 @@ libbsc_deinit(void **data)
 
 int
 libbsc_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-	       int level, uchar_t chdr, void *data)
+	       int level, uchar_t chdr, int btype, void *data)
 {
 	int rv;
 	struct libbsc_params *bscdat = (struct libbsc_params *)data;
+
+	if ((btype & TYPE_COMPRESSED_BZ2) == TYPE_COMPRESSED_BZ2 ||
+	    (btype & TYPE_COMPRESSED_LZMA) == TYPE_COMPRESSED_LZMA)
+		return (-1);
 
 	rv = bsc_compress(src, dst, srclen, bscdat->lzpHashSize, bscdat->lzpMinLen,
 	    LIBBSC_BLOCKSORTER_BWT, bscdat->bscCoder, bscdat->features);
@@ -165,7 +169,7 @@ libbsc_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 
 int
 libbsc_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-		 int level, uchar_t chdr, void *data)
+		 int level, uchar_t chdr, int btype, void *data)
 {
 	int rv;
 	struct libbsc_params *bscdat = (struct libbsc_params *)data;

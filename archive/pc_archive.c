@@ -229,8 +229,6 @@ archiver_read(void *ctx, void *buf, uint64_t count)
 	sem_post(&(pctx->write_sem));
 	sem_wait(&(pctx->read_sem));
 	pctx->arc_buf = NULL;
-	if (pctx->btype == TYPE_UNKNOWN)
-		pctx->btype = TYPE_GENERIC;
 	return (pctx->arc_buf_pos);
 }
 
@@ -1166,9 +1164,9 @@ init_archive_mod() {
 	if (!inited) {
 		int i, j;
 
-		exthtab = malloc(NUM_EXT * sizeof (struct ext_hash_entry));
+		exthtab = malloc(PHASHNKEYS * sizeof (struct ext_hash_entry));
 		if (exthtab != NULL) {
-			for (i = 0; i < NUM_EXT; i++) {
+			for (i = 0; i < PHASHNKEYS; i++) {
 				uint64_t extnum;
 				ub4 slot = phash(extlist[i].ext, extlist[i].len);
 				extnum = 0;
@@ -1211,7 +1209,7 @@ detect_type_by_ext(char *path, int pathlen)
 	if (len == 0) goto out; // If extension is empty give up
 	ext = &path[i+1];
 	slot = phash(ext, len);
-	if (slot > NUM_EXT) goto out; // Extension maps outside hash table range, give up
+	if (slot > PHASHNKEYS) goto out; // Extension maps outside hash table range, give up
 	extnum = 0;
 
 	/*
@@ -1244,15 +1242,15 @@ detect_type_by_data(uchar_t *buf, size_t len)
 	if (len < 16) return (TYPE_UNKNOWN);
 
 	if (U32_P(buf) == ELFSHORT)
-		return (TYPE_EXE); // Regular ELF
+		return (TYPE_BINARY|TYPE_EXE); // Regular ELF
 	if ((buf[0] == 'M' || buf[0] == 'L') && buf[1] == 'Z')
-		return (TYPE_EXE); // MSDOS Exe
+		return (TYPE_BINARY|TYPE_EXE); // MSDOS Exe
 	if (buf[0] == 0xe9)
-		return (TYPE_EXE); // MSDOS COM
+		return (TYPE_BINARY|TYPE_EXE); // MSDOS COM
 	if (U32_P(buf) == TZSHORT)
-		return (TYPE_BINARY); // Timezone data
+		return (TYPE_BINARY|TYPE_BINARY); // Timezone data
 	if (U32_P(buf) == PPMSHORT)
-		return (TYPE_COMPRESSED); // PPM Compressed archive
+		return (TYPE_BINARY|TYPE_COMPRESSED); // PPM Compressed archive
 
 	return (TYPE_UNKNOWN);
 }

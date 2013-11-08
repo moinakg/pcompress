@@ -99,7 +99,7 @@ lz4_deinit(void **data)
 
 int
 lz4_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-	       int level, uchar_t chdr, void *data)
+	       int level, uchar_t chdr, int btype, void *data)
 {
 	int rv;
 	struct lz4_params *lzdat = (struct lz4_params *)data;
@@ -135,7 +135,7 @@ lz4_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 
 int
 lz4_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-		 int level, uchar_t chdr, void *data)
+		 int level, uchar_t chdr, int btype, void *data)
 {
 	int rv;
 	struct lz4_params *lzdat = (struct lz4_params *)data;

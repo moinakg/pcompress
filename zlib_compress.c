@@ -142,7 +142,7 @@ void zerr(int ret, int cmp)
 
 int
 zlib_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-	      int level, uchar_t chdr, void *data)
+	      int level, uchar_t chdr, int btype, void *data)
 {
 	int ret, ending;
 	unsigned int slen, dlen;
@@ -205,7 +205,7 @@ zlib_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 
 int
 zlib_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-		int level, uchar_t chdr, void *data)
+		int level, uchar_t chdr, int btype, void *data)
 {
 	int err;
 	unsigned int slen, dlen;

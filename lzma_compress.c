@@ -199,7 +199,7 @@ lzerr(int err, int cmp)
  */
 int
 lzma_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data)
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data)
 {
 	uint64_t props_len = LZMA_PROPS_SIZE;
 	SRes res;
@@ -210,6 +210,9 @@ lzma_compress(void *src, uint64_t srclen, void *dst,
 		lzerr(SZ_ERROR_DESTLEN, 1);
 		return (-1);
 	}
+
+	if ((btype & TYPE_COMPRESSED_LZMA) == TYPE_COMPRESSED_LZMA)
+		return (-1);
 	props->level = level;
 
 	_dst = (Byte *)dst;
@@ -228,7 +231,7 @@ lzma_compress(void *src, uint64_t srclen, void *dst,
 
 int
 lzma_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data)
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data)
 {
 	uint64_t _srclen;
 	const uchar_t *_src;

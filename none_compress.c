@@ -61,7 +61,7 @@ none_deinit(void **data)
 
 int
 none_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-	       int level, uchar_t chdr, void *data)
+	       int level, uchar_t chdr, int btype, void *data)
 {
 	memcpy(dst, src, srclen);
 	return (0);
@@ -69,7 +69,7 @@ none_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 
 int
 none_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-		 int level, uchar_t chdr, void *data)
+		 int level, uchar_t chdr, int btype, void *data)
 {
 	memcpy(dst, src, srclen);
 	return (0);

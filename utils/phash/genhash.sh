@@ -1,6 +1,5 @@
 #!/bin/sh
 
-count=`cat extensions.txt | wc -l`
 echo '
 /* Generated File. DO NOT EDIT. */
 /*
@@ -18,6 +17,9 @@ struct ext_entry {
 rm -f extlist
 cat extensions.txt | while read line
 do
+	[ "x$line" = "x" ] && continue
+	echo "$line" | egrep "^#" > /dev/null
+	[ $? -eq 0 ] && continue
 	_OIFS="$IFS"
 	IFS=","
 	set -- $line
@@ -30,7 +32,6 @@ do
 done
 
 echo '};' >> extensions.h
-echo "#define	NUM_EXT	(${count})" >> extensions.h
 echo "#endif" >> extensions.h
 ./perfect -nm < extlist
 rm -f extlist

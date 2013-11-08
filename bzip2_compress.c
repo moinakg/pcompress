@@ -95,7 +95,7 @@ bzerr(int err)
 
 int
 bzip2_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-	       int level, uchar_t chdr, void *data)
+	       int level, uchar_t chdr, int btype, void *data)
 {
 	bz_stream bzs;
 	int ret, ending;
@@ -164,7 +164,7 @@ bzip2_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 
 int
 bzip2_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-		 int level, uchar_t chdr, void *data)
+		 int level, uchar_t chdr, int btype, void *data)
 {
 	bz_stream bzs;
 	int ret;
@@ -174,6 +174,15 @@ bzip2_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	char *dst1 = (char *)dst;
 	char *src1 = (char *)src;
 
+	if (btype & TYPE_COMPRESSED) {
+		if ((btype & TYPE_COMPRESSED_LZW) != TYPE_COMPRESSED_LZW &&
+		    (btype & TYPE_COMPRESSED_GZ) != TYPE_COMPRESSED_GZ &&
+		    (btype & TYPE_COMPRESSED_LZ) != TYPE_COMPRESSED_LZ &&
+		    (btype & TYPE_COMPRESSED_LZO) != TYPE_COMPRESSED_LZO)
+		{
+			return (-1);
+		}
+	}
 	bzs.bzalloc = slab_alloc_i;
 	bzs.bzfree = slab_free;
 	bzs.opaque = NULL;

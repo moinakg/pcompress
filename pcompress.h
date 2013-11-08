@@ -84,38 +84,38 @@ extern uint32_t zlib_buf_extra(uint64_t buflen);
 extern int lz4_buf_extra(uint64_t buflen);
 
 extern int zlib_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *destlen, int level, uchar_t chdr, void *data);
+	uint64_t *destlen, int level, uchar_t chdr, int btype, void *data);
 extern int lzma_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *destlen, int level, uchar_t chdr, void *data);
+	uint64_t *destlen, int level, uchar_t chdr, int btype, void *data);
 extern int bzip2_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *destlen, int level, uchar_t chdr, void *data);
+	uint64_t *destlen, int level, uchar_t chdr, int btype, void *data);
 extern int adapt_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int ppmd_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int lz_fx_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int lz4_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int none_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 
 extern int zlib_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int lzma_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int bzip2_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int adapt_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int ppmd_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int lz_fx_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int lz4_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int none_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 
 extern int adapt_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		      int file_version, compress_op_t op);
@@ -165,9 +165,9 @@ extern void none_stats(int show);
 
 #ifdef ENABLE_PC_LIBBSC
 extern int libbsc_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int libbsc_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int libbsc_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	int file_version, compress_op_t op);
 extern void libbsc_props(algo_props_t *data, int level, uint64_t chunksize);

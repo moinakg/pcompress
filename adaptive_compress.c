@@ -35,6 +35,7 @@
 #include <utils.h>
 #include <pcompress.h>
 #include <allocator.h>
+#include <pc_archive.h>
 
 #define	FIFTY_PCT(x)	(((x)/10) * 5)
 #define	FORTY_PCT(x)	(((x)/10) * 4)
@@ -46,22 +47,22 @@ static unsigned int bsc_count = 0;
 static unsigned int ppmd_count = 0;
 
 extern int lzma_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *destlen, int level, uchar_t chdr, void *data);
+	uint64_t *destlen, int level, uchar_t chdr, int btype, void *data);
 extern int bzip2_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *destlen, int level, uchar_t chdr, void *data);
+	uint64_t *destlen, int level, uchar_t chdr, int btype, void *data);
 extern int ppmd_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int libbsc_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 
 extern int lzma_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int bzip2_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int ppmd_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int libbsc_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data);
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 
 extern int lzma_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		     int file_version, compress_op_t op);
@@ -180,51 +181,63 @@ adapt_deinit(void **data)
 
 int
 adapt_compress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data)
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data)
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t *src1 = (uchar_t *)src;
-	uint64_t i, tot8b, tag1, tag2, tag3;
 	int rv = 0;
-	double tagcnt, pct_tag;
-	uchar_t cur_byte, prev_byte;
 
-	/*
-	 * Count number of 8-bit binary bytes and XML tags in source.
-	 */
-	tot8b = 0;
-	tag1 = 0;
-	tag2 = 0;
-	tag3 = 0;
-	prev_byte = cur_byte = 0;
-	for (i = 0; i < srclen; i++) {
-		cur_byte = src1[i];
-		tot8b += (cur_byte & 0x80); // This way for possible auto-vectorization
-		tag1 += (cur_byte == '<');
-		tag2 += (cur_byte == '>');
-		tag3 += ((prev_byte == '<') & (cur_byte == '/'));
-		tag3 += ((prev_byte == '/') & (cur_byte == '>'));
-		if (cur_byte != ' ')
-			prev_byte = cur_byte;
+	if (btype == TYPE_UNKNOWN) {
+		uint64_t i, tot8b, tag1, tag2, tag3;
+		double tagcnt, pct_tag;
+		uchar_t cur_byte, prev_byte;
+		/*
+		* Count number of 8-bit binary bytes and XML tags in source.
+		*/
+		tot8b = 0;
+		tag1 = 0;
+		tag2 = 0;
+		tag3 = 0;
+		prev_byte = cur_byte = 0;
+		for (i = 0; i < srclen; i++) {
+			cur_byte = src1[i];
+			tot8b += (cur_byte & 0x80); // This way for possible auto-vectorization
+			tag1 += (cur_byte == '<');
+			tag2 += (cur_byte == '>');
+			tag3 += ((prev_byte == '<') & (cur_byte == '/'));
+			tag3 += ((prev_byte == '/') & (cur_byte == '>'));
+			if (cur_byte != ' ')
+				prev_byte = cur_byte;
+		}
+
+		tot8b /= 0x80;
+		tagcnt = tag1 + tag2 + tag3;
+		pct_tag = tagcnt / (double)srclen;
+		if (adat->adapt_mode == 2 && tot8b > FORTY_PCT(srclen)) {
+			btype = TYPE_BINARY;
+		} else if (adat->adapt_mode == 1 && tot8b > FIFTY_PCT(srclen)) {
+			btype = TYPE_BINARY;
+		} else {
+			btype = TYPE_TEXT;
+			if (tag1 > tag2 - 4 && tag1 < tag2 + 4 && tag3 > (double)tag1 * 0.40 &&
+			    tagcnt > (double)srclen * 0.001)
+				btype |= TYPE_MARKUP;
+		}
 	}
-
-	tot8b /= 0x80;
-	tagcnt = tag1 + tag2 + tag3;
-	pct_tag = tagcnt / (double)srclen;
 
 	/*
 	 * Use PPMd if some percentage of source is 7-bit textual bytes, otherwise
 	 * use Bzip2 or LZMA.
 	 */
-	if (adat->adapt_mode == 2 && tot8b > FORTY_PCT(srclen)) {
-		rv = lzma_compress(src, srclen, dst, dstlen, level, chdr, adat->lzma_data);
+	if (adat->adapt_mode == 2 && (btype & TYPE_BINARY)) {
+		rv = lzma_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->lzma_data);
 		if (rv < 0)
 			return (rv);
 		rv = ADAPT_COMPRESS_LZMA;
 		lzma_count++;
 
-	} else if (adat->adapt_mode == 1 && tot8b > FIFTY_PCT(srclen)) {
-		rv = bzip2_compress(src, srclen, dst, dstlen, level, chdr, NULL);
+	} else if (adat->adapt_mode == 1 && (btype & TYPE_BINARY)) {
+		rv = bzip2_compress(src, srclen, dst, dstlen, level, chdr, btype, NULL);
 		if (rv < 0)
 			return (rv);
 		rv = ADAPT_COMPRESS_BZIP2;
@@ -232,16 +245,15 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 
 	} else {
 #ifdef ENABLE_PC_LIBBSC
-		if (adat->bsc_data && tag1 > tag2 - 4 && tag1 < tag2 + 4 && tag3 > (double)tag1 * 0.40 &&
-		    tagcnt > (double)srclen * 0.001) {
-			rv = libbsc_compress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data);
+		if (adat->bsc_data && (btype & TYPE_MARKUP)) {
+			rv = libbsc_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->bsc_data);
 			if (rv < 0)
 				return (rv);
 			rv = ADAPT_COMPRESS_BSC;
 			bsc_count++;
 		} else {
 #endif
-			rv = ppmd_compress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data);
+			rv = ppmd_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->ppmd_data);
 			if (rv < 0)
 				return (rv);
 			rv = ADAPT_COMPRESS_PPMD;
@@ -256,7 +268,7 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 
 int
 adapt_decompress(void *src, uint64_t srclen, void *dst,
-	uint64_t *dstlen, int level, uchar_t chdr, void *data)
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data)
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t cmp_flags;
@@ -264,17 +276,17 @@ adapt_decompress(void *src, uint64_t srclen, void *dst,
 	cmp_flags = (chdr>>4) & CHDR_ALGO_MASK;
 
 	if (cmp_flags == ADAPT_COMPRESS_LZMA) {
-		return (lzma_decompress(src, srclen, dst, dstlen, level, chdr, adat->lzma_data));
+		return (lzma_decompress(src, srclen, dst, dstlen, level, chdr, btype, adat->lzma_data));
 
 	} else if (cmp_flags == ADAPT_COMPRESS_BZIP2) {
-		return (bzip2_decompress(src, srclen, dst, dstlen, level, chdr, NULL));
+		return (bzip2_decompress(src, srclen, dst, dstlen, level, chdr, btype, NULL));
 
 	} else if (cmp_flags == ADAPT_COMPRESS_PPMD) {
-		return (ppmd_decompress(src, srclen, dst, dstlen, level, chdr, adat->ppmd_data));
+		return (ppmd_decompress(src, srclen, dst, dstlen, level, chdr, btype, adat->ppmd_data));
 
 	} else if (cmp_flags == ADAPT_COMPRESS_BSC) {
 #ifdef ENABLE_PC_LIBBSC
-		return (libbsc_decompress(src, srclen, dst, dstlen, level, chdr, adat->bsc_data));
+		return (libbsc_decompress(src, srclen, dst, dstlen, level, chdr, btype, adat->bsc_data));
 #else
 		log_msg(LOG_ERR, 0, "Cannot decompress chunk. Libbsc support not present.\n");
 		return (-1);

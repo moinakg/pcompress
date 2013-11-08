@@ -228,6 +228,35 @@ struct fn_list {
 	struct fn_list *next;
 };
 
+/*
+ * Enumerated type constants for file type identification in pc_archive.
+ */
+typedef enum {
+	TYPE_UNKNOWN = 0,
+	TYPE_TEXT = 1,
+	TYPE_BINARY = 2,
+	TYPE_COMPRESSED = 4,
+	TYPE_EXE = 8,
+	TYPE_JPEG = 12,
+	TYPE_MARKUP = 16,
+	TYPE_COMPRESSED_GZ = 20,
+	TYPE_COMPRESSED_LZW = 24,
+	TYPE_COMPRESSED_BZ2 = 28,
+	TYPE_COMPRESSED_ZIP = 32,
+	TYPE_COMPRESSED_ARJ = 36,
+	TYPE_COMPRESSED_ARC = 40,
+	TYPE_COMPRESSED_LH = 44,
+	TYPE_COMPRESSED_LZMA = 48,
+	TYPE_COMPRESSED_LZO = 52,
+	TYPE_COMPRESSED_UHARC = 56,
+	TYPE_COMPRESSED_ALZ = 60,
+	TYPE_COMPRESSED_ACE = 64,
+	TYPE_COMPRESSED_RAR = 68,
+	TYPE_COMPRESSED_LZ = 72,
+	TYPE_COMPRESSED_PPMD = 76,
+	TYPE_COMPRESSED_ZPAQ = 80
+} data_type_t;
+
 #ifndef _IN_UTILS_
 extern processor_info_t proc_info;
 #endif
@@ -254,7 +283,7 @@ extern char *get_temp_dir();
 
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, uint64_t srclen, void *dst,
-	uint64_t *destlen, int level, uchar_t chdr, void *data);
+	uint64_t *destlen, int level, uchar_t chdr, int btype, void *data);
 
 typedef enum {
 	COMPRESS,

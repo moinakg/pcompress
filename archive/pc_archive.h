@@ -26,6 +26,9 @@
 #ifndef	_ARCHIVE_H
 #define	_ARCHIVE_H
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <pcompress.h>
 
 #ifdef	__cplusplus
@@ -37,16 +40,6 @@ typedef struct {
 	int typeflag;
 	size_t size;
 } archive_list_entry_t;
-
-typedef enum {
-	TYPE_UNKNOWN = 0,
-	TYPE_GENERIC,
-	TYPE_COMPRESSED,
-	TYPE_EXE,
-	TYPE_TEXT,
-	TYPE_BINARY,
-	TYPE_JPEG
-} data_type_t;
 
 /*
  * Archiving related functions.

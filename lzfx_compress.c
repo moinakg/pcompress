@@ -104,7 +104,7 @@ lz_fx_err(int err)
 
 int
 lz_fx_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-	       int level, uchar_t chdr, void *data)
+	       int level, uchar_t chdr, int btype, void *data)
 {
 	int rv;
 	struct lzfx_params *lzdat = (struct lzfx_params *)data;
@@ -124,7 +124,7 @@ lz_fx_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 
 int
 lz_fx_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
-		 int level, uchar_t chdr, void *data)
+		 int level, uchar_t chdr, int btype, void *data)
 {
 	int rv;
 	unsigned int _srclen = srclen;

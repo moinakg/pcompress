@@ -201,7 +201,7 @@ show_compression_stats(pc_ctx_t *pctx)
  */
 static int
 preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t srclen,
-	void *dst, uint64_t *dstlen, int level, uchar_t chdr, void *data, algo_props_t *props)
+	void *dst, uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data, algo_props_t *props)
 {
 	uchar_t *dest = (uchar_t *)dst, type = 0;
 	int64_t result;
@@ -247,7 +247,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	U64_P(dest + 1) = htonll(srclen);
 	_dstlen = srclen;
 	DEBUG_STAT_EN(strt = get_wtime_millis());
-	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr, data);
+	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr, btype, data);
 	DEBUG_STAT_EN(en = get_wtime_millis());
 
 	if (result > -1 && _dstlen < srclen) {
@@ -273,7 +273,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 
 static int
 preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64_t srclen,
-	void *dst, uint64_t *dstlen, int level, uchar_t chdr, void *data, algo_props_t *props)
+	void *dst, uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data, algo_props_t *props)
 {
 	uchar_t *sorc = (uchar_t *)src, type;
 	int64_t result;
@@ -288,7 +288,7 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 		sorc += 8;
 		srclen -= 8;
 		DEBUG_STAT_EN(strt = get_wtime_millis());
-		result = dec_func(sorc, srclen, dst, dstlen, level, chdr, data);
+		result = dec_func(sorc, srclen, dst, dstlen, level, chdr, btype, data);
 		DEBUG_STAT_EN(en = get_wtime_millis());
 
 		if (result < 0) return (result);
@@ -488,13 +488,13 @@ redo:
 		if (HDR & COMPRESSED) {
 			if (HDR & CHUNK_FLAG_PREPROC) {
 				rv = preproc_decompress(pctx, tdat->decompress, cmpbuf, dedupe_data_sz_cmp,
-				    ubuf, &_chunksize, tdat->level, HDR, tdat->data, tdat->props);
+				    ubuf, &_chunksize, tdat->level, HDR, pctx->btype, tdat->data, tdat->props);
 			} else {
 				DEBUG_STAT_EN(double strt, en);
 
 				DEBUG_STAT_EN(strt = get_wtime_millis());
 				rv = tdat->decompress(cmpbuf, dedupe_data_sz_cmp, ubuf, &_chunksize,
-				    tdat->level, HDR, tdat->data);
+				    tdat->level, HDR, pctx->btype, tdat->data);
 				DEBUG_STAT_EN(en = get_wtime_millis());
 				DEBUG_STAT_EN(fprintf(stderr, "Chunk %d decompression speed %.3f MB/s\n",
 						      tdat->id, get_mb_s(_chunksize, strt, en)));
@@ -516,7 +516,7 @@ redo:
 		if (dedupe_index_sz >= 90 && dedupe_index_sz > dedupe_index_sz_cmp) {
 			/* Index should be at least 90 bytes to have been compressed. */
 			rv = lzma_decompress(cmpbuf, dedupe_index_sz_cmp, ubuf,
-			    &dedupe_index_sz, tdat->rctx->level, 0, tdat->rctx->lzma_data);
+			    &dedupe_index_sz, tdat->rctx->level, 0, TYPE_BINARY, tdat->rctx->lzma_data);
 		} else {
 			memcpy(ubuf, cmpbuf, dedupe_index_sz);
 		}
@@ -531,14 +531,14 @@ redo:
 		if (HDR & COMPRESSED) {
 			if (HDR & CHUNK_FLAG_PREPROC) {
 				rv = preproc_decompress(pctx, tdat->decompress, cseg, tdat->len_cmp,
-				    tdat->uncompressed_chunk, &_chunksize, tdat->level, HDR, tdat->data,
-				    tdat->props);
+				    tdat->uncompressed_chunk, &_chunksize, tdat->level, HDR, pctx->btype,
+				    tdat->data, tdat->props);
 			} else {
 				DEBUG_STAT_EN(double strt, en);
 
 				DEBUG_STAT_EN(strt = get_wtime_millis());
 				rv = tdat->decompress(cseg, tdat->len_cmp, tdat->uncompressed_chunk,
-				    &_chunksize, tdat->level, HDR, tdat->data);
+				    &_chunksize, tdat->level, HDR, pctx->btype, tdat->data);
 				DEBUG_STAT_EN(en = get_wtime_millis());
 				DEBUG_STAT_EN(fprintf(stderr, "Chunk decompression speed %.3f MB/s\n",
 						get_mb_s(_chunksize, strt, en)));
@@ -1520,7 +1520,8 @@ redo:
 			/* Compress index if it is at least 90 bytes. */
 			rv = lzma_compress(tdat->uncompressed_chunk + RABIN_HDR_SIZE,
 			    dedupe_index_sz, compressed_chunk + RABIN_HDR_SIZE,
-			    &index_size_cmp, tdat->rctx->level, 255, tdat->rctx->lzma_data);
+			    &index_size_cmp, tdat->rctx->level, 255, TYPE_BINARY,
+			    tdat->rctx->lzma_data);
 
 			/* 
 			 * If index compression fails or does not produce a smaller result
@@ -1546,14 +1547,15 @@ plain_index:
 		if ((pctx->lzp_preprocess || pctx->enable_delta2_encode) && _chunksize > 0) {
 			rv = preproc_compress(pctx, tdat->compress, tdat->uncompressed_chunk + dedupe_index_sz,
 			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
-			    tdat->level, 0, tdat->data, tdat->props);
+			    tdat->level, 0, pctx->btype, tdat->data, tdat->props);
 
 		} else if (_chunksize > 0) {
 			DEBUG_STAT_EN(double strt, en);
 
 			DEBUG_STAT_EN(strt = get_wtime_millis());
 			rv = tdat->compress(tdat->uncompressed_chunk + dedupe_index_sz, _chunksize,
-			    compressed_chunk + index_size_cmp, &_chunksize, tdat->level, 0, tdat->data);
+			    compressed_chunk + index_size_cmp, &_chunksize, tdat->level, 0, pctx->btype,
+			    tdat->data);
 			DEBUG_STAT_EN(en = get_wtime_millis());
 			DEBUG_STAT_EN(fprintf(stderr, "Chunk compression speed %.3f MB/s\n",
 					      get_mb_s(_chunksize, strt, en)));
@@ -1576,14 +1578,14 @@ plain_index:
 		if (pctx->lzp_preprocess || pctx->enable_delta2_encode) {
 			rv = preproc_compress(pctx, tdat->compress,
 			    tdat->uncompressed_chunk, tdat->rbytes,
-			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data,
+			    compressed_chunk, &_chunksize, tdat->level, 0, pctx->btype, tdat->data,
 			    tdat->props);
 		} else {
 			DEBUG_STAT_EN(double strt, en);
 
 			DEBUG_STAT_EN(strt = get_wtime_millis());
 			rv = tdat->compress(tdat->uncompressed_chunk, tdat->rbytes,
-			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->data);
+			    compressed_chunk, &_chunksize, tdat->level, 0, pctx->btype, tdat->data);
 			DEBUG_STAT_EN(en = get_wtime_millis());
 			DEBUG_STAT_EN(fprintf(stderr, "Chunk compression speed %.3f MB/s\n",
 					      get_mb_s(_chunksize, strt, en)));
@@ -2292,7 +2294,10 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		rctx = create_dedupe_context(chunksize, 0, pctx->rab_blk_size, pctx->algo, &props,
 		    pctx->enable_delta_encode, pctx->enable_fixed_scan, VERSION, COMPRESS, 0, NULL,
 		    pctx->pipe_mode, nprocs);
-		rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx, pctx);
+		if (pctx->archive_mode)
+			rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx, pctx);
+		else
+			rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx, NULL);
 	} else {
 		if (pctx->archive_mode)
 			rbytes = archiver_read(pctx, cread_buf, chunksize);
@@ -2405,7 +2410,12 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			 * buffer is in progress.
 			 */
 			if (pctx->enable_rabin_split) {
-				rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx, pctx);
+				if (pctx->archive_mode)
+					rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize,
+					    &rabin_count, rctx, pctx);
+				else
+					rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize,
+					    &rabin_count, rctx, NULL);
 			} else {
 				if (pctx->archive_mode)
 					rbytes = archiver_read(pctx, cread_buf, chunksize);

@@ -109,11 +109,13 @@ ppmd_deinit(void **data)
 
 int
 ppmd_compress(void *src, uint64_t srclen, void *dst,
- 	      uint64_t *dstlen, int level, uchar_t chdr, void *data)
+ 	      uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data)
 {
 	CPpmd8 *_ppmd = (CPpmd8 *)data;
 	uchar_t *_src = (uchar_t *)src;
 
+	if (btype & TYPE_COMPRESSED)
+		return (-1);
 	Ppmd8_RangeEnc_Init(_ppmd);
 	Ppmd8_Init(_ppmd, _ppmd->Order, PPMD8_RESTORE_METHOD_RESTART);
 	_ppmd->buf = (Byte *)dst;
@@ -132,7 +134,7 @@ ppmd_compress(void *src, uint64_t srclen, void *dst,
 
 int
 ppmd_decompress(void *src, uint64_t srclen, void *dst,
-		uint64_t *dstlen, int level, uchar_t chdr, void *data)
+		uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data)
 {
 	CPpmd8 *_ppmd = (CPpmd8 *)data;
 	Byte *_src = (Byte *)src;
