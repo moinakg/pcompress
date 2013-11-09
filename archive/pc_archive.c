@@ -1027,6 +1027,66 @@ start_archiver(pc_ctx_t *pctx) {
 }
 
 /*
+ * The next two functions are from libArchive source/example:
+ * https://github.com/libarchive/libarchive/wiki/Examples#wiki-A_Complete_Extractor
+ * 
+ * We have to use low-level APIs to extract entries to disk. Normally one would use
+ * archive_read_extract2() but LibArchive has no option to set user-defined filter
+ * routines, so we have to handle here.
+ */
+static int
+copy_data_out(struct archive *ar, struct archive *aw)
+{
+        int64_t offset;
+        const void *buff;
+        size_t size;
+        int r;
+
+        for (;;) {
+                r = archive_read_data_block(ar, &buff, &size, &offset);
+                if (r == ARCHIVE_EOF)
+                        return (ARCHIVE_OK);
+                if (r != ARCHIVE_OK)
+                        return (r);
+                r = (int)archive_write_data_block(aw, buff, size, offset);
+                if (r < ARCHIVE_WARN)
+                        r = ARCHIVE_WARN;
+                if (r != ARCHIVE_OK) {
+                        archive_set_error(ar, archive_errno(aw),
+                            "%s", archive_error_string(aw));
+                        return (r);
+                }
+        }
+}
+
+static int
+archive_extract_entry(struct archive *a, struct archive_entry *entry,
+    struct archive *ad)
+{
+        int r, r2;
+
+        r = archive_write_header(ad, entry);
+        if (r < ARCHIVE_WARN)
+                r = ARCHIVE_WARN;
+        if (r != ARCHIVE_OK)
+                /* If _write_header failed, copy the error. */
+                archive_copy_error(a, ad);
+        else if (!archive_entry_size_is_set(entry) || archive_entry_size(entry) > 0)
+                /* Otherwise, pour data into the entry. */
+                r = copy_data_out(a, ad);
+        r2 = archive_write_finish_entry(ad);
+        if (r2 < ARCHIVE_WARN)
+                r2 = ARCHIVE_WARN;
+        /* Use the first message. */
+        if (r2 != ARCHIVE_OK && r == ARCHIVE_OK)
+                archive_copy_error(a, ad);
+        /* Use the worst error return. */
+        if (r2 < r)
+                r = r2;
+        return (r);
+}
+
+/*
  * Extract Thread function. Read an uncompressed archive from the pipe and extract
  * members to disk. The decompressor writes to the other end of the pipe.
  */
@@ -1121,7 +1181,7 @@ extractor_thread_func(void *dat) {
 		}
 #endif
 
-		rv = archive_read_extract2(arc, entry, awd);
+		rv = archive_extract_entry(arc, entry, awd);
 		if (rv != ARCHIVE_OK) {
 			log_msg(LOG_WARN, 0, "%s: %s", archive_entry_pathname(entry),
 			    archive_error_string(arc));
@@ -1224,14 +1284,25 @@ out:
 	return (TYPE_UNKNOWN);
 }
 
+#ifdef WORDS_BIGENDIAN
 /* 0x7fELF packed into 32-bit integer. */
-#define	ELFSHORT (0x7f454c46U)
+#	define	ELFINT (0x7f454c46U)
 
 /* TZif packed into 32-bit integer. */
-#define	TZSHORT	(0x545a6966U)
+#	define	TZSINT	(0x545a6966U)
 
 /* PPMZ packed into 32-bit integer. */
-#define	PPMSHORT	(0x50504d5aU)
+#	define	PPMINT	(0x50504d5aU)
+#else
+/* 0x7fELF packed into 32-bit integer. */
+#	define	ELFINT (0x464c457fU)
+
+/* TZif packed into 32-bit integer. */
+#	define	TZINT	(0x66695a54U)
+
+/* PPMZ packed into 32-bit integer. */
+#	define	PPMINT	(0x5a4d5050U)
+#endif
 
 /*
  * Detect a few file types from looking at magic signatures.
@@ -1242,15 +1313,15 @@ detect_type_by_data(uchar_t *buf, size_t len)
 	// At least a few bytes.
 	if (len < 16) return (TYPE_UNKNOWN);
 
-	if (U32_P(buf) == ELFSHORT)
+	if (U32_P(buf) == ELFINT)
 		return (TYPE_BINARY|TYPE_EXE); // Regular ELF
 	if ((buf[0] == 'M' || buf[0] == 'L') && buf[1] == 'Z')
 		return (TYPE_BINARY|TYPE_EXE); // MSDOS Exe
 	if (buf[0] == 0xe9)
 		return (TYPE_BINARY|TYPE_EXE); // MSDOS COM
-	if (U32_P(buf) == TZSHORT)
+	if (U32_P(buf) == TZINT)
 		return (TYPE_BINARY); // Timezone data
-	if (U32_P(buf) == PPMSHORT)
+	if (U32_P(buf) == PPMINT)
 		return (TYPE_BINARY|TYPE_COMPRESSED|TYPE_COMPRESSED_PPMD); // PPM Compressed archive
 
 	return (TYPE_UNKNOWN);
