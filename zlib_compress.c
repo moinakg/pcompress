@@ -152,6 +152,19 @@ zlib_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	uchar_t *src1 = (uchar_t *)src;
 	z_stream *zs = (z_stream *)data;
 
+	/*
+	 * If the data is known to be compressed then certain types less compressed data
+	 * can be attempted to be compressed again for a possible gain. For others it is
+	 * a waste of time.
+	 */
+	if (PC_TYPE(btype) == TYPE_COMPRESSED && level < 7) {
+		int subtype = PC_SUBTYPE(btype);
+
+		if (subtype != TYPE_COMPRESSED_LZW &&
+		    subtype != TYPE_COMPRESSED_LZ && subtype != TYPE_COMPRESSED_LZO) {
+			return (-1);
+		}
+	}
 	ending = 0;
 	while (_srclen > 0) {
 		if (_srclen > SINGLE_CALL_MAX) {

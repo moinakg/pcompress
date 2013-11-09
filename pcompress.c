@@ -1544,12 +1544,13 @@ plain_index:
 		o_chunksize = _chunksize;
 
 		/* Compress data chunk. */
-		if ((pctx->lzp_preprocess || pctx->enable_delta2_encode) && _chunksize > 0) {
+		if ((pctx->lzp_preprocess || pctx->enable_delta2_encode) && _chunksize > 0 &&
+		    PC_SUBTYPE(pctx->btype) == TYPE_CMP_MAX) {
 			rv = preproc_compress(pctx, tdat->compress, tdat->uncompressed_chunk + dedupe_index_sz,
 			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
 			    tdat->level, 0, pctx->btype, tdat->data, tdat->props);
 
-		} else if (_chunksize > 0) {
+		} else if (_chunksize > 0 && PC_SUBTYPE(pctx->btype) == TYPE_CMP_MAX) {
 			DEBUG_STAT_EN(double strt, en);
 
 			DEBUG_STAT_EN(strt = get_wtime_millis());

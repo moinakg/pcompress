@@ -153,9 +153,11 @@ libbsc_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	int rv;
 	struct libbsc_params *bscdat = (struct libbsc_params *)data;
 
-	if ((btype & TYPE_COMPRESSED_BZ2) == TYPE_COMPRESSED_BZ2 ||
-	    (btype & TYPE_COMPRESSED_LZMA) == TYPE_COMPRESSED_LZMA)
-		return (-1);
+	if (PC_TYPE(btype) == TYPE_COMPRESSED) {
+		int subtype = PC_SUBTYPE(btype);
+		if (subtype == TYPE_COMPRESSED_BZ2 || subtype == TYPE_COMPRESSED_LZMA)
+			return (-1);
+	}
 
 	rv = bsc_compress(src, dst, srclen, bscdat->lzpHashSize, bscdat->lzpMinLen,
 	    LIBBSC_BLOCKSORTER_BWT, bscdat->bscCoder, bscdat->features);

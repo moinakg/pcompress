@@ -942,6 +942,7 @@ archiver_thread_func(void *dat) {
 			continue;
 		}
 
+		typ = TYPE_UNKNOWN;
 		if (archive_entry_filetype(entry) == AE_IFREG) {
 			if ((typ = detect_type_by_ext(fpath, fpathlen)) != TYPE_UNKNOWN)
 				pctx->ctype = typ;
@@ -1248,9 +1249,9 @@ detect_type_by_data(uchar_t *buf, size_t len)
 	if (buf[0] == 0xe9)
 		return (TYPE_BINARY|TYPE_EXE); // MSDOS COM
 	if (U32_P(buf) == TZSHORT)
-		return (TYPE_BINARY|TYPE_BINARY); // Timezone data
+		return (TYPE_BINARY); // Timezone data
 	if (U32_P(buf) == PPMSHORT)
-		return (TYPE_BINARY|TYPE_COMPRESSED); // PPM Compressed archive
+		return (TYPE_BINARY|TYPE_COMPRESSED|TYPE_COMPRESSED_PPMD); // PPM Compressed archive
 
 	return (TYPE_UNKNOWN);
 }

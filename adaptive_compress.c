@@ -229,14 +229,14 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 	 * Use PPMd if some percentage of source is 7-bit textual bytes, otherwise
 	 * use Bzip2 or LZMA.
 	 */
-	if (adat->adapt_mode == 2 && (btype & TYPE_BINARY)) {
+	if (adat->adapt_mode == 2 && (PC_TYPE(btype) == TYPE_BINARY)) {
 		rv = lzma_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->lzma_data);
 		if (rv < 0)
 			return (rv);
 		rv = ADAPT_COMPRESS_LZMA;
 		lzma_count++;
 
-	} else if (adat->adapt_mode == 1 && (btype & TYPE_BINARY)) {
+	} else if (adat->adapt_mode == 1 && (PC_TYPE(btype) == TYPE_BINARY)) {
 		rv = bzip2_compress(src, srclen, dst, dstlen, level, chdr, btype, NULL);
 		if (rv < 0)
 			return (rv);
@@ -245,7 +245,7 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 
 	} else {
 #ifdef ENABLE_PC_LIBBSC
-		if (adat->bsc_data && (btype & TYPE_MARKUP)) {
+		if (adat->bsc_data && PC_SUBTYPE(btype) == TYPE_MARKUP) {
 			rv = libbsc_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->bsc_data);
 			if (rv < 0)
 				return (rv);

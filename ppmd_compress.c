@@ -114,8 +114,9 @@ ppmd_compress(void *src, uint64_t srclen, void *dst,
 	CPpmd8 *_ppmd = (CPpmd8 *)data;
 	uchar_t *_src = (uchar_t *)src;
 
-	if (btype & TYPE_COMPRESSED)
+	if (PC_TYPE(btype) == TYPE_COMPRESSED)
 		return (-1);
+
 	Ppmd8_RangeEnc_Init(_ppmd);
 	Ppmd8_Init(_ppmd, _ppmd->Order, PPMD8_RESTORE_METHOD_RESTART);
 	_ppmd->buf = (Byte *)dst;

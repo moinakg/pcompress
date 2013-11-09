@@ -232,30 +232,52 @@ struct fn_list {
  * Enumerated type constants for file type identification in pc_archive.
  */
 typedef enum {
+	/*
+	 * Primary Types.
+	 */
 	TYPE_UNKNOWN = 0,
 	TYPE_TEXT = 1,
 	TYPE_BINARY = 2,
 	TYPE_COMPRESSED = 4,
+	/*
+	 * Sub-types.
+	 */
 	TYPE_EXE = 8,
-	TYPE_JPEG = 12,
-	TYPE_MARKUP = 16,
-	TYPE_COMPRESSED_GZ = 20,
-	TYPE_COMPRESSED_LZW = 24,
-	TYPE_COMPRESSED_BZ2 = 28,
-	TYPE_COMPRESSED_ZIP = 32,
-	TYPE_COMPRESSED_ARJ = 36,
-	TYPE_COMPRESSED_ARC = 40,
-	TYPE_COMPRESSED_LH = 44,
-	TYPE_COMPRESSED_LZMA = 48,
-	TYPE_COMPRESSED_LZO = 52,
-	TYPE_COMPRESSED_UHARC = 56,
-	TYPE_COMPRESSED_ALZ = 60,
-	TYPE_COMPRESSED_ACE = 64,
-	TYPE_COMPRESSED_RAR = 68,
-	TYPE_COMPRESSED_LZ = 72,
-	TYPE_COMPRESSED_PPMD = 76,
-	TYPE_COMPRESSED_ZPAQ = 80
+	TYPE_CMP_MAX = 16,
+	TYPE_MARKUP = 24,
+	TYPE_COMPRESSED_GZ = 32,
+	TYPE_COMPRESSED_LZW = 40,
+	TYPE_COMPRESSED_BZ2 = 48,
+	TYPE_COMPRESSED_ZIP = 56,
+	TYPE_COMPRESSED_ARJ = 64,
+	TYPE_COMPRESSED_ARC = 72,
+	TYPE_COMPRESSED_LH = 80,
+	TYPE_COMPRESSED_LZMA = 88,
+	TYPE_COMPRESSED_LZO = 96,
+	TYPE_COMPRESSED_UHARC = 104,
+	TYPE_COMPRESSED_ALZ = 112,
+	TYPE_COMPRESSED_ACE = 120,
+	TYPE_COMPRESSED_RAR = 128,
+	TYPE_COMPRESSED_LZ = 136,
+	TYPE_COMPRESSED_PPMD = 144,
+	TYPE_COMPRESSED_ZPAQ = 152
 } data_type_t;
+
+/*
+ * Type identifier is an int with the following format.
+ *
+ *                Sub Type            Primary Type
+ *            (Numeric Value)    (Bit Positions - Flags)
+ *      _____________|_____________     ___|___
+ *     |                           |   |       |
+ *     .---------------------------------------.
+ *     |   |   |   |   |   |   |   |   |   |   |
+ * Bit 10                                         Bit 0
+ */
+#define	PC_TYPE_MASK	0x7
+#define	PC_SUBTYPE_MASK	0x7f8
+#define	PC_SUBTYPE(x)	((x) & PC_SUBTYPE_MASK)
+#define	PC_TYPE(x)	((x) & PC_TYPE_MASK)
 
 #ifndef _IN_UTILS_
 extern processor_info_t proc_info;
