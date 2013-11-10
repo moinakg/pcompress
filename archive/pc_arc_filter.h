@@ -23,37 +23,28 @@
  *      
  */
 
-#ifndef	_PC_ARCHIVE_H
-#define	_PC_ARCHIVE_H
+#ifndef	_PC_ARCHIVE_FILTER_H
+#define	_PC_ARCHIVE_FILTER_H
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <pcompress.h>
-#include <pc_arc_filter.h>
+#include <archive.h>
+#include <archive_entry.h>
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
-typedef struct {
-	char *fpath;
-	int typeflag;
-	size_t size;
-} archive_list_entry_t;
+struct filter_info {
+	struct archive *target_arc;
+	struct archive_entry *entry;
+	int fd;
+};
 
-/*
- * Archiving related functions.
- */
-int setup_archiver(pc_ctx_t *pctx, struct stat *sbuf);
-int start_archiver(pc_ctx_t *pctx);
-int setup_extractor(pc_ctx_t *pctx);
-int start_extractor(pc_ctx_t *pctx);
-int64_t archiver_read(void *ctx, void *buf, uint64_t count);
-int64_t archiver_write(void *ctx, void *buf, uint64_t count);
-int archiver_close(void *ctx);
-int init_archive_mod();
-int insert_filter_data(filter_func_ptr func, void *filter_private, const char *ext);
+typedef int (*filter_func_ptr)(struct filter_info *fi, void *filter_private);
+
+void add_filters_by_ext();
 
 #ifdef	__cplusplus
 }

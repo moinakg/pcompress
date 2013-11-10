@@ -28,11 +28,9 @@ LINKLIB=pcompress
 LIBVER=1
 MAINSRCS = utils/utils.c allocator.c lzma_compress.c ppmd_compress.c \
 	adaptive_compress.c lzfx_compress.c lz4_compress.c none_compress.c \
-	utils/xxhash_base.c utils/heap.c utils/cpuid.c archive/pc_archive.c \
-	utils/phash/phash.c utils/phash/lookupa.c utils/phash/recycle.c pcompress.c
+	utils/xxhash_base.c utils/heap.c utils/cpuid.c pcompress.c
 MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heap.h \
-	utils/cpuid.h utils/xxhash.h archive/pc_archive.h utils/phash/standard.h \
-	utils/phash/lookupa.h utils/phash/recycle.h utils/phash/phash.h
+	utils/cpuid.h utils/xxhash.h archive/pc_archive.h
 MAINOBJS = $(MAINSRCS:.c=.o)
 
 PROGSRCS = main.c
@@ -124,13 +122,25 @@ CRCHDRS = lzma/crc64_table_le.h lzma/crc64_table_be.h lzma/crc_macros.h \
 	lzma/crc32_table_le.h lzma/crc32_table_be.h lzma/lzma_crc.h
 CRCOBJS = $(CRCSRCS:.c=.o)
 
-LZPSRCS = lzp/lzp.c
-LZPHDRS = lzp/lzp.h
+LZPSRCS = filters/lzp/lzp.c
+LZPHDRS = filters/lzp/lzp.h
 LZPOBJS = $(LZPSRCS:.c=.o)
 
-DELTA2SRCS = delta2/delta2.c
-DELTA2HDRS = delta2/delta2.h
+DELTA2SRCS = filters/delta2/delta2.c
+DELTA2HDRS = filters/delta2/delta2.h
 DELTA2OBJS = $(DELTA2SRCS:.c=.o)
+
+ARCHIVESRCS = archive/pc_archive.c archive/pc_arc_filter.c utils/phash/phash.c \
+	utils/phash/lookupa.c utils/phash/recycle.c
+ARCHIVEHDRS = pcompress.h  utils/utils.h archive/pc_archive.h utils/phash/standard.h \
+	utils/phash/lookupa.h utils/phash/recycle.h utils/phash/phash.h archive/pc_arc_filter.h
+ARCHIVEOBJS = $(ARCHIVESRCS:.c=.o)
+
+PJPGSRCS = filters/packjpg/aricoder.cpp filters/packjpg/bitops.cpp filters/packjpg/packjpg.cpp \
+	 archive/pjpg_helper.cpp
+PJPGHDRS = filters/packjpg/aricoder.h filters/packjpg/bitops.h filters/packjpg/dct8x8.h \
+	filters/packjpg/packjpglib.h filters/packjpg/pjpgtbl.h
+PJPGOBJS = $(PJPGSRCS:.cpp=.o)
 
 SKEIN_BLOCK_C = crypto/skein/skein_block.c
 SKEIN_BLOCK_ASM = crypto/skein/skein_block_x64.s
@@ -157,8 +167,8 @@ LIBBSCLIB = @LIBBSCLIB@
 LIBBSCGEN_OPT = -fopenmp
 LIBBSCCPPFLAGS = -I$(LIBBSCDIR)/libbsc -DENABLE_PC_LIBBSC
 
-TRANSP_SRCS = transpose/transpose.c
-TRANSP_HDRS = transpose/transpose.h
+TRANSP_SRCS = filters/transpose/transpose.c
+TRANSP_HDRS = filters/transpose/transpose.h
 TRANSP_OBJS = $(TRANSP_SRCS:.c=.o)
 
 KECCAK_SRC_COMMON = crypto/keccak/genKAT.c crypto/keccak/KeccakDuplex.c \
@@ -182,21 +192,23 @@ KECCAK_HDRS = @KECCAK_HDRS@
 KECCAK_OBJS = $(KECCAK_SRCS:.c=.o)
 KECCAK_OBJS_ASM = $(KECCAK_SRCS_ASM:.s=.o)
 
-BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ lzp/*~ utils/*~ crypto/sha2/*~ \
+BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ filters/lzp/*~ utils/*~ crypto/sha2/*~ \
 	crypto/sha2/intel/*~ crypto/aes/*~ crypto/scrypt/*~ crypto/*~ rabin/global/*~ \
 	delta2/*~ crypto/keccak/*~ transpose/*~ crypto/skein/*~ crypto/keccak/*.o \
-	archive/*~
+	archive/*~ filters/delta2/*~ filters/packjpg/*~ filters/transpose/*~
 
 RM = rm -f
 RM_RF = rm -rf
-COMMON_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
+BASE_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_PROPS \
 	-DFILE_OFFSET_BITS=64 -D_REENTRANT -D__USE_SSE_INTRIN__ -D_LZMA_PROB32 \
-	-I./lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I./crypto/sha2 \
+	-I./filters/lzp @LIBBSCCPPFLAGS@ -I./crypto/skein -I./utils -I./crypto/sha2 \
 	-I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ -I./rabin/global \
-	-I./crypto/keccak -I./transpose -I./crypto/blake2 $(EXTRA_CPPFLAGS) \
-	-I./crypto/xsalsa20 -I./archive -pedantic -Wall -std=gnu99 \
-	-fno-strict-aliasing -Wno-unused-but-set-variable -Wno-enum-compare \
-	@COMPAT_CPPFLAGS@ @XSALSA20_DEBUG@ -I@LIBARCHIVE_INC@
+	-I./crypto/keccak -I./filters/transpose -I./crypto/blake2 $(EXTRA_CPPFLAGS) \
+	-I./crypto/xsalsa20 -I./archive -pedantic -Wall -I./filters -fno-strict-aliasing \
+	-Wno-unused-but-set-variable -Wno-enum-compare \
+	@COMPAT_CPPFLAGS@ @XSALSA20_DEBUG@ -I@LIBARCHIVE_INC@ -I./filters/packjpg
+COMMON_CPPFLAGS = $(BASE_CPPFLAGS) -std=gnu99 
+COMMON_CPPFLAGS_cpp = $(BASE_CPPFLAGS)
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 LDLIBS = -ldl -L./buildtmp -Wl,-R@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,-R@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
@@ -206,7 +218,7 @@ OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
 $(SKEIN_BLOCK_OBJ) @SHA2ASM_OBJS@ @SHA2_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
 $(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS) $(XXHASH_OBJS) $(BLAKE2_OBJS) \
-@CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS)
+@CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS) $(ARCHIVEOBJS) $(PJPGOBJS)
 
 DEBUG_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
 DEBUG_COMPILE = gcc -g -c @EXTRA_OPT_FLAGS@ -fPIC
@@ -276,6 +288,13 @@ $(LZPOBJS): $(LZPSRCS) $(LZPHDRS)
 
 $(DELTA2OBJS): $(DELTA2SRCS) $(DELTA2HDRS)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
+$(ARCHIVEOBJS): $(ARCHIVESRCS) $(ARCHIVEHDRS)
+	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
+
+$(PJPGOBJS): $(PJPGSRCS) $(PJPGHDRS)
+	$(COMPILE_cpp) $(COMMON_VEC_FLAGS) @SSE_OPT_FLAGS@ -O2 -fsched-spec-load \
+	$(VEC_FLAGS) -DBUILD_LIB $(COMMON_CPPFLAGS_cpp) $(@:.o=.cpp) -o $@
 
 $(SKEIN_BLOCK_OBJ): $(SKEIN_BLOCK_SRC)
 	$(COMPILE) $(SKEIN_FLAGS) $(SKEIN_BLOCK_SRC) -o $@

@@ -27,8 +27,8 @@
  * This file includes all the archiving related functions. Pathnames are sorted
  * based on extension (or first 4 chars of name if no extension) and size. A simple
  * external merge sort is used. This sorting yields better compression ratio.
- * 
- * Sorting is enabled for compression levels greater than 2.
+ *
+ * Sorting is enabled for compression levels greater than 6.
  */
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -45,10 +45,10 @@
 #include <ctype.h>
 #include <archive.h>
 #include <archive_entry.h>
-#include "pc_archive.h"
 #include <phash/phash.h>
 #include <phash/extensions.h>
 #include <phash/standard.h>
+#include "pc_archive.h"
 
 #undef _FEATURES_H
 #define _XOPEN_SOURCE 700
@@ -60,6 +60,8 @@ pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct ext_hash_entry {
 	uint64_t extnum;
 	int type;
+	void *filter_private;
+	filter_func_ptr filter_func;
 } *exthtab = NULL;
 
 /*
@@ -809,12 +811,11 @@ setup_extractor(pc_ctx_t *pctx)
 }
 
 /*
- * Routines to archive members and write the archive to pipe. Most of the following
- * code is adapted from some of the Libarchive bsdtar code.
+ * Routines to archive members and write the file data to the callback. Portions of
+ * the following code is adapted from some of the Libarchive bsdtar code.
  */
 static int
-copy_file_data(pc_ctx_t *pctx, struct archive *arc,
-	       struct archive *in_arc, struct archive_entry *entry, int typ)
+copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry, int typ)
 {
 	size_t sz, offset, len;
 	ssize_t bytes_to_write;
@@ -833,6 +834,10 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc,
 		return (-1);
 	}
 
+	/*
+	 * Use mmap for copying file data. Not necessarily for performance, but it saves on
+	 * resident memory use.
+	 */
 	while (bytes_to_write > 0) {
 		uchar_t *src;
 		size_t wlen;
@@ -843,6 +848,12 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc,
 		else
 			len = MMAP_SIZE;
 		mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, offset);
+		if (mapbuf == NULL) {
+			/* Mmap failed; this is bad. */
+			log_msg(LOG_ERR, 1, "Mmap failed for %s.", fpath);
+			rv = -1;
+			break;
+		}
 		offset += len;
 		src = mapbuf;
 		wlen = len;
@@ -852,7 +863,7 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc,
 
 		/*
 		 * Write the entire mmap-ed buffer. Since we are writing to the compressor
-		 * stage pipe there is no need for blocking.
+		 * stage there is no need for blocking.
 		 */
 		wrtn = archive_write_data(arc, src, wlen);
 		if (wrtn < wlen) {
@@ -870,8 +881,7 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc,
 }
 
 static int
-write_entry(pc_ctx_t *pctx, struct archive *arc, struct archive *in_arc,
-	    struct archive_entry *entry, int typ)
+write_entry(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry, int typ)
 {
 	int rv;
 
@@ -888,7 +898,7 @@ write_entry(pc_ctx_t *pctx, struct archive *arc, struct archive *in_arc,
 	}
 
 	if (archive_entry_size(entry) > 0) {
-		return (copy_file_data(pctx, arc, in_arc, entry, typ));
+		return (copy_file_data(pctx, arc, entry, typ));
 	}
 
 	return (0);
@@ -999,7 +1009,7 @@ archiver_thread_func(void *dat) {
 		archive_entry_linkify(resolver, &entry, &spare_entry);
 		ent = entry;
 		while (ent != NULL) {
-			if (write_entry(pctx, arc, ard, ent, typ) != 0) {
+			if (write_entry(pctx, arc, ent, typ) != 0) {
 				goto done;
 			}
 			ent = spare_entry;
@@ -1037,58 +1047,58 @@ start_archiver(pc_ctx_t *pctx) {
 static int
 copy_data_out(struct archive *ar, struct archive *aw)
 {
-        int64_t offset;
-        const void *buff;
-        size_t size;
-        int r;
+	int64_t offset;
+	const void *buff;
+	size_t size;
+	int r;
 
-        for (;;) {
-                r = archive_read_data_block(ar, &buff, &size, &offset);
-                if (r == ARCHIVE_EOF)
-                        return (ARCHIVE_OK);
-                if (r != ARCHIVE_OK)
-                        return (r);
-                r = (int)archive_write_data_block(aw, buff, size, offset);
-                if (r < ARCHIVE_WARN)
-                        r = ARCHIVE_WARN;
-                if (r != ARCHIVE_OK) {
-                        archive_set_error(ar, archive_errno(aw),
-                            "%s", archive_error_string(aw));
-                        return (r);
-                }
-        }
+	for (;;) {
+		r = archive_read_data_block(ar, &buff, &size, &offset);
+		if (r == ARCHIVE_EOF)
+			return (ARCHIVE_OK);
+		if (r != ARCHIVE_OK)
+			return (r);
+		r = (int)archive_write_data_block(aw, buff, size, offset);
+		if (r < ARCHIVE_WARN)
+			r = ARCHIVE_WARN;
+		if (r != ARCHIVE_OK) {
+			archive_set_error(ar, archive_errno(aw),
+			    "%s", archive_error_string(aw));
+			return (r);
+		}
+	}
 }
 
 static int
 archive_extract_entry(struct archive *a, struct archive_entry *entry,
     struct archive *ad)
 {
-        int r, r2;
-
-        r = archive_write_header(ad, entry);
-        if (r < ARCHIVE_WARN)
-                r = ARCHIVE_WARN;
-        if (r != ARCHIVE_OK)
-                /* If _write_header failed, copy the error. */
-                archive_copy_error(a, ad);
-        else if (!archive_entry_size_is_set(entry) || archive_entry_size(entry) > 0)
-                /* Otherwise, pour data into the entry. */
-                r = copy_data_out(a, ad);
-        r2 = archive_write_finish_entry(ad);
-        if (r2 < ARCHIVE_WARN)
-                r2 = ARCHIVE_WARN;
-        /* Use the first message. */
-        if (r2 != ARCHIVE_OK && r == ARCHIVE_OK)
-                archive_copy_error(a, ad);
-        /* Use the worst error return. */
-        if (r2 < r)
-                r = r2;
-        return (r);
+	int r, r2;
+	
+	r = archive_write_header(ad, entry);
+	if (r < ARCHIVE_WARN)
+		r = ARCHIVE_WARN;
+	if (r != ARCHIVE_OK)
+		/* If _write_header failed, copy the error. */
+		archive_copy_error(a, ad);
+	else if (!archive_entry_size_is_set(entry) || archive_entry_size(entry) > 0)
+		/* Otherwise, pour data into the entry. */
+		r = copy_data_out(a, ad);
+	r2 = archive_write_finish_entry(ad);
+	if (r2 < ARCHIVE_WARN)
+		r2 = ARCHIVE_WARN;
+	/* Use the first message. */
+	if (r2 != ARCHIVE_OK && r == ARCHIVE_OK)
+		archive_copy_error(a, ad);
+	/* Use the worst error return. */
+	if (r2 < r)
+		r = r2;
+	return (r);
 }
 
 /*
- * Extract Thread function. Read an uncompressed archive from the pipe and extract
- * members to disk. The decompressor writes to the other end of the pipe.
+ * Extract Thread function. Read an uncompressed archive from the decompressor stage
+ * and extract members to disk.
  */
 static void *
 extractor_thread_func(void *dat) {
@@ -1241,7 +1251,11 @@ init_archive_mod() {
 					extnum = (extnum << 1) | extlist[i].ext[j];
 				exthtab[slot].extnum = extnum;
 				exthtab[slot].type = extlist[i].type;
+				exthtab[slot].filter_func = NULL;
+				exthtab[slot].filter_private = NULL;
 			}
+
+			add_filters_by_ext();
 			inited = 1;
 		} else {
 			rv = 1;
@@ -1270,7 +1284,7 @@ detect_type_by_ext(char *path, int pathlen)
 	if (len == 0) goto out; // If extension is empty give up
 	ext = &path[i+1];
 	slot = phash(ext, len);
-	if (slot > PHASHNKEYS) goto out; // Extension maps outside hash table range, give up
+	if (slot >= PHASHNKEYS) goto out; // Extension maps outside hash table range, give up
 	extnum = 0;
 
 	/*
@@ -1325,4 +1339,17 @@ detect_type_by_data(uchar_t *buf, size_t len)
 		return (TYPE_BINARY|TYPE_COMPRESSED|TYPE_COMPRESSED_PPMD); // PPM Compressed archive
 
 	return (TYPE_UNKNOWN);
+}
+
+int
+insert_filter_data(filter_func_ptr func, void *filter_private, const char *ext)
+{
+	ub4 slot = phash(ext, strlen(ext));
+	if (slot >= PHASHNKEYS || slot < 0) {
+		log_msg(LOG_WARN, 0, "Cannot add filter for unknown extension: %s", ext);
+		return (-1);
+	}
+	exthtab[slot].filter_func = func;
+	exthtab[slot].filter_private = filter_private;
+	return (0);
 }

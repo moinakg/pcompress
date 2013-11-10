@@ -23,40 +23,36 @@
  *      
  */
 
-#ifndef	_PC_ARCHIVE_H
-#define	_PC_ARCHIVE_H
-
+/*
+ */
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <unistd.h>
-#include <pcompress.h>
-#include <pc_arc_filter.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
+#include <packjpglib.h>
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
-typedef struct {
-	char *fpath;
-	int typeflag;
-	size_t size;
-} archive_list_entry_t;
+typedef unsigned char uchar_t;
 
-/*
- * Archiving related functions.
- */
-int setup_archiver(pc_ctx_t *pctx, struct stat *sbuf);
-int start_archiver(pc_ctx_t *pctx);
-int setup_extractor(pc_ctx_t *pctx);
-int start_extractor(pc_ctx_t *pctx);
-int64_t archiver_read(void *ctx, void *buf, uint64_t count);
-int64_t archiver_write(void *ctx, void *buf, uint64_t count);
-int archiver_close(void *ctx);
-int init_archive_mod();
-int insert_filter_data(filter_func_ptr func, void *filter_private, const char *ext);
+size_t
+packjpg_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf)
+{
+	unsigned int len1;
+
+	pjglib_init_streams(in_buf, 1, len, *out_buf, 1);
+	len1 = len;
+	if (!pjglib_convert_stream2mem(out_buf, &len1, NULL))
+		return (0);
+	if (len1 == len)
+		return (0);
+	return (len1);
+}
 
 #ifdef	__cplusplus
 }
 #endif
-
-#endif	
