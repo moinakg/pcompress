@@ -28,6 +28,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <archive.h>
 #include <archive_entry.h>
@@ -36,15 +37,26 @@
 extern "C" {
 #endif
 
+#define	FILTER_RETURN_SKIP	(1)
+#define	FILTER_RETURN_ERROR	(-1)
+
 struct filter_info {
+	struct archive *source_arc;
 	struct archive *target_arc;
 	struct archive_entry *entry;
 	int fd;
+	int compressing, block_size;
 };
 
-typedef int (*filter_func_ptr)(struct filter_info *fi, void *filter_private);
+typedef ssize_t (*filter_func_ptr)(struct filter_info *fi, void *filter_private);
 
-void add_filters_by_ext();
+struct type_data {
+	void *filter_private;
+	filter_func_ptr filter_func;
+	char *filter_name;
+};
+
+void add_filters_by_type(struct type_data *typetab);
 
 #ifdef	__cplusplus
 }

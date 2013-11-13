@@ -39,6 +39,29 @@ extern "C" {
 
 typedef unsigned char uchar_t;
 
+/* a short reminder about input/output stream types
+   for the pjglib_init_streams() function
+	
+	if input is file
+	----------------
+	in_scr -> name of input file
+	in_type -> 0
+	in_size -> ignore
+	
+	if input is memory
+	------------------
+	in_scr -> array containg data
+	in_type -> 1
+	in_size -> size of data array
+	
+	if input is *FILE (f.e. stdin)
+	------------------------------
+	in_src -> stream pointer
+	in_type -> 2
+	in_size -> ignore
+	
+	vice versa for output streams! */
+
 size_t
 packjpg_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf)
 {

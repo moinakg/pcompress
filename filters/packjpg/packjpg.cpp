@@ -3384,7 +3384,7 @@ INTERN bool unpack_pjg( void )
 	
 	// init arithmetic compression
 	decoder = new aricoder( str_in, 0 );
-	
+
 	// decode JPG header
 	if ( !pjg_decode_generic( decoder, &hdrdata, &hdrs ) ) return false;
 	// retrieve padbit from stream

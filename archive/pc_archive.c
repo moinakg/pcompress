@@ -60,9 +60,9 @@ pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct ext_hash_entry {
 	uint64_t extnum;
 	int type;
-	void *filter_private;
-	filter_func_ptr filter_func;
 } *exthtab = NULL;
+
+struct type_data typetab[NUM_SUB_TYPES];
 
 /*
 AE_IFREG   Regular file
@@ -74,12 +74,12 @@ AE_IFDIR   Directory
 AE_IFIFO   Named pipe (fifo)
 */
 
-#define	ARC_ENTRY_OVRHEAD	500
-#define	ARC_SCRATCH_BUFF_SIZE	(64 *1024)
+#define	ARC_ENTRY_OVRHEAD	1024
 #define	MMAP_SIZE		(1024 * 1024)
 #define	SORT_BUF_SIZE		(65536)
 #define	NAMELEN			4
 #define	TEMP_MMAP_SIZE		(128 * 1024)
+#define	AW_BLOCK_SIZE		(256 * 1024)
 
 typedef struct member_entry {
 	char name[NAMELEN];
@@ -104,7 +104,7 @@ static struct arc_list_state {
 
 pthread_mutex_t nftw_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static int detect_type_by_ext(char *path, int pathlen);
+static int detect_type_by_ext(const char *path, int pathlen);
 static int detect_type_by_data(uchar_t *buf, size_t len);
 
 /*
@@ -164,6 +164,12 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 		uchar_t *tbuf;
 
 		tbuf = pctx->arc_buf + pctx->arc_buf_pos;
+
+		/*
+		 * Determine if we should return the accumulated data to the caller.
+		 * This is done if the data type changes and at least some minimum amount
+		 * of data has accumulated in the buffer.
+		 */
 		if (pctx->btype != pctx->ctype) {
 			if (pctx->btype == TYPE_UNKNOWN || pctx->arc_buf_pos == 0) {
 				pctx->btype = pctx->ctype;
@@ -718,12 +724,23 @@ setup_archiver(pc_ctx_t *pctx, struct stat *sbuf)
 			err = nftw(fn->filename, add_pathname, 1024, FTW_PHYS);
 		} else {
 			int tflag;
+			struct FTW ftwbuf;
+			char *pos;
 
 			if (S_ISLNK(sb.st_mode))
 				tflag = FTW_SL;
 			else
 				tflag = FTW_F;
-			add_pathname(fn->filename, &sb, tflag, NULL);
+
+			/*
+			 * Find out basename to mimic FTW.
+			 */
+			pos = strrchr(fn->filename, PATHSEP_CHAR);
+			if (pos)
+				ftwbuf.base = pos - fn->filename + 1;
+			else
+				ftwbuf.base = 0;
+			add_pathname(fn->filename, &sb, tflag, &ftwbuf);
 			a_state.arc_size = sb.st_size;
 		}
 		if (a_state.bufpos > 0) {
@@ -766,6 +783,7 @@ setup_archiver(pc_ctx_t *pctx, struct stat *sbuf)
 		return (-1);
 	}
 	archive_write_set_format_pax_restricted(arc);
+	archive_write_set_bytes_per_block(arc, 0);
 	archive_write_open(arc, pctx, arc_open_callback,
 			   creat_write_callback, creat_close_callback);
 	pctx->archive_ctx = arc;
@@ -774,7 +792,7 @@ setup_archiver(pc_ctx_t *pctx, struct stat *sbuf)
 	pctx->temp_mmap_buf = mmap(NULL, pctx->temp_mmap_len, PROT_READ,
 				   MAP_SHARED, pctx->archive_members_fd, 0);
 	if (pctx->temp_mmap_buf == NULL) {
-		log_msg(LOG_WARN, 1, "Unable to mmap pathlist file, switching to slower read().");
+		log_msg(LOG_WARN, 1, "Unable to mmap pathlist file, switching to read().");
 		pctx->temp_mmap_len = 0;
 	}
 	pctx->temp_mmap_pos = 0;
@@ -810,6 +828,28 @@ setup_extractor(pc_ctx_t *pctx)
 	return (0);
 }
 
+static ssize_t
+process_by_filter(int fd, int typ, struct archive *target_arc,
+    struct archive *source_arc, struct archive_entry *entry, int cmp)
+{
+	struct filter_info fi;
+	int64_t wrtn;
+
+	fi.source_arc = source_arc;
+	fi.target_arc = target_arc;
+	fi.entry = entry;
+	fi.fd = fd;
+	fi.compressing = cmp;
+	fi.block_size = AW_BLOCK_SIZE;
+	wrtn = (*(typetab[(typ >> 3)].filter_func))(&fi, typetab[(typ >> 3)].filter_private);
+	close(fd);
+	if (wrtn == FILTER_RETURN_ERROR) {
+		log_msg(LOG_ERR, 0, "Error invoking filter module: %s",
+		    typetab[(typ >> 3)].filter_name);
+	}
+	return (wrtn);
+}
+
 /*
  * Routines to archive members and write the file data to the callback. Portions of
  * the following code is adapted from some of the Libarchive bsdtar code.
@@ -834,6 +874,20 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 		return (-1);
 	}
 
+	if (typ != TYPE_UNKNOWN) {
+		if (typetab[(typ >> 3)].filter_func != NULL) {
+			int64_t rv;
+
+			rv = process_by_filter(fd, typ, arc, NULL, entry, 1); 
+			if (rv == FILTER_RETURN_ERROR)
+				return (-1);
+			else if (rv == FILTER_RETURN_SKIP)
+				lseek(fd, 0, SEEK_SET);
+			else
+				return (ARCHIVE_OK);
+		}
+	}
+
 	/*
 	 * Use mmap for copying file data. Not necessarily for performance, but it saves on
 	 * resident memory use.
@@ -847,6 +901,7 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 			len = bytes_to_write;
 		else
 			len = MMAP_SIZE;
+do_map:
 		mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, offset);
 		if (mapbuf == NULL) {
 			/* Mmap failed; this is bad. */
@@ -858,8 +913,28 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 		src = mapbuf;
 		wlen = len;
 
-		if (typ == TYPE_UNKNOWN)
+		if (typ == TYPE_UNKNOWN) {
 			pctx->ctype = detect_type_by_data(src, len);
+			if (typ != TYPE_UNKNOWN) {
+				if (typetab[(typ >> 3)].filter_func != NULL) {
+					int64_t rv;
+					munmap(mapbuf, len);
+
+					rv = process_by_filter(fd, typ, arc, NULL, entry, 1); 
+					if (rv == FILTER_RETURN_ERROR) {
+						return (-1);
+					} else if (rv == FILTER_RETURN_SKIP) {
+						lseek(fd, 0, SEEK_SET);
+						typ = TYPE_COMPRESSED;
+						offset = 0;
+						goto do_map;
+					} else {
+						return (ARCHIVE_OK);
+					}
+				}
+			}
+		}
+		typ = TYPE_COMPRESSED; // Need to avoid calling detect_type_by_data subsequently.
 
 		/*
 		 * Write the entire mmap-ed buffer. Since we are writing to the compressor
@@ -983,10 +1058,10 @@ archiver_thread_func(void *dat) {
 		 * libarchive refuses to extract these files on Linux, no matter what I try.
 		 * Bug?
 		 * 
-		 * In this case the file basename is changed and a custom extended attribute
-		 * is set to indicate extraction to change it back.
+		 * In this case the file basename is changed and a custom flag is set to
+		 * indicate extraction to change it back.
 		 */
-		if (bnchars[0] == '.' && bnchars[1] == '_') {
+		if (bnchars[0] == '.' && bnchars[1] == '_' && archive_entry_filetype(entry) == AE_IFREG) {
 			char *pos = strstr(name, "._");
 			char name[] = "@.", value[] = "m";
 			if (pos) {
@@ -1001,6 +1076,8 @@ archiver_thread_func(void *dat) {
 
 		if (archive_entry_filetype(entry) != AE_IFREG) {
 			archive_entry_set_size(entry, 0);
+		} else {
+			archive_entry_set_size(entry, archive_entry_size(entry));
 		}
 		if (pctx->verbose)
 			log_msg(LOG_INFO, 0, "%5d/%5d %8d %s", ctr, pctx->archive_members_count,
@@ -1015,6 +1092,7 @@ archiver_thread_func(void *dat) {
 			ent = spare_entry;
 			spare_entry = NULL;
 		}
+		archive_write_finish_entry(arc);
 		archive_entry_clear(entry);
 		ctr++;
 	}
@@ -1045,12 +1123,28 @@ start_archiver(pc_ctx_t *pctx) {
  * routines, so we have to handle here.
  */
 static int
-copy_data_out(struct archive *ar, struct archive *aw)
+copy_data_out(struct archive *ar, struct archive *aw, struct archive_entry *entry,
+    int typ)
 {
 	int64_t offset;
 	const void *buff;
 	size_t size;
 	int r;
+
+	if (typ != TYPE_UNKNOWN) {
+		if (typetab[(typ >> 3)].filter_func != NULL) {
+			int64_t rv;
+
+			rv = process_by_filter(-1, typ, aw, ar, entry, 0); 
+			if (rv == FILTER_RETURN_ERROR) {
+				archive_set_error(ar, archive_errno(aw),
+				    "%s", archive_error_string(aw));
+				return (ARCHIVE_FATAL);
+			} else {
+				return (ARCHIVE_OK);
+			}
+		}
+	}
 
 	for (;;) {
 		r = archive_read_data_block(ar, &buff, &size, &offset);
@@ -1071,19 +1165,20 @@ copy_data_out(struct archive *ar, struct archive *aw)
 
 static int
 archive_extract_entry(struct archive *a, struct archive_entry *entry,
-    struct archive *ad)
+    struct archive *ad, int typ)
 {
 	int r, r2;
-	
+
 	r = archive_write_header(ad, entry);
 	if (r < ARCHIVE_WARN)
 		r = ARCHIVE_WARN;
-	if (r != ARCHIVE_OK)
+	if (r != ARCHIVE_OK) {
 		/* If _write_header failed, copy the error. */
 		archive_copy_error(a, ad);
-	else if (!archive_entry_size_is_set(entry) || archive_entry_size(entry) > 0)
+	} else if (!archive_entry_size_is_set(entry) || archive_entry_size(entry) > 0) {
 		/* Otherwise, pour data into the entry. */
-		r = copy_data_out(a, ad);
+		r = copy_data_out(a, ad, entry, typ);
+	}
 	r2 = archive_write_finish_entry(ad);
 	if (r2 < ARCHIVE_WARN)
 		r2 = ARCHIVE_WARN;
@@ -1153,6 +1248,7 @@ extractor_thread_func(void *dat) {
 	while ((rv = archive_read_next_header(arc, &entry)) != ARCHIVE_EOF) {
 		const char *xt_name, *xt_value;
 		size_t xt_size;
+		int typ;
 
 		if (rv != ARCHIVE_OK)
 			log_msg(LOG_WARN, 0, "%s", archive_error_string(arc));
@@ -1165,6 +1261,12 @@ extractor_thread_func(void *dat) {
 		if (rv == ARCHIVE_RETRY) {
 			log_msg(LOG_INFO, 0, "Retrying extractor read ...");
 			continue;
+		}
+
+		typ = TYPE_UNKNOWN;
+		if (archive_entry_filetype(entry) == AE_IFREG) {
+			const char *fpath = archive_entry_pathname(entry);
+			typ = detect_type_by_ext(fpath, strlen(fpath));
 		}
 
 		/*
@@ -1191,7 +1293,7 @@ extractor_thread_func(void *dat) {
 		}
 #endif
 
-		rv = archive_extract_entry(arc, entry, awd);
+		rv = archive_extract_entry(arc, entry, awd, typ);
 		if (rv != ARCHIVE_OK) {
 			log_msg(LOG_WARN, 0, "%s: %s", archive_entry_pathname(entry),
 			    archive_error_string(arc));
@@ -1251,11 +1353,10 @@ init_archive_mod() {
 					extnum = (extnum << 1) | extlist[i].ext[j];
 				exthtab[slot].extnum = extnum;
 				exthtab[slot].type = extlist[i].type;
-				exthtab[slot].filter_func = NULL;
-				exthtab[slot].filter_private = NULL;
 			}
 
-			add_filters_by_ext();
+			memset(typetab, 0, sizeof (typetab));
+			add_filters_by_type(typetab);
 			inited = 1;
 		} else {
 			rv = 1;
@@ -1271,9 +1372,9 @@ init_archive_mod() {
  * outside the hash table range then the function returns unknown type.
  */
 static int
-detect_type_by_ext(char *path, int pathlen)
+detect_type_by_ext(const char *path, int pathlen)
 {
-	char *ext = NULL;
+	const char *ext = NULL;
 	ub4 slot;
 	int i, len;
 	uint64_t extnum;
@@ -1339,17 +1440,4 @@ detect_type_by_data(uchar_t *buf, size_t len)
 		return (TYPE_BINARY|TYPE_COMPRESSED|TYPE_COMPRESSED_PPMD); // PPM Compressed archive
 
 	return (TYPE_UNKNOWN);
-}
-
-int
-insert_filter_data(filter_func_ptr func, void *filter_private, const char *ext)
-{
-	ub4 slot = phash(ext, strlen(ext));
-	if (slot >= PHASHNKEYS || slot < 0) {
-		log_msg(LOG_WARN, 0, "Cannot add filter for unknown extension: %s", ext);
-		return (-1);
-	}
-	exthtab[slot].filter_func = func;
-	exthtab[slot].filter_private = filter_private;
-	return (0);
 }

@@ -1544,13 +1544,12 @@ plain_index:
 		o_chunksize = _chunksize;
 
 		/* Compress data chunk. */
-		if ((pctx->lzp_preprocess || pctx->enable_delta2_encode) && _chunksize > 0 &&
-		    PC_SUBTYPE(pctx->btype) == TYPE_CMP_MAX) {
+		if ((pctx->lzp_preprocess || pctx->enable_delta2_encode) && _chunksize > 0) {
 			rv = preproc_compress(pctx, tdat->compress, tdat->uncompressed_chunk + dedupe_index_sz,
 			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
 			    tdat->level, 0, pctx->btype, tdat->data, tdat->props);
 
-		} else if (_chunksize > 0 && PC_SUBTYPE(pctx->btype) == TYPE_CMP_MAX) {
+		} else if (_chunksize > 0) {
 			DEBUG_STAT_EN(double strt, en);
 
 			DEBUG_STAT_EN(strt = get_wtime_millis());
@@ -1915,8 +1914,10 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		/*
 		 * Adjust chunk size for small files. We then get an archive with
 		 * a single chunk for the entire file.
+		 * This is not valid for archive mode since we cannot accurately estimate
+		 * final archive size.
 		 */
-		if (sbuf.st_size <= chunksize) {
+		if (sbuf.st_size <= chunksize && !(pctx->archive_mode)) {
 			chunksize = sbuf.st_size;
 			pctx->enable_rabin_split = 0; // Do not split for whole files.
 			pctx->nthreads = 1;

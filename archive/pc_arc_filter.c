@@ -43,88 +43,183 @@
 #include "pc_archive.h"
 
 #define	PACKJPG_DEF_BUFSIZ	(512 * 1024)
-#define	JPG_SIZE_LIMIT		(100 * 1024 * 1024)
+#define	JPG_SIZE_LIMIT		(50 * 1024 * 1024)
 
 struct packjpg_filter_data {
-	uchar_t *buff;
-	size_t bufflen;
+	uchar_t *buff, *in_buff;
+	size_t bufflen, in_bufflen;
 };
 
 extern size_t packjpg_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf);
 
-int packjpg_filter(struct filter_info *fi, void *filter_private);
+int64_t packjpg_filter(struct filter_info *fi, void *filter_private);
 
 void
-add_filters_by_ext()
+add_filters_by_type(struct type_data *typetab)
 {
 	struct packjpg_filter_data *pjdat;
+	int slot;
 
 	pjdat = (struct packjpg_filter_data *)malloc(sizeof (struct packjpg_filter_data));
 	pjdat->buff = (uchar_t *)malloc(PACKJPG_DEF_BUFSIZ);
 	pjdat->bufflen = PACKJPG_DEF_BUFSIZ;
-	if (insert_filter_data(packjpg_filter, pjdat, "pjg") != 0) {
-		free(pjdat->buff);
-		free(pjdat);
-		log_msg(LOG_WARN, 0, "Failed to add filter module for packJPG.");
-	}
+	pjdat->in_buff = NULL;
+	pjdat->in_bufflen = 0;
+
+	slot = TYPE_JPEG >> 3;
+	typetab[slot].filter_private = pjdat;
+	typetab[slot].filter_func = packjpg_filter;
+	typetab[slot].filter_name = "packJPG";
+	slot = TYPE_PACKJPG >> 3;
+	typetab[slot].filter_private = pjdat;
+	typetab[slot].filter_func = packjpg_filter;
+	typetab[slot].filter_name = "packJPG";
 }
 
-/* a short reminder about input/output stream types
-   for the pjglib_init_streams() function
-	
-	if input is file
-	----------------
-	in_scr -> name of input file
-	in_type -> 0
-	in_size -> ignore
-	
-	if input is memory
-	------------------
-	in_scr -> array containg data
-	in_type -> 1
-	in_size -> size of data array
-	
-	if input is *FILE (f.e. stdin)
-	------------------------------
-	in_src -> stream pointer
-	in_type -> 2
-	in_size -> ignore
-	
-	vice versa for output streams! */
+static ssize_t
+copy_archive_data(struct archive *ar, uchar_t *out_buf)
+{
+	int64_t offset;
+	const void *buff;
+	size_t size, tot;
+	int r;
 
-int
+	tot = 0;
+	for (;;) {
+		r = archive_read_data_block(ar, &buff, &size, &offset);
+		if (r == ARCHIVE_EOF)
+			break;
+		if (r != ARCHIVE_OK)
+			return (0);
+		memcpy(out_buf + offset, buff, size);
+		tot += size;
+	}
+	return (tot);
+}
+
+static ssize_t
+write_archive_data(struct archive *aw, uchar_t *out_buf, size_t len, int block_size)
+{
+	int64_t offset;
+	uchar_t *buff;
+	int r;
+	size_t tot;
+
+	buff = out_buf;
+	offset = 0;
+	tot = len;
+	while (len > 0) {
+		if (len < block_size)
+			block_size = len;
+		r = (int)archive_write_data_block(aw, buff, block_size, offset);
+		if (r < ARCHIVE_WARN)
+			r = ARCHIVE_WARN;
+		if (r != ARCHIVE_OK) {
+			return (r);
+		}
+		offset += block_size;
+		len -= block_size;
+	}
+	return (tot);
+}
+
+/*
+ * Helper routine to bridge to packJPG C++ lib, without changing packJPG itself.
+ */
+ssize_t
 packjpg_filter(struct filter_info *fi, void *filter_private)
 {
 	struct packjpg_filter_data *pjdat = (struct packjpg_filter_data *)filter_private;
 	uchar_t *mapbuf, *out;
-	size_t len;
+	size_t len, in_size = 0;
 
 	len = archive_entry_size(fi->entry);
 	if (len > JPG_SIZE_LIMIT) // Bork on massive JPEGs
-		return (-1);
+		return (FILTER_RETURN_SKIP);
 
-	mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fi->fd, 0);
-	if (mapbuf == NULL)
-		return (-1);
+	if (fi->compressing) {
+		mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fi->fd, 0);
+		if (mapbuf == NULL) {
+			log_msg(LOG_ERR, 1, "Mmap failed in packJPG filter.");
+			return (FILTER_RETURN_ERROR);
+		}
 
+		/*
+		 * We are trying to compress and this is not a jpeg. Skip.
+		 */
+		if (mapbuf[0] != 0xFF && mapbuf[1] != 0xD8) {
+			munmap(mapbuf, len);
+			return (FILTER_RETURN_SKIP);
+		}
+
+	} else {
+
+		/*
+		 * Allocate input buffer and read archive data stream for the entry
+		 * into this buffer.
+		 */
+		if (pjdat->in_bufflen < len) {
+			if (pjdat->in_buff) free(pjdat->in_buff);
+			pjdat->in_bufflen = len;
+			pjdat->in_buff = malloc(pjdat->in_bufflen);
+			if (pjdat->in_buff == NULL) {
+				log_msg(LOG_ERR, 1, "Out of memory.");
+				return (FILTER_RETURN_ERROR);
+			}
+		}
+
+		in_size = copy_archive_data(fi->source_arc, pjdat->in_buff);
+		if (in_size != len) {
+			log_msg(LOG_ERR, 0, "Failed to read archive data.");
+			return (FILTER_RETURN_ERROR);
+		}
+		in_size = U64_P(pjdat->in_buff);
+		mapbuf = pjdat->in_buff + 8;
+
+		/*
+		 * We are trying to decompress and this is not a packJPG file.
+		 * Write the raw data and skip.
+		 */
+		if (mapbuf[0] != 'J' && mapbuf[1] != 'S') {
+			return (write_archive_data(fi->target_arc, mapbuf, in_size,
+			    fi->block_size));
+		}
+	}
 	if (pjdat->bufflen < len) {
 		free(pjdat->buff);
-		pjdat->bufflen = len;
+		pjdat->bufflen = len; // Include size for compressed len
 		pjdat->buff = malloc(pjdat->bufflen);
 		if (pjdat->buff == NULL) {
 			log_msg(LOG_ERR, 1, "Out of memory.");
 			munmap(mapbuf, len);
-			return (-1);
+			return (FILTER_RETURN_ERROR);
 		}
 	}
 
 	/*
-	 * Helper routine to bridge to packJPG C++ lib, without changing packJPG itself.
+	 * Compression case.
+	 */
+	if (fi->compressing) {
+		ssize_t rv;
+
+		out = pjdat->buff;
+		if ((len = packjpg_filter_process(mapbuf, len, &out)) == 0) {
+			return (FILTER_RETURN_SKIP);
+		}
+		in_size = LE64(len);
+		rv = archive_write_data(fi->target_arc, &in_size, 8);
+		if (rv != 8)
+			return (rv);
+		return (archive_write_data(fi->target_arc, out, len));
+	}
+
+	/*
+	 * Decompression case.
 	 */
 	out = pjdat->buff;
-	if ((len = packjpg_filter_process(mapbuf, len, &out)) == 0) {
-		return (-1);
+	if ((len = packjpg_filter_process(mapbuf, in_size, &out)) == 0) {
+		return (FILTER_RETURN_ERROR);
 	}
-	return (archive_write_data(fi->target_arc, out, len));
+	return (write_archive_data(fi->target_arc, out, len, fi->block_size));
 }
 
