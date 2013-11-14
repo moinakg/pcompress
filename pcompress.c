@@ -3123,11 +3123,28 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 	if (pctx->do_compress) {
 		struct stat sbuf;
+		struct filter_flags ff;
 
 		if (pctx->filename && stat(pctx->filename, &sbuf) == -1) {
 			log_msg(LOG_ERR, 1, "Cannot stat: %s", pctx->filename);
 			return (1);
 		}
+
+		/*
+		 * Selectively enable filters while compressing.
+		 */
+		ff.enable_packjpg = 0;
+		if (pctx->level > 9) ff.enable_packjpg = 1;
+		init_filters(&ff);
+
+	} else if (pctx->do_uncompress) {
+		struct filter_flags ff;
+
+		/*
+		 * Enable all filters while decompressing. Obviously!
+		 */
+		ff.enable_packjpg = 1;
+		init_filters(&ff);
 	}
 	pctx->inited = 1;
 

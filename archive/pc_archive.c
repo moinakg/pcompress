@@ -55,14 +55,14 @@
 #include <ftw.h>
 #include <stdint.h>
 
-static int inited = 0;
-pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int inited = 0, filters_inited = 0;
+static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct ext_hash_entry {
 	uint64_t extnum;
 	int type;
 } *exthtab = NULL;
 
-struct type_data typetab[NUM_SUB_TYPES];
+static struct type_data typetab[NUM_SUB_TYPES];
 
 /*
 AE_IFREG   Regular file
@@ -1140,6 +1140,10 @@ copy_data_out(struct archive *ar, struct archive *aw, struct archive_entry *entr
 				archive_set_error(ar, archive_errno(aw),
 				    "%s", archive_error_string(aw));
 				return (ARCHIVE_FATAL);
+
+			} else if (rv == FILTER_RETURN_SKIP) {
+				log_msg(LOG_WARN, 0, "Filter function failed for entry.");
+				return (ARCHIVE_WARN);
 			} else {
 				return (ARCHIVE_OK);
 			}
@@ -1356,7 +1360,6 @@ init_archive_mod() {
 			}
 
 			memset(typetab, 0, sizeof (typetab));
-			add_filters_by_type(typetab);
 			inited = 1;
 		} else {
 			rv = 1;
@@ -1364,6 +1367,17 @@ init_archive_mod() {
 	}
 	pthread_mutex_unlock(&init_mutex);
 	return (rv);
+}
+
+void
+init_filters(struct filter_flags *ff)
+{
+	pthread_mutex_lock(&init_mutex);
+	if (!filters_inited) {
+		add_filters_by_type(typetab, ff);
+		filters_inited = 1;
+	}
+	pthread_mutex_unlock(&init_mutex);
 }
 
 /*

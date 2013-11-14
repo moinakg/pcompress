@@ -48,6 +48,10 @@ struct filter_info {
 	int compressing, block_size;
 };
 
+struct filter_flags {
+	int enable_packjpg;
+};
+
 typedef ssize_t (*filter_func_ptr)(struct filter_info *fi, void *filter_private);
 
 struct type_data {
@@ -56,7 +60,7 @@ struct type_data {
 	char *filter_name;
 };
 
-void add_filters_by_type(struct type_data *typetab);
+void add_filters_by_type(struct type_data *typetab, struct filter_flags *ff);
 
 #ifdef	__cplusplus
 }

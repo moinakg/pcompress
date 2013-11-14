@@ -54,6 +54,7 @@ int64_t archiver_write(void *ctx, void *buf, uint64_t count);
 int archiver_close(void *ctx);
 int init_archive_mod();
 int insert_filter_data(filter_func_ptr func, void *filter_private, const char *ext);
+void init_filters(struct filter_flags *ff);
 
 #ifdef	__cplusplus
 }

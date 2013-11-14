@@ -55,27 +55,28 @@ extern size_t packjpg_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_
 int64_t packjpg_filter(struct filter_info *fi, void *filter_private);
 
 void
-add_filters_by_type(struct type_data *typetab)
+add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 {
 	struct packjpg_filter_data *pjdat;
 	int slot;
 
-	pjdat = (struct packjpg_filter_data *)malloc(sizeof (struct packjpg_filter_data));
-	pjdat->buff = (uchar_t *)malloc(PACKJPG_DEF_BUFSIZ);
-	pjdat->bufflen = PACKJPG_DEF_BUFSIZ;
-	pjdat->in_buff = NULL;
-	pjdat->in_bufflen = 0;
+	if (ff->enable_packjpg) {
+		pjdat = (struct packjpg_filter_data *)malloc(sizeof (struct packjpg_filter_data));
+		pjdat->buff = (uchar_t *)malloc(PACKJPG_DEF_BUFSIZ);
+		pjdat->bufflen = PACKJPG_DEF_BUFSIZ;
+		pjdat->in_buff = NULL;
+		pjdat->in_bufflen = 0;
 
-	slot = TYPE_JPEG >> 3;
-	typetab[slot].filter_private = pjdat;
-	typetab[slot].filter_func = packjpg_filter;
-	typetab[slot].filter_name = "packJPG";
-	slot = TYPE_PACKJPG >> 3;
-	typetab[slot].filter_private = pjdat;
-	typetab[slot].filter_func = packjpg_filter;
-	typetab[slot].filter_name = "packJPG";
+		slot = TYPE_JPEG >> 3;
+		typetab[slot].filter_private = pjdat;
+		typetab[slot].filter_func = packjpg_filter;
+		typetab[slot].filter_name = "packJPG";
+	}
 }
 
+/*
+ * Copy current entry data from the archive being extracted into the given buffer.
+ */
 static ssize_t
 copy_archive_data(struct archive *ar, uchar_t *out_buf)
 {
@@ -97,6 +98,9 @@ copy_archive_data(struct archive *ar, uchar_t *out_buf)
 	return (tot);
 }
 
+/*
+ * Copy the given buffer into the archive stream.
+ */
 static ssize_t
 write_archive_data(struct archive *aw, uchar_t *out_buf, size_t len, int block_size)
 {
@@ -119,6 +123,7 @@ write_archive_data(struct archive *aw, uchar_t *out_buf, size_t len, int block_s
 		}
 		offset += block_size;
 		len -= block_size;
+		buff += block_size;
 	}
 	return (tot);
 }
@@ -131,9 +136,10 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 {
 	struct packjpg_filter_data *pjdat = (struct packjpg_filter_data *)filter_private;
 	uchar_t *mapbuf, *out;
-	size_t len, in_size = 0;
+	size_t len, in_size = 0, len1;
 
 	len = archive_entry_size(fi->entry);
+	len1 = len;
 	if (len > JPG_SIZE_LIMIT) // Bork on massive JPEGs
 		return (FILTER_RETURN_SKIP);
 
@@ -173,21 +179,29 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 			log_msg(LOG_ERR, 0, "Failed to read archive data.");
 			return (FILTER_RETURN_ERROR);
 		}
+
+		/*
+		 * First 8 bytes in the data is the compressed size of the entry.
+		 * LibArchive always zero-pads entries to their original size so
+		 * we need to separately store the compressed size.
+		 */
 		in_size = U64_P(pjdat->in_buff);
 		mapbuf = pjdat->in_buff + 8;
 
 		/*
-		 * We are trying to decompress and this is not a packJPG file.
+		 * We are trying to decompress and this is not a packJPG file, or is
+		 * a normal Jpeg.
 		 * Write the raw data and skip.
 		 */
-		if (mapbuf[0] != 'J' && mapbuf[1] != 'S') {
+		if ((mapbuf[0] != 'J' && mapbuf[1] != 'S') ||
+		    (pjdat->in_buff[0] == 0xFF && pjdat->in_buff[1] == 0xD8)) {
 			return (write_archive_data(fi->target_arc, mapbuf, in_size,
 			    fi->block_size));
 		}
 	}
 	if (pjdat->bufflen < len) {
 		free(pjdat->buff);
-		pjdat->bufflen = len; // Include size for compressed len
+		pjdat->bufflen = len;
 		pjdat->buff = malloc(pjdat->bufflen);
 		if (pjdat->buff == NULL) {
 			log_msg(LOG_ERR, 1, "Out of memory.");
@@ -218,7 +232,13 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 	 */
 	out = pjdat->buff;
 	if ((len = packjpg_filter_process(mapbuf, in_size, &out)) == 0) {
-		return (FILTER_RETURN_ERROR);
+		/*
+		 * If filter failed we write out the original data and indicate skip
+		 * to continue the archive extraction.
+		 */
+		if (write_archive_data(fi->target_arc, mapbuf, len1, fi->block_size) < len1)
+			return (FILTER_RETURN_ERROR);
+		return (FILTER_RETURN_SKIP);
 	}
 	return (write_archive_data(fi->target_arc, out, len, fi->block_size));
 }
