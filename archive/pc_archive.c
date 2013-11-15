@@ -878,10 +878,13 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 			int64_t rv;
 
 			rv = process_by_filter(fd, typ, arc, NULL, entry, 1); 
-			if (rv == FILTER_RETURN_ERROR)
+			if (rv == FILTER_RETURN_ERROR) {
+				close(fd);
 				return (-1);
-			else if (rv != FILTER_RETURN_SKIP)
+			} else if (rv != FILTER_RETURN_SKIP) {
+				close(fd);
 				return (ARCHIVE_OK);
+			}
 		}
 	}
 
