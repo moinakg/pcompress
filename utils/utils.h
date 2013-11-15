@@ -357,6 +357,11 @@ void add_fname(char *fn);
 void rm_fname(char *fn);
 
 /*
+ * Some types (like Jpeg) are totally incompressible.
+ */
+int is_incompressible(int type);
+
+/*
  * Roundup v to the nearest power of 2. From Bit Twiddling Hacks:
  * http://graphics.stanford.edu/~seander/bithacks.html
  */

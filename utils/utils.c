@@ -565,3 +565,13 @@ rm_fname(char *fn)
 	}
 	pthread_mutex_unlock(&f_mutex);
 }
+
+int
+is_incompressible(int type)
+{
+	int ic = 0;
+	int st = PC_SUBTYPE(type);
+
+	ic = (st == TYPE_JPEG) | (st == TYPE_PACKJPG);
+	return (ic);
+}

@@ -66,9 +66,11 @@ X Bytes - Chunk Header CRC32 for normal compression
    |     |        |  `---- 1 - Chunk was Deduped
    |     |        `------- 1 - Chunk was pre-compressed
    |     |
-   |     |                 1 - Bzip2 (Adaptive Mode)
-   |     `---------------- 2 - Lzma (Adaptive Mode)
-   |                       3 - PPMD (Adaptive Mode)
+   |     |                 1 - Lzma (Adaptive Mode)
+   |     |                 2 - Bzip2 (Adaptive Mode)
+   |     `---------------- 3 - PPMD (Adaptive Mode)
+   |                       4 - Libbsc (Adaptive Mode)
+   |                       5 - LZ4 (Adaptive Mode)
    |
    `---------------------- 1 - Chunk size flag (if original chunk is of variable length)
 

@@ -78,7 +78,14 @@ extern "C" {
 #define	ADAPT_COMPRESS_BZIP2	2
 #define	ADAPT_COMPRESS_PPMD	3
 #define	ADAPT_COMPRESS_BSC	4
+/*
+ * This is used in adaptive modes in cases where the data is deemed totally incompressible.
+ * We can still have zero padding and archive headers that can be compressed. So we use the
+ * fastest algo at our disposal for these cases.
+ */
+#define	ADAPT_COMPRESS_LZ4	5
 #define	CHDR_ALGO_MASK	7
+#define	CHDR_ALGO(x) (((x)>>4) & CHDR_ALGO_MASK)
 
 extern uint32_t zlib_buf_extra(uint64_t buflen);
 extern int lz4_buf_extra(uint64_t buflen);
@@ -226,6 +233,7 @@ typedef struct pc_ctx {
 	int arc_closed, arc_writing;
 	uchar_t btype, ctype;
 	int min_chunk;
+	int enable_packjpg;
 
 	unsigned int chunk_num;
 	uint64_t largest_chunk, smallest_chunk, avg_chunk;

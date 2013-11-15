@@ -1544,23 +1544,23 @@ plain_index:
 		o_chunksize = _chunksize;
 
 		/* Compress data chunk. */
-		if ((pctx->lzp_preprocess || pctx->enable_delta2_encode) && _chunksize > 0) {
-			rv = preproc_compress(pctx, tdat->compress, tdat->uncompressed_chunk + dedupe_index_sz,
-			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
-			    tdat->level, 0, pctx->btype, tdat->data, tdat->props);
-
-		} else if (_chunksize > 0) {
+		if (_chunksize == 0) {
+			rv = -1;
+		} else if ((pctx->lzp_preprocess || pctx->enable_delta2_encode)) {
+			rv = preproc_compress(pctx, tdat->compress,
+			    tdat->uncompressed_chunk + dedupe_index_sz, _chunksize,
+			    compressed_chunk + index_size_cmp, &_chunksize, tdat->level, 0,
+			    tdat->btype, tdat->data, tdat->props);
+		} else {
 			DEBUG_STAT_EN(double strt, en);
 
 			DEBUG_STAT_EN(strt = get_wtime_millis());
-			rv = tdat->compress(tdat->uncompressed_chunk + dedupe_index_sz, _chunksize,
-			    compressed_chunk + index_size_cmp, &_chunksize, tdat->level, 0, pctx->btype,
-			    tdat->data);
+			rv = tdat->compress(tdat->uncompressed_chunk + dedupe_index_sz,
+			    _chunksize, compressed_chunk + index_size_cmp, &_chunksize,
+			    tdat->level, 0, tdat->btype, tdat->data);
 			DEBUG_STAT_EN(en = get_wtime_millis());
 			DEBUG_STAT_EN(fprintf(stderr, "Chunk compression speed %.3f MB/s\n",
 					      get_mb_s(_chunksize, strt, en)));
-		} else {
-			rv = -1;
 		}
 
 		/* Can't compress data just retain as-is. */
@@ -1576,16 +1576,16 @@ plain_index:
 	} else {
 		_chunksize = tdat->rbytes;
 		if (pctx->lzp_preprocess || pctx->enable_delta2_encode) {
-			rv = preproc_compress(pctx, tdat->compress,
-			    tdat->uncompressed_chunk, tdat->rbytes,
-			    compressed_chunk, &_chunksize, tdat->level, 0, pctx->btype, tdat->data,
-			    tdat->props);
+			rv = preproc_compress(pctx, tdat->compress, tdat->uncompressed_chunk,
+			    tdat->rbytes, compressed_chunk, &_chunksize, tdat->level, 0,
+			    tdat->btype, tdat->data, tdat->props);
 		} else {
 			DEBUG_STAT_EN(double strt, en);
 
 			DEBUG_STAT_EN(strt = get_wtime_millis());
 			rv = tdat->compress(tdat->uncompressed_chunk, tdat->rbytes,
-			    compressed_chunk, &_chunksize, tdat->level, 0, pctx->btype, tdat->data);
+			    compressed_chunk, &_chunksize, tdat->level, 0, tdat->btype,
+			    tdat->data);
 			DEBUG_STAT_EN(en = get_wtime_millis());
 			DEBUG_STAT_EN(fprintf(stderr, "Chunk compression speed %.3f MB/s\n",
 					      get_mb_s(_chunksize, strt, en)));
@@ -3123,7 +3123,6 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 	if (pctx->do_compress) {
 		struct stat sbuf;
-		struct filter_flags ff;
 
 		if (pctx->filename && stat(pctx->filename, &sbuf) == -1) {
 			log_msg(LOG_ERR, 1, "Cannot stat: %s", pctx->filename);
@@ -3133,17 +3132,22 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		/*
 		 * Selectively enable filters while compressing.
 		 */
-		ff.enable_packjpg = 0;
-		if (pctx->level > 9) ff.enable_packjpg = 1;
-		init_filters(&ff);
+		if (pctx->archive_mode) {
+			struct filter_flags ff;
+
+			ff.enable_packjpg = 0;
+			if (pctx->level > 9) ff.enable_packjpg = 1;
+			init_filters(&ff);
+			pctx->enable_packjpg = ff.enable_packjpg;
+		}
 
 	} else if (pctx->do_uncompress) {
 		struct filter_flags ff;
-
 		/*
 		 * Enable all filters while decompressing. Obviously!
 		 */
 		ff.enable_packjpg = 1;
+		pctx->enable_packjpg = 1;
 		init_filters(&ff);
 	}
 	pctx->inited = 1;

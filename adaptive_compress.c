@@ -45,6 +45,7 @@ static unsigned int lzma_count = 0;
 static unsigned int bzip2_count = 0;
 static unsigned int bsc_count = 0;
 static unsigned int ppmd_count = 0;
+static unsigned int lz4_count = 0;
 
 extern int lzma_compress(void *src, uint64_t srclen, void *dst,
 	uint64_t *destlen, int level, uchar_t chdr, int btype, void *data);
@@ -54,6 +55,8 @@ extern int ppmd_compress(void *src, uint64_t srclen, void *dst,
 	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int libbsc_compress(void *src, uint64_t srclen, void *dst,
 	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
+extern int lz4_compress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 
 extern int lzma_decompress(void *src, uint64_t srclen, void *dst,
 	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
@@ -62,6 +65,8 @@ extern int bzip2_decompress(void *src, uint64_t srclen, void *dst,
 extern int ppmd_decompress(void *src, uint64_t srclen, void *dst,
 	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 extern int libbsc_decompress(void *src, uint64_t srclen, void *dst,
+	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
+extern int lz4_decompress(void *src, uint64_t srclen, void *dst,
 	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data);
 
 extern int lzma_init(void **data, int *level, int nthreads, uint64_t chunksize,
@@ -73,11 +78,15 @@ extern int ppmd_deinit(void **data);
 extern int libbsc_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		       int file_version, compress_op_t op);
 extern int libbsc_deinit(void **data);
+extern int lz4_init(void **data, int *level, int nthreads, uint64_t chunksize,
+		       int file_version, compress_op_t op);
+extern int lz4_deinit(void **data);
 
 struct adapt_data {
 	void *lzma_data;
 	void *ppmd_data;
 	void *bsc_data;
+	void *lz4_data;
 	int adapt_mode;
 };
 
@@ -86,11 +95,12 @@ adapt_stats(int show)
 {
 	if (show) {
 		if (bzip2_count > 0 || bsc_count > 0 || ppmd_count > 0 || lzma_count > 0) {
-			log_msg(LOG_INFO, 0, "Adaptive mode stats:\n");
-			log_msg(LOG_INFO, 0, "	BZIP2 chunk count: %u\n", bzip2_count);
-			log_msg(LOG_INFO, 0, "	LIBBSC chunk count: %u\n", bsc_count);
-			log_msg(LOG_INFO, 0, "	PPMd chunk count: %u\n", ppmd_count);
-			log_msg(LOG_INFO, 0, "	LZMA chunk count: %u\n\n", lzma_count);
+			log_msg(LOG_INFO, 0, "Adaptive mode stats:");
+			log_msg(LOG_INFO, 0, "	BZIP2 chunk count: %u", bzip2_count);
+			log_msg(LOG_INFO, 0, "	LIBBSC chunk count: %u", bsc_count);
+			log_msg(LOG_INFO, 0, "	PPMd chunk count: %u", ppmd_count);
+			log_msg(LOG_INFO, 0, "	LZMA chunk count: %u", lzma_count);
+			log_msg(LOG_INFO, 0, "	LZ4 chunk count: %u", lz4_count);
 		} else {
 			log_msg(LOG_INFO, 0, "\n");
 		}
@@ -99,6 +109,7 @@ adapt_stats(int show)
 	bzip2_count = 0;
 	bsc_count = 0;
 	ppmd_count = 0;
+	lz4_count = 0;
 }
 
 void
@@ -119,6 +130,8 @@ adapt_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		adat = (struct adapt_data *)slab_alloc(NULL, sizeof (struct adapt_data));
 		adat->adapt_mode = 1;
 		rv = ppmd_init(&(adat->ppmd_data), level, nthreads, chunksize, file_version, op);
+		if (rv == 0)
+			rv = lz4_init(&(adat->lz4_data), level, nthreads, chunksize, file_version, op);
 		adat->lzma_data = NULL;
 		adat->bsc_data = NULL;
 		*data = adat;
@@ -128,6 +141,7 @@ adapt_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	bzip2_count = 0;
 	ppmd_count = 0;
 	bsc_count = 0;
+	lz4_count = 0;
 	return (rv);
 }
 
@@ -153,6 +167,8 @@ adapt2_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		if (rv == 0)
 			rv = libbsc_init(&(adat->bsc_data), &lv, nthreads, chunksize, file_version, op);
 #endif
+		if (rv == 0)
+			rv = lz4_init(&(adat->lz4_data), level, nthreads, chunksize, file_version, op);
 		*data = adat;
 		if (*level > 9) *level = 9;
 	}
@@ -160,6 +176,7 @@ adapt2_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	bzip2_count = 0;
 	ppmd_count = 0;
 	bsc_count = 0;
+	lz4_count = 0;
 	return (rv);
 }
 
@@ -173,6 +190,8 @@ adapt_deinit(void **data)
 		rv = ppmd_deinit(&(adat->ppmd_data));
 		if (adat->lzma_data)
 			rv += lzma_deinit(&(adat->lzma_data));
+		if (adat->lz4_data)
+			rv += lz4_deinit(&(adat->lz4_data));
 		slab_free(NULL, adat);
 		*data = NULL;
 	}
@@ -227,9 +246,18 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 
 	/*
 	 * Use PPMd if some percentage of source is 7-bit textual bytes, otherwise
-	 * use Bzip2 or LZMA.
+	 * use Bzip2 or LZMA. For totally incompressible data we always use LZ4. There
+	 * is no point trying to compress such data, like Jpegs. However some archive headers
+	 * and zero paddings can exist which LZ4 can easily take care of very fast.
 	 */
-	if (adat->adapt_mode == 2 && (PC_TYPE(btype) == TYPE_BINARY)) {
+	if (is_incompressible(btype)) {
+		rv = lz4_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->lz4_data);
+		if (rv < 0)
+			return (rv);
+		rv = ADAPT_COMPRESS_LZ4;
+		lz4_count++;
+
+	} else if (adat->adapt_mode == 2 && (PC_TYPE(btype) == TYPE_BINARY)) {
 		rv = lzma_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->lzma_data);
 		if (rv < 0)
 			return (rv);
@@ -273,9 +301,12 @@ adapt_decompress(void *src, uint64_t srclen, void *dst,
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t cmp_flags;
 
-	cmp_flags = (chdr>>4) & CHDR_ALGO_MASK;
+	cmp_flags = CHDR_ALGO(chdr);
 
-	if (cmp_flags == ADAPT_COMPRESS_LZMA) {
+	if (cmp_flags == ADAPT_COMPRESS_LZ4) {
+		return (lz4_decompress(src, srclen, dst, dstlen, level, chdr, btype, adat->lz4_data));
+
+	} else if (cmp_flags == ADAPT_COMPRESS_LZMA) {
 		return (lzma_decompress(src, srclen, dst, dstlen, level, chdr, btype, adat->lzma_data));
 
 	} else if (cmp_flags == ADAPT_COMPRESS_BZIP2) {

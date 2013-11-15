@@ -220,6 +220,7 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		if ((len = packjpg_filter_process(mapbuf, len, &out)) == 0) {
 			return (FILTER_RETURN_SKIP);
 		}
+
 		in_size = LE64(len);
 		rv = archive_write_data(fi->target_arc, &in_size, 8);
 		if (rv != 8)
