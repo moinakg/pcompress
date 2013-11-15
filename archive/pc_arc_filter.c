@@ -195,8 +195,8 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		 */
 		if ((mapbuf[0] != 'J' && mapbuf[1] != 'S') ||
 		    (pjdat->in_buff[0] == 0xFF && pjdat->in_buff[1] == 0xD8)) {
-			return (write_archive_data(fi->target_arc, mapbuf, in_size,
-			    fi->block_size));
+			return (write_archive_data(fi->target_arc, pjdat->in_buff,
+			    in_size, fi->block_size));
 		}
 	}
 	if (pjdat->bufflen < len) {
@@ -218,8 +218,10 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 
 		out = pjdat->buff;
 		if ((len = packjpg_filter_process(mapbuf, len, &out)) == 0) {
+			munmap(mapbuf, len1);
 			return (FILTER_RETURN_SKIP);
 		}
+		munmap(mapbuf, len1);
 
 		in_size = LE64(len);
 		rv = archive_write_data(fi->target_arc, &in_size, 8);

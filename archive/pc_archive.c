@@ -842,7 +842,6 @@ process_by_filter(int fd, int typ, struct archive *target_arc,
 	fi.compressing = cmp;
 	fi.block_size = AW_BLOCK_SIZE;
 	wrtn = (*(typetab[(typ >> 3)].filter_func))(&fi, typetab[(typ >> 3)].filter_private);
-	close(fd);
 	if (wrtn == FILTER_RETURN_ERROR) {
 		log_msg(LOG_ERR, 0, "Error invoking filter module: %s",
 		    typetab[(typ >> 3)].filter_name);
@@ -881,9 +880,7 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 			rv = process_by_filter(fd, typ, arc, NULL, entry, 1); 
 			if (rv == FILTER_RETURN_ERROR)
 				return (-1);
-			else if (rv == FILTER_RETURN_SKIP)
-				lseek(fd, 0, SEEK_SET);
-			else
+			else if (rv != FILTER_RETURN_SKIP)
 				return (ARCHIVE_OK);
 		}
 	}
