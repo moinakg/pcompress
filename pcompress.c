@@ -205,43 +205,56 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 {
 	uchar_t *dest = (uchar_t *)dst, type = 0;
 	int64_t result;
-	uint64_t _dstlen;
+	uint64_t _dstlen, fromlen;
+	uchar_t *from, *to;
 	DEBUG_STAT_EN(double strt, en);
 
 	_dstlen = *dstlen;
+	from = src;
+	to = dst;
+	fromlen = srclen;
+	result = 0;
+
 	if (pctx->lzp_preprocess) {
 		int hashsize;
 
 		hashsize = lzp_hash_size(level);
-		result = lzp_compress((const uchar_t *)src, (uchar_t *)dst, srclen,
+		result = lzp_compress((const uchar_t *)from, to, fromlen,
 				      hashsize, LZP_DEFAULT_LZPMINLEN, 0);
-		if (result < 0 || result == srclen) {
-			if (!pctx->enable_delta2_encode)
-				return (-1);
-		} else {
+		if (result >= 0 && result < srclen) {
+			uchar_t *tmp;
+			tmp = from;
+			from = to;
+			to = tmp;
+			fromlen = result;
 			type |= PREPROC_TYPE_LZP;
-			srclen = result;
-			memcpy(src, dst, srclen);
 		}
-
-	} else if (!pctx->enable_delta2_encode)  {
-		/*
-		 * Execution won't come here but just in case ...
-		 */
-		log_msg(LOG_ERR, 0, "Invalid preprocessing mode");
-		return (-1);
 	}
 
 	if (pctx->enable_delta2_encode && props->delta2_span > 0) {
-		_dstlen = srclen;
-		result = delta2_encode((uchar_t *)src, srclen, (uchar_t *)dst,
+		_dstlen = fromlen;
+		result = delta2_encode((uchar_t *)from, fromlen, to,
 				       &_dstlen, props->delta2_span);
 		if (result != -1) {
-			memcpy(src, dst, _dstlen);
-			srclen = _dstlen;
+			uchar_t *tmp;
+			tmp = from;
+			from = to;
+			to = tmp;
+			fromlen = _dstlen;
 			type |= PREPROC_TYPE_DELTA2;
 		}
 	}
+
+	/*
+	 * Check which is the resulting buffer. If Encoded data is already sitting
+	 * in src buffer then a memcpy() is not needed.
+	 * Note that from,to ptrs are swapped after every encoding stage. So if
+	 * from == dst, it means that encoded data is in dst.
+	 */
+	if (from == dst) {
+		memcpy(src, dst, fromlen);
+	}
+	srclen = fromlen;
 
 	*dest = type;
 	U64_P(dest + 1) = htonll(srclen);
@@ -305,7 +318,7 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 			memcpy(src, dst, _dstlen);
 			srclen = _dstlen;
 			*dstlen = _dstlen;
-	} else {
+		} else {
 			return (result);
 		}
 	}
@@ -819,8 +832,8 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 			err = 1;
 			goto uncomp_done;
 		}
+		to_filename = (char *)origf;
 	}
-
 
 	compressed_chunksize = chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
 
@@ -1546,7 +1559,7 @@ plain_index:
 		/* Compress data chunk. */
 		if (_chunksize == 0) {
 			rv = -1;
-		} else if ((pctx->lzp_preprocess || pctx->enable_delta2_encode)) {
+		} else if (pctx->preprocess_mode) {
 			rv = preproc_compress(pctx, tdat->compress,
 			    tdat->uncompressed_chunk + dedupe_index_sz, _chunksize,
 			    compressed_chunk + index_size_cmp, &_chunksize, tdat->level, 0,
@@ -1575,7 +1588,7 @@ plain_index:
 		_chunksize += index_size_cmp;
 	} else {
 		_chunksize = tdat->rbytes;
-		if (pctx->lzp_preprocess || pctx->enable_delta2_encode) {
+		if (pctx->preprocess_mode) {
 			rv = preproc_compress(pctx, tdat->compress, tdat->uncompressed_chunk,
 			    tdat->rbytes, compressed_chunk, &_chunksize, tdat->level, 0,
 			    tdat->btype, tdat->data, tdat->props);
@@ -1639,7 +1652,7 @@ plain_index:
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan) && tdat->rctx->valid) {
 		type |= CHUNK_FLAG_DEDUP;
 	}
-	if (pctx->lzp_preprocess || pctx->enable_delta2_encode) {
+	if (pctx->preprocess_mode) {
 		type |= CHUNK_FLAG_PREPROC;
 	}
 
@@ -2689,6 +2702,7 @@ create_pc_context(void)
 	ctx->rab_blk_size = -1;
 	ctx->archive_temp_fd = -1;
 	ctx->pagesize = sysconf(_SC_PAGE_SIZE);
+	ctx->btype = TYPE_UNKNOWN;
 
 	return (ctx);
 }
@@ -3140,7 +3154,9 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			init_filters(&ff);
 			pctx->enable_packjpg = ff.enable_packjpg;
 		}
-
+		if (pctx->lzp_preprocess || pctx->enable_delta2_encode) {
+			pctx->preprocess_mode = 1;
+		}
 	} else if (pctx->do_uncompress) {
 		struct filter_flags ff;
 		/*

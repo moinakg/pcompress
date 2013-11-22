@@ -1422,6 +1422,12 @@ out:
 
 /* PPMZ packed into 32-bit integer. */
 #	define	PPMINT	(0x50504d5aU)
+
+/* wvpk packed into 32-bit integer. */
+#	define	WVPK	(0x7776706b)
+
+/* TTA1 packed into 32-bit integer. */
+#	define	TTA1	(0x54544131)
 #else
 /* 0x7fELF packed into 32-bit integer. */
 #	define	ELFINT (0x464c457fU)
@@ -1431,6 +1437,12 @@ out:
 
 /* PPMZ packed into 32-bit integer. */
 #	define	PPMINT	(0x5a4d5050U)
+
+/* wvpk packed into 32-bit integer. */
+#	define	WVPK	(0x6b707677)
+
+/* TTA1 packed into 32-bit integer. */
+#	define	TTA1	(0x31415454)
 #endif
 
 /*
@@ -1452,6 +1464,8 @@ detect_type_by_data(uchar_t *buf, size_t len)
 		return (TYPE_BINARY); // Timezone data
 	if (U32_P(buf) == PPMINT)
 		return (TYPE_BINARY|TYPE_COMPRESSED|TYPE_COMPRESSED_PPMD); // PPM Compressed archive
+	if (U32_P(buf) == WVPK || U32_P(buf) == TTA1)
+		return (TYPE_BINARY|TYPE_COMPRESSED|TYPE_AUDIO_COMPRESSED);
 
 	return (TYPE_UNKNOWN);
 }

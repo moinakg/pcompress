@@ -58,7 +58,7 @@ extern "C" {
 #define	CHUNK_FLAG_PREPROC	4
 #define	COMP_EXTN	".pz"
 
-#define	PREPROC_TYPE_LZP	1
+#define	PREPROC_TYPE_LZP		1
 #define	PREPROC_TYPE_DELTA2	2
 #define	PREPROC_COMPRESSED	128
 
@@ -203,6 +203,7 @@ typedef struct pc_ctx {
 	int enable_delta2_encode;
 	int enable_rabin_split;
 	int enable_fixed_scan;
+	int preprocess_mode;
 	int lzp_preprocess;
 	int encrypt_type;
 	int archive_mode;

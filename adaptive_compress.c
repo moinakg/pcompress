@@ -130,8 +130,14 @@ adapt_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		adat = (struct adapt_data *)slab_alloc(NULL, sizeof (struct adapt_data));
 		adat->adapt_mode = 1;
 		rv = ppmd_init(&(adat->ppmd_data), level, nthreads, chunksize, file_version, op);
+
+		/*
+		 * LZ4 is used to tackle some embedded archive headers and/or zero paddings in
+		 * otherwise incompressible data. So we always use it at the lowest and fastest
+		 * compression level.
+		 */
 		if (rv == 0)
-			rv = lz4_init(&(adat->lz4_data), level, nthreads, chunksize, file_version, op);
+			rv = lz4_init(&(adat->lz4_data), 1, nthreads, chunksize, file_version, op);
 		adat->lzma_data = NULL;
 		adat->bsc_data = NULL;
 		*data = adat;
@@ -167,8 +173,13 @@ adapt2_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		if (rv == 0)
 			rv = libbsc_init(&(adat->bsc_data), &lv, nthreads, chunksize, file_version, op);
 #endif
+		/*
+		 * LZ4 is used to tackle some embedded archive headers and/or zero paddings in
+		 * otherwise incompressible data. So we always use it at the lowest and fastest
+		 * compression level.
+		 */
 		if (rv == 0)
-			rv = lz4_init(&(adat->lz4_data), level, nthreads, chunksize, file_version, op);
+			rv = lz4_init(&(adat->lz4_data), 1, nthreads, chunksize, file_version, op);
 		*data = adat;
 		if (*level > 9) *level = 9;
 	}
@@ -304,7 +315,7 @@ adapt_decompress(void *src, uint64_t srclen, void *dst,
 	cmp_flags = CHDR_ALGO(chdr);
 
 	if (cmp_flags == ADAPT_COMPRESS_LZ4) {
-		return (lz4_decompress(src, srclen, dst, dstlen, level, chdr, btype, adat->lz4_data));
+		return (lz4_decompress(src, srclen, dst, dstlen, 1, chdr, btype, adat->lz4_data));
 
 	} else if (cmp_flags == ADAPT_COMPRESS_LZMA) {
 		return (lzma_decompress(src, srclen, dst, dstlen, level, chdr, btype, adat->lzma_data));

@@ -572,6 +572,6 @@ is_incompressible(int type)
 	int ic = 0;
 	int st = PC_SUBTYPE(type);
 
-	ic = (st == TYPE_JPEG) | (st == TYPE_PACKJPG);
+	ic = (st == TYPE_JPEG) | (st == TYPE_PACKJPG) | (st == TYPE_AUDIO_COMPRESSED);
 	return (ic);
 }

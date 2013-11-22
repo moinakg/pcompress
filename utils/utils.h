@@ -90,9 +90,11 @@ typedef int32_t bsize_t;
 #	if !defined(sun) && !defined (__sun)
 #		define LE64(x) __bswap_64(x)
 #		define LE32(x) __bswap_32(x)
+#		define LE16(x) __bswap_16(x)
 #	else
 #		define LE64(x) BSWAP_64(x)
 #		define LE32(x) BSWAP_32(x)
+#		define LE16(x) BSWAP_16(x)
 #	endif
 #else
 #	if !defined(sun) && !defined (__sun)
@@ -105,6 +107,7 @@ typedef int32_t bsize_t;
 #	endif
 #	define LE64(x) (x)
 #	define LE32(x) (x)
+#	define LE16(x) (x)
 #endif
 
 
@@ -262,7 +265,10 @@ typedef enum {
 	TYPE_COMPRESSED_LZ = 136,
 	TYPE_COMPRESSED_PPMD = 144,
 	TYPE_COMPRESSED_ZPAQ = 152,
-	TYPE_PACKJPG = 160
+	TYPE_PACKJPG = 160,
+	TYPE_DNA_SEQ = 168,
+	TYPE_MJPEG = 176,
+	TYPE_AUDIO_COMPRESSED = 184
 } data_type_t;
 
 /*

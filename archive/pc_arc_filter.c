@@ -43,7 +43,7 @@
 #include "pc_archive.h"
 
 #define	PACKJPG_DEF_BUFSIZ	(512 * 1024)
-#define	JPG_SIZE_LIMIT		(50 * 1024 * 1024)
+#define	JPG_SIZE_LIMIT		(25 * 1024 * 1024)
 
 struct packjpg_filter_data {
 	uchar_t *buff, *in_buff;
@@ -136,7 +136,7 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 {
 	struct packjpg_filter_data *pjdat = (struct packjpg_filter_data *)filter_private;
 	uchar_t *mapbuf, *out;
-	size_t len, in_size = 0, len1;
+	uint64_t len, in_size = 0, len1;
 
 	len = archive_entry_size(fi->entry);
 	len1 = len;
@@ -157,9 +157,7 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 			munmap(mapbuf, len);
 			return (FILTER_RETURN_SKIP);
 		}
-
 	} else {
-
 		/*
 		 * Allocate input buffer and read archive data stream for the entry
 		 * into this buffer.
