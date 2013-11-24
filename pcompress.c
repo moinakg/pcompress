@@ -308,7 +308,7 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 {
 	uchar_t *sorc = (uchar_t *)src, type;
 	int64_t result;
-	uint64_t _dstlen = *dstlen;
+	uint64_t _dstlen = *dstlen, _dstlen1 = *dstlen;
 	DEBUG_STAT_EN(double strt, en);
 
 	type = *sorc;
@@ -337,6 +337,7 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 			srclen = _dstlen;
 			*dstlen = _dstlen;
 		} else {
+			log_msg(LOG_ERR, 0, "Delta2 decoding failed.");
 			return (result);
 		}
 	}
@@ -346,24 +347,23 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 		hashsize = lzp_hash_size(level);
 		result = lzp_decompress((const uchar_t *)src, (uchar_t *)dst, srclen,
 					hashsize, LZP_DEFAULT_LZPMINLEN, 0);
-		if (result < 0) {
+		if (result > 0) {
+			memcpy(src, dst, result);
+			srclen = result;
+			*dstlen = result;
+			_dstlen = result;
+		} else {
 			log_msg(LOG_ERR, 0, "LZP decompression failed.");
-			return (-1);
+			return (result);
 		}
-		*dstlen = result;
 	}
 
-	/*
-	 * If Dispack is enabled it has to be done first since Dispack analyses the
-	 * x86 instruction stream in the raw data.
-	 */
 	if (type & PREPROC_TYPE_DISPACK) {
-		result = dispack_decode((uchar_t *)src, srclen, (uchar_t *)dst, &_dstlen);
+		result = dispack_decode((uchar_t *)src, srclen, (uchar_t *)dst, &_dstlen1);
 		if (result != -1) {
-			memcpy(src, dst, _dstlen);
-			srclen = _dstlen;
-			*dstlen = _dstlen;
+			*dstlen = _dstlen1;
 		} else {
+			log_msg(LOG_ERR, 0, "Dispack decoding failed.");
 			return (result);
 		}
 	}

@@ -1041,16 +1041,19 @@ dispack_decode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 		}
 
 		if (type & DISFILTERED) {
-			if (pos_to + sz > to_last)
+			if (pos_to + sz > to_last) {
 				return (-1);
-			if (DisUnFilter(pos, cmpsz, pos_to, sz, 0) != sTRUE)
+			}
+			if (DisUnFilter(pos, cmpsz, pos_to, sz, 0) != sTRUE) {
 				return (-1);
+			}
 			pos += cmpsz;
 			pos_to += sz;
 			len -= cmpsz;
 		} else {
-			if (pos_to + cmpsz > to_last)
+			if (pos_to + cmpsz > to_last) {
 				return (-1);
+			}
 			memcpy(pos_to, pos, cmpsz);
 			pos += cmpsz;
 			pos_to += cmpsz;
