@@ -30,7 +30,7 @@ MAINSRCS = utils/utils.c allocator.c lzma_compress.c ppmd_compress.c \
 	adaptive_compress.c lzfx_compress.c lz4_compress.c none_compress.c \
 	utils/xxhash_base.c utils/heap.c utils/cpuid.c pcompress.c
 MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heap.h \
-	utils/cpuid.h utils/xxhash.h archive/pc_archive.h
+	utils/cpuid.h utils/xxhash.h archive/pc_archive.h filters/dispack/dis.hpp
 MAINOBJS = $(MAINSRCS:.c=.o)
 
 PROGSRCS = main.c
@@ -142,6 +142,10 @@ PJPGHDRS = filters/packjpg/aricoder.h filters/packjpg/bitops.h filters/packjpg/d
 	filters/packjpg/packjpglib.h filters/packjpg/pjpgtbl.h
 PJPGOBJS = $(PJPGSRCS:.cpp=.o)
 
+DISPACKSRCS = filters/dispack/dis.cpp
+DISPACKHDRS = filters/dispack/dis.hpp filters/dispack/types.hpp
+DISPACKOBJS = $(DISPACKSRCS:.cpp=.o)
+
 SKEIN_BLOCK_C = crypto/skein/skein_block.c
 SKEIN_BLOCK_ASM = crypto/skein/skein_block_x64.s
 SKEIN_BLOCK_SRC = @SKEIN_BLOCK@
@@ -218,7 +222,7 @@ OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
 $(SKEIN_BLOCK_OBJ) @SHA2ASM_OBJS@ @SHA2_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
 $(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS) $(XXHASH_OBJS) $(BLAKE2_OBJS) \
-@CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS) $(ARCHIVEOBJS) $(PJPGOBJS)
+@CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS) $(ARCHIVEOBJS) $(PJPGOBJS) $(DISPACKOBJS)
 
 DEBUG_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
 DEBUG_COMPILE = gcc -g -c @EXTRA_OPT_FLAGS@ -fPIC
@@ -295,6 +299,10 @@ $(ARCHIVEOBJS): $(ARCHIVESRCS) $(ARCHIVEHDRS)
 $(PJPGOBJS): $(PJPGSRCS) $(PJPGHDRS)
 	$(COMPILE_cpp) $(COMMON_VEC_FLAGS) @SSE_OPT_FLAGS@ -O2 -fsched-spec-load \
 	$(VEC_FLAGS) -DBUILD_LIB $(COMMON_CPPFLAGS_cpp) $(@:.o=.cpp) -o $@
+
+$(DISPACKOBJS): $(DISPACKSRCS) $(DISPACKHDRS)
+	$(COMPILE_cpp) $(COMMON_VEC_FLAGS) @SSE_OPT_FLAGS@ -O2 -fsched-spec-load \
+	$(VEC_FLAGS) $(COMMON_CPPFLAGS_cpp) $(@:.o=.cpp) -o $@
 
 $(SKEIN_BLOCK_OBJ): $(SKEIN_BLOCK_SRC)
 	$(COMPILE) $(SKEIN_FLAGS) $(SKEIN_BLOCK_SRC) -o $@

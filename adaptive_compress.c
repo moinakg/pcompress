@@ -124,7 +124,7 @@ adapt_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	   int file_version, compress_op_t op)
 {
 	struct adapt_data *adat = (struct adapt_data *)(*data);
-	int rv = 0;
+	int rv = 0, lv = 1;
 
 	if (!adat) {
 		adat = (struct adapt_data *)slab_alloc(NULL, sizeof (struct adapt_data));
@@ -137,7 +137,7 @@ adapt_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		 * compression level.
 		 */
 		if (rv == 0)
-			rv = lz4_init(&(adat->lz4_data), 1, nthreads, chunksize, file_version, op);
+			rv = lz4_init(&(adat->lz4_data), &lv, nthreads, chunksize, file_version, op);
 		adat->lzma_data = NULL;
 		adat->bsc_data = NULL;
 		*data = adat;
@@ -178,8 +178,9 @@ adapt2_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		 * otherwise incompressible data. So we always use it at the lowest and fastest
 		 * compression level.
 		 */
+		lv = 1;
 		if (rv == 0)
-			rv = lz4_init(&(adat->lz4_data), 1, nthreads, chunksize, file_version, op);
+			rv = lz4_init(&(adat->lz4_data), &lv, nthreads, chunksize, file_version, op);
 		*data = adat;
 		if (*level > 9) *level = 9;
 	}

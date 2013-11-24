@@ -55,6 +55,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <pc_archive.h>
+#include <filters/dispack/dis.hpp>
 
 /*
  * We use 8MB chunks by default.
@@ -215,6 +216,23 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	fromlen = srclen;
 	result = 0;
 
+	/*
+	 * If Dispack is enabled it has to be done first since Dispack analyses the
+	 * x86 instruction stream in the raw data.
+	 */
+	if (pctx->dispack_preprocess && PC_SUBTYPE(btype) == TYPE_EXE32) {
+		_dstlen = fromlen;
+		result = dispack_encode((uchar_t *)from, fromlen, to, &_dstlen);
+		if (result != -1) {
+			uchar_t *tmp;
+			tmp = from;
+			from = to;
+			to = tmp;
+			fromlen = _dstlen;
+			type |= PREPROC_TYPE_DISPACK;
+		}
+	}
+
 	if (pctx->lzp_preprocess) {
 		int hashsize;
 
@@ -335,7 +353,23 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 		*dstlen = result;
 	}
 
-	if (!(type & (PREPROC_COMPRESSED | PREPROC_TYPE_DELTA2 | PREPROC_TYPE_LZP)) && type > 0) {
+	/*
+	 * If Dispack is enabled it has to be done first since Dispack analyses the
+	 * x86 instruction stream in the raw data.
+	 */
+	if (type & PREPROC_TYPE_DISPACK) {
+		result = dispack_decode((uchar_t *)src, srclen, (uchar_t *)dst, &_dstlen);
+		if (result != -1) {
+			memcpy(src, dst, _dstlen);
+			srclen = _dstlen;
+			*dstlen = _dstlen;
+		} else {
+			return (result);
+		}
+	}
+
+	if (!(type & (PREPROC_COMPRESSED | PREPROC_TYPE_DELTA2 | PREPROC_TYPE_LZP | PREPROC_TYPE_DISPACK))
+	    && type > 0) {
 		log_msg(LOG_ERR, 0, "Invalid preprocessing flags: %d", type);
 		return (-1);
 	}
@@ -3153,8 +3187,9 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			if (pctx->level > 9) ff.enable_packjpg = 1;
 			init_filters(&ff);
 			pctx->enable_packjpg = ff.enable_packjpg;
+			if (pctx->level > 8) pctx->dispack_preprocess = 1;
 		}
-		if (pctx->lzp_preprocess || pctx->enable_delta2_encode) {
+		if (pctx->lzp_preprocess || pctx->enable_delta2_encode || pctx->dispack_preprocess) {
 			pctx->preprocess_mode = 1;
 		}
 	} else if (pctx->do_uncompress) {

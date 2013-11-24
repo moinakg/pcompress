@@ -60,6 +60,7 @@ extern "C" {
 
 #define	PREPROC_TYPE_LZP		1
 #define	PREPROC_TYPE_DELTA2	2
+#define	PREPROC_TYPE_DISPACK	4
 #define	PREPROC_COMPRESSED	128
 
 /*
@@ -205,6 +206,7 @@ typedef struct pc_ctx {
 	int enable_fixed_scan;
 	int preprocess_mode;
 	int lzp_preprocess;
+	int dispack_preprocess;
 	int encrypt_type;
 	int archive_mode;
 	int verbose;

@@ -915,6 +915,7 @@ do_map:
 
 		if (typ == TYPE_UNKNOWN) {
 			pctx->ctype = detect_type_by_data(src, len);
+			typ = pctx->ctype;
 			if (typ != TYPE_UNKNOWN) {
 				if (typetab[(typ >> 3)].filter_func != NULL) {
 					int64_t rv;
@@ -1428,6 +1429,9 @@ out:
 
 /* TTA1 packed into 32-bit integer. */
 #	define	TTA1	(0x54544131)
+
+/* Magic for different MSDOS COM file types. */
+#	define COM_MAGIC	(0xcd21)
 #else
 /* 0x7fELF packed into 32-bit integer. */
 #	define	ELFINT (0x464c457fU)
@@ -1443,6 +1447,9 @@ out:
 
 /* TTA1 packed into 32-bit integer. */
 #	define	TTA1	(0x31415454)
+
+/* Magic for different MSDOS COM file types. */
+#	define COM_MAGIC	(0x21cd)
 #endif
 
 /*
@@ -1454,12 +1461,63 @@ detect_type_by_data(uchar_t *buf, size_t len)
 	// At least a few bytes.
 	if (len < 16) return (TYPE_UNKNOWN);
 
-	if (U32_P(buf) == ELFINT)
-		return (TYPE_BINARY|TYPE_EXE); // Regular ELF
-	if ((buf[0] == 'M' || buf[0] == 'L') && buf[1] == 'Z')
-		return (TYPE_BINARY|TYPE_EXE); // MSDOS Exe
-	if (buf[0] == 0xe9)
-		return (TYPE_BINARY|TYPE_EXE); // MSDOS COM
+	if (U32_P(buf) == ELFINT) {  // Regular ELF, check for 32/64-bit, core dump
+		if (*(buf + 16) != 4) {
+			if (*(buf + 4) == 2) {
+				return (TYPE_BINARY|TYPE_EXE64);
+			} else {
+				return (TYPE_BINARY|TYPE_EXE32);
+			}
+		} else {
+			return (TYPE_BINARY);
+		}
+	}
+	if (buf[1] == 'Z') {
+		 // Check for MSDOS/Windows Exe types
+		if (buf[0] == 'L') {
+			return (TYPE_BINARY|TYPE_EXE32);
+		} else if (buf[0] == 'M') {
+			// If relocation table is less than 0x40 bytes into file then
+			// it is a 32-bit MSDOS exe.
+			if (LE16(U16_P(buf + 0x18)) < 0x40) {
+				return (TYPE_BINARY|TYPE_EXE32);
+			} else {
+				uint32_t off = LE32(U32_P(buf + 0x3c));
+				// This is non-MSDOS, check whether PE
+				if (off < len - 3) {
+					if (buf[off] == 'P' && buf[off+1] == 'E' &&
+					    buf[off+2] == '\0' && buf[off+3] == '\0') {
+						// This is a PE executable.
+						// Check 32/64-bit.
+						off = LE32(U32_P(buf + 0x3c))+4;
+						if (LE16(U16_P(buf + off)) == 0x8664) {
+							return (TYPE_BINARY|TYPE_EXE64);
+						} else {
+							return (TYPE_BINARY|TYPE_EXE32);
+						}
+					} else {
+						return (TYPE_BINARY|TYPE_EXE32);
+					}
+				}
+			}
+		}
+	}
+
+	// MSDOS COM types
+	if (buf[0] == 0xe9 || buf[0] == 0xeb) {
+		if (LE16(U16_P(buf + 0x1fe)) == 0xaa55)
+			return (TYPE_BINARY|TYPE_EXE32); // MSDOS COM
+		else
+			return (TYPE_BINARY);
+	}
+	if (U16_P(buf + 2) == COM_MAGIC || U16_P(buf + 4) == COM_MAGIC ||
+	    U16_P(buf + 4) == COM_MAGIC || U16_P(buf + 5) == COM_MAGIC ||
+	    U16_P(buf + 13) == COM_MAGIC || U16_P(buf + 18) == COM_MAGIC ||
+	    U16_P(buf + 23) == COM_MAGIC || U16_P(buf + 30) == COM_MAGIC ||
+	    U16_P(buf + 70) == COM_MAGIC) {
+			return (TYPE_BINARY|TYPE_EXE32); // MSDOS COM
+	}
+
 	if (U32_P(buf) == TZINT)
 		return (TYPE_BINARY); // Timezone data
 	if (U32_P(buf) == PPMINT)
