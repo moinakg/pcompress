@@ -43,11 +43,11 @@
 #include "pc_archive.h"
 
 #define	PACKJPG_DEF_BUFSIZ	(512 * 1024)
-#define	JPG_SIZE_LIMIT		(25 * 1024 * 1024)
+#define	JPG_SIZE_LIMIT		(8 * 1024 * 1024)
 
 struct packjpg_filter_data {
-	uchar_t *buff, *in_buff;
-	size_t bufflen, in_bufflen;
+	uchar_t *in_buff;
+	size_t in_bufflen;
 };
 
 extern size_t packjpg_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf);
@@ -62,8 +62,6 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 
 	if (ff->enable_packjpg) {
 		pjdat = (struct packjpg_filter_data *)malloc(sizeof (struct packjpg_filter_data));
-		pjdat->buff = (uchar_t *)malloc(PACKJPG_DEF_BUFSIZ);
-		pjdat->bufflen = PACKJPG_DEF_BUFSIZ;
 		pjdat->in_buff = NULL;
 		pjdat->in_bufflen = 0;
 
@@ -137,6 +135,7 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 	struct packjpg_filter_data *pjdat = (struct packjpg_filter_data *)filter_private;
 	uchar_t *mapbuf, *out;
 	uint64_t len, in_size = 0, len1;
+	ssize_t rv;
 
 	len = archive_entry_size(fi->entry);
 	len1 = len;
@@ -183,28 +182,16 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		 * LibArchive always zero-pads entries to their original size so
 		 * we need to separately store the compressed size.
 		 */
-		in_size = U64_P(pjdat->in_buff);
+		in_size = LE64(U64_P(pjdat->in_buff));
 		mapbuf = pjdat->in_buff + 8;
 
 		/*
-		 * We are trying to decompress and this is not a packJPG file, or is
-		 * a normal Jpeg.
+		 * We are trying to decompress and this is not a packJPG file.
 		 * Write the raw data and skip.
 		 */
-		if ((mapbuf[0] != 'J' && mapbuf[1] != 'S') ||
-		    (pjdat->in_buff[0] == 0xFF && pjdat->in_buff[1] == 0xD8)) {
+		if (mapbuf[0] != 'J' && mapbuf[1] != 'S') {
 			return (write_archive_data(fi->target_arc, pjdat->in_buff,
-			    in_size, fi->block_size));
-		}
-	}
-	if (pjdat->bufflen < len) {
-		free(pjdat->buff);
-		pjdat->bufflen = len;
-		pjdat->buff = malloc(pjdat->bufflen);
-		if (pjdat->buff == NULL) {
-			log_msg(LOG_ERR, 1, "Out of memory.");
-			munmap(mapbuf, len);
-			return (FILTER_RETURN_ERROR);
+			    len, fi->block_size));
 		}
 	}
 
@@ -212,11 +199,11 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 	 * Compression case.
 	 */
 	if (fi->compressing) {
-		ssize_t rv;
-
-		out = pjdat->buff;
-		if ((len = packjpg_filter_process(mapbuf, len, &out)) == 0) {
+		out = NULL;
+		len = packjpg_filter_process(mapbuf, len, &out);
+		if (len == 0 || len >= (len1 - 8)) {
 			munmap(mapbuf, len1);
+			free(out);
 			return (FILTER_RETURN_SKIP);
 		}
 		munmap(mapbuf, len1);
@@ -225,22 +212,27 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		rv = archive_write_data(fi->target_arc, &in_size, 8);
 		if (rv != 8)
 			return (rv);
-		return (archive_write_data(fi->target_arc, out, len));
+		rv = archive_write_data(fi->target_arc, out, len);
+		free(out);
+		return (rv);
 	}
 
 	/*
 	 * Decompression case.
 	 */
-	out = pjdat->buff;
+	out = NULL;
 	if ((len = packjpg_filter_process(mapbuf, in_size, &out)) == 0) {
 		/*
 		 * If filter failed we write out the original data and indicate skip
 		 * to continue the archive extraction.
 		 */
+		free(out);
 		if (write_archive_data(fi->target_arc, mapbuf, len1, fi->block_size) < len1)
 			return (FILTER_RETURN_ERROR);
 		return (FILTER_RETURN_SKIP);
 	}
-	return (write_archive_data(fi->target_arc, out, len, fi->block_size));
+	rv = write_archive_data(fi->target_arc, out, len, fi->block_size);
+	free(out);
+	return (rv);
 }
 
