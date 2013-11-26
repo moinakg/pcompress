@@ -302,7 +302,7 @@ $(PJPGOBJS): $(PJPGSRCS) $(PJPGHDRS)
 
 $(DISPACKOBJS): $(DISPACKSRCS) $(DISPACKHDRS)
 	$(COMPILE_cpp) $(COMMON_VEC_FLAGS) @SSE_OPT_FLAGS@ -O2 -fsched-spec-load \
-	$(VEC_FLAGS) $(COMMON_CPPFLAGS_cpp) $(@:.o=.cpp) -o $@
+	-Wno-variadic-macros $(VEC_FLAGS) $(COMMON_CPPFLAGS_cpp) $(@:.o=.cpp) -o $@
 
 $(SKEIN_BLOCK_OBJ): $(SKEIN_BLOCK_SRC)
 	$(COMPILE) $(SKEIN_FLAGS) $(SKEIN_BLOCK_SRC) -o $@
