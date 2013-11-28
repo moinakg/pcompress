@@ -38,6 +38,7 @@
 #include <sys/param.h>
 #include <stdint.h>
 #include <assert.h>
+#include <string.h>
 #include <cpuid.h>
 
 #ifdef	__cplusplus
@@ -269,7 +270,8 @@ typedef enum {
 	TYPE_DNA_SEQ = 168,
 	TYPE_MJPEG = 176,
 	TYPE_AUDIO_COMPRESSED = 184,
-	TYPE_EXE64 = 192
+	TYPE_EXE64 = 192,
+	TYPE_BMP = 200
 } data_type_t;
 
 /*
@@ -382,6 +384,18 @@ roundup_pow_two(unsigned int v) {
 	v |= v >> 16;
 	v++;
 	return (v);
+}
+
+static inline int
+endswith(char *haystack, char *needle) {
+	size_t len = strlen(haystack);
+	size_t nlen = strlen(needle);
+	if (nlen > len)
+		return (0);
+	size_t pos = len - nlen;
+	if (memcmp(&haystack[pos], needle, nlen) != 0)
+		return (0);
+	return (1);
 }
 
 #ifdef	__cplusplus

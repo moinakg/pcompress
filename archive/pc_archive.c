@@ -1355,7 +1355,7 @@ init_archive_mod() {
 				 * comparison.
 				 */
 				for (j = 0; j < extlist[i].len; j++)
-					extnum = (extnum << 1) | extlist[i].ext[j];
+					extnum = (extnum << 8) | extlist[i].ext[j];
 				exthtab[slot].extnum = extnum;
 				exthtab[slot].type = extlist[i].type;
 			}
@@ -1407,7 +1407,7 @@ detect_type_by_ext(const char *path, int pathlen)
 	 * Pack given extension into 64-bit integer.
 	 */
 	for (i = 0; i < len; i++)
-		extnum = (extnum << 1) | tolower(ext[i]);
+		extnum = (extnum << 8) | tolower(ext[i]);
 	if (exthtab[slot].extnum == extnum)
 		return (exthtab[slot].type);
 out:
@@ -1501,6 +1501,13 @@ detect_type_by_data(uchar_t *buf, size_t len)
 				}
 			}
 		}
+	}
+
+	// BMP Files
+	if (buf[0] == 'B' && buf[1] == 'M') {
+		uint16_t typ = LE16(U16_P(buf + 14));
+		if (typ == 12 || typ == 64 || typ == 40 || typ == 128)
+			return (TYPE_BINARY|TYPE_BMP);
 	}
 
 	// MSDOS COM types

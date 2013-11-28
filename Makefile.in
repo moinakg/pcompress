@@ -133,7 +133,8 @@ DELTA2OBJS = $(DELTA2SRCS:.c=.o)
 ARCHIVESRCS = archive/pc_archive.c archive/pc_arc_filter.c utils/phash/phash.c \
 	utils/phash/lookupa.c utils/phash/recycle.c
 ARCHIVEHDRS = pcompress.h  utils/utils.h archive/pc_archive.h utils/phash/standard.h \
-	utils/phash/lookupa.h utils/phash/recycle.h utils/phash/phash.h archive/pc_arc_filter.h
+	utils/phash/lookupa.h utils/phash/recycle.h utils/phash/phash.h archive/pc_arc_filter.h \
+	utils/phash/extensions.h
 ARCHIVEOBJS = $(ARCHIVESRCS:.c=.o)
 
 PJPGSRCS = filters/packjpg/aricoder.cpp filters/packjpg/bitops.cpp filters/packjpg/packjpg.cpp \

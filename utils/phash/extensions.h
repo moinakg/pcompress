@@ -132,7 +132,6 @@ struct ext_entry {
 	{"zpaq"	, TYPE_BINARY|TYPE_COMPRESSED|TYPE_COMPRESSED_ZPAQ, 4},
 	{"xcf"	, TYPE_BINARY, 3},
 	{"mo"	, TYPE_BINARY, 2},
-	{"bmp"	, TYPE_BINARY, 3},
 	{"pyo"	, TYPE_BINARY, 3},
 	{"pyc"	, TYPE_BINARY, 3},
 	{"wav"	, TYPE_BINARY, 3},

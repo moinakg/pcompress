@@ -180,12 +180,15 @@ show_compression_stats(pc_ctx_t *pctx)
 		log_msg(LOG_INFO, 0, "No statistics to display.");
 	} else {
 		log_msg(LOG_INFO, 0, "Best compressed chunk  : %s(%.2f%%)",
-		    bytes_to_size(pctx->smallest_chunk), (double)pctx->smallest_chunk/(double)pctx->chunksize*100);
+		    bytes_to_size(pctx->smallest_chunk),
+		    (double)pctx->smallest_chunk/(double)pctx->chunksize*100);
 		log_msg(LOG_INFO, 0, "Worst compressed chunk : %s(%.2f%%)",
-		    bytes_to_size(pctx->largest_chunk), (double)pctx->largest_chunk/(double)pctx->chunksize*100);
+		    bytes_to_size(pctx->largest_chunk),
+		    (double)pctx->largest_chunk/(double)pctx->chunksize*100);
 		pctx->avg_chunk /= pctx->chunk_num;
 		log_msg(LOG_INFO, 0, "Avg compressed chunk   : %s(%.2f%%)\n",
-		    bytes_to_size(pctx->avg_chunk), (double)pctx->avg_chunk/(double)pctx->chunksize*100);
+		    bytes_to_size(pctx->avg_chunk),
+		    (double)pctx->avg_chunk/(double)pctx->chunksize*100);
 	}
 }
 
@@ -202,7 +205,8 @@ show_compression_stats(pc_ctx_t *pctx)
  */
 static int
 preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t srclen,
-	void *dst, uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data, algo_props_t *props)
+    void *dst, uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data,
+    algo_props_t *props)
 {
 	uchar_t *dest = (uchar_t *)dst, type = 0;
 	int64_t result;
@@ -233,7 +237,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		}
 	}
 
-	if (pctx->lzp_preprocess) {
+	if (pctx->lzp_preprocess && PC_SUBTYPE(btype) != TYPE_BMP) {
 		int hashsize;
 
 		hashsize = lzp_hash_size(level);
@@ -249,7 +253,8 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		}
 	}
 
-	if (pctx->enable_delta2_encode && props->delta2_span > 0) {
+	if (pctx->enable_delta2_encode && props->delta2_span > 0 &&
+	    PC_SUBTYPE(btype) != TYPE_DNA_SEQ && PC_SUBTYPE(btype) != TYPE_BMP) {
 		_dstlen = fromlen;
 		result = delta2_encode((uchar_t *)from, fromlen, to,
 				       &_dstlen, props->delta2_span);
@@ -284,7 +289,8 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	if (result > -1 && _dstlen < srclen) {
 		*dest |= PREPROC_COMPRESSED;
 		*dstlen = _dstlen + 9;
-		DEBUG_STAT_EN(fprintf(stderr, "Chunk compression speed %.3f MB/s\n", get_mb_s(srclen, strt, en)));
+		DEBUG_STAT_EN(fprintf(stderr, "Chunk compression speed %.3f MB/s\n",
+		    get_mb_s(srclen, strt, en)));
 	} else {
 		DEBUG_STAT_EN(fprintf(stderr, "Chunk did not compress.\n"));
 		memcpy(dest+1, src, srclen);
@@ -304,7 +310,8 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 
 static int
 preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64_t srclen,
-	void *dst, uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data, algo_props_t *props)
+    void *dst, uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data,
+    algo_props_t *props)
 {
 	uchar_t *sorc = (uchar_t *)src, type;
 	int64_t result;
@@ -323,7 +330,8 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 		DEBUG_STAT_EN(en = get_wtime_millis());
 
 		if (result < 0) return (result);
-		DEBUG_STAT_EN(fprintf(stderr, "Chunk decompression speed %.3f MB/s\n", get_mb_s(srclen, strt, en)));
+		DEBUG_STAT_EN(fprintf(stderr, "Chunk decompression speed %.3f MB/s\n",
+		    get_mb_s(srclen, strt, en)));
 		memcpy(src, dst, *dstlen);
 		srclen = *dstlen;
 	} else {
@@ -368,7 +376,7 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 		}
 	}
 
-	if (!(type & (PREPROC_COMPRESSED | PREPROC_TYPE_DELTA2 | PREPROC_TYPE_LZP | PREPROC_TYPE_DISPACK))
+	if (!(type & (PREPROC_COMPRESSED|PREPROC_TYPE_DELTA2|PREPROC_TYPE_LZP|PREPROC_TYPE_DISPACK))
 	    && type > 0) {
 		log_msg(LOG_ERR, 0, "Invalid preprocessing flags: %d", type);
 		return (-1);
@@ -435,7 +443,8 @@ redo:
 
 		DEBUG_STAT_EN(strt = get_wtime_millis());
 		len = pctx->mac_bytes;
-		deserialize_checksum(checksum, tdat->compressed_chunk + pctx->cksum_bytes, pctx->mac_bytes);
+		deserialize_checksum(checksum, tdat->compressed_chunk + pctx->cksum_bytes,
+		    pctx->mac_bytes);
 		memset(tdat->compressed_chunk + pctx->cksum_bytes, 0, pctx->mac_bytes);
 		hmac_reinit(&tdat->chunk_hmac);
 		hmac_update(&tdat->chunk_hmac, (uchar_t *)&tdat->len_cmp_be, sizeof (tdat->len_cmp_be));
@@ -641,7 +650,8 @@ redo:
 		 * If it does not match we set length of chunk to 0 to indicate
 		 * exit to the writer thread.
 		 */
-		compute_checksum(checksum, pctx->cksum, tdat->uncompressed_chunk, _chunksize, tdat->cksum_mt, 1);
+		compute_checksum(checksum, pctx->cksum, tdat->uncompressed_chunk,
+		    _chunksize, tdat->cksum_mt, 1);
 		if (memcmp(checksum, tdat->checksum, pctx->cksum_bytes) != 0) {
 			tdat->len_cmp = 0;
 			log_msg(LOG_ERR, 0, "ERROR: Chunk %d, checksums do not match.", tdat->id);
@@ -887,7 +897,8 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		if (flags & FLAG_DEDUP_FIXED) {
 			if (version > 7) {
 				if (pctx->pipe_mode) {
-					log_msg(LOG_ERR, 0, "Global Deduplication is not supported with pipe mode.");
+					log_msg(LOG_ERR, 0, "Global Deduplication is not "
+					    "supported with pipe mode.");
 					err = 1;
 					goto uncomp_done;
 				}
@@ -1129,7 +1140,8 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		free(salt1);
 		memset(n1, 0, noncelen);
 		if (memcmp(hdr_hash2, hdr_hash1, pctx->mac_bytes) != 0) {
-			log_msg(LOG_ERR, 0, "Header verification failed! File tampered or wrong password.");
+			log_msg(LOG_ERR, 0, "Header verification failed! File "
+			    "tampered or wrong password.");
 			UNCOMP_BAIL;
 		}
 	} else if (version >= 5) {
@@ -1158,7 +1170,8 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		d2 = htonl(level);
 		crc2 = lzma_crc32((uchar_t *)&d2, sizeof (level), crc2);
 		if (crc1 != crc2) {
-			log_msg(LOG_ERR, 0, "Header verification failed! File tampered or wrong password.");
+			log_msg(LOG_ERR, 0, "Header verification failed! File tampered "
+			    "or wrong password.");
 			UNCOMP_BAIL;
 		}
 	}
@@ -1169,7 +1182,8 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 			strcat(pctx->archive_temp_file, "/.data");
 			if ((pctx->archive_temp_fd = open(pctx->archive_temp_file,
 			O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1) {
-				log_msg(LOG_ERR, 1, "Cannot open temporary data file in target directory.");
+				log_msg(LOG_ERR, 1, "Cannot open temporary data file in "
+				    "target directory.");
 				UNCOMP_BAIL;
 			}
 			add_fname(pctx->archive_temp_file);
@@ -2883,7 +2897,8 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		    case 'e':
 			pctx->encrypt_type = get_crypto_alg(optarg);
 			if (pctx->encrypt_type == 0) {
-				log_msg(LOG_ERR, 0, "Invalid encryption algorithm. Should be AES or SALSA20.", optarg);
+				log_msg(LOG_ERR, 0, "Invalid encryption algorithm. "
+				    "Should be AES or SALSA20.", optarg);
 				return (1);
 			}
 			break;
@@ -3098,12 +3113,14 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 					pctx->to_filename = NULL;
 				} else {
 					strcpy(apath, argv[my_optind]);
-					strcat(apath, COMP_EXTN);
+					if (!endswith(apath, COMP_EXTN))
+						strcat(apath, COMP_EXTN);
 					pctx->to_filename = realpath(apath, NULL);
 
 					/* Check if compressed file exists */
 					if (pctx->to_filename != NULL) {
-						log_msg(LOG_ERR, 0, "Compressed file %s exists", pctx->to_filename);
+						log_msg(LOG_ERR, 0, "Compressed file %s exists",
+						    pctx->to_filename);
 						free((void *)(pctx->to_filename));
 						return (1);
 					}
@@ -3111,12 +3128,14 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 				}
 			} else {
 				strcpy(apath, pctx->filename);
-				strcat(apath, COMP_EXTN);
+				if (!endswith(apath, COMP_EXTN))
+					strcat(apath, COMP_EXTN);
 				pctx->to_filename = realpath(apath, NULL);
 
 				/* Check if compressed file exists */
 				if (pctx->to_filename != NULL) {
-					log_msg(LOG_ERR, 0, "Compressed file %s exists", pctx->to_filename);
+					log_msg(LOG_ERR, 0, "Compressed file %s exists",
+					    pctx->to_filename);
 					free((void *)(pctx->to_filename));
 					return (1);
 				}
