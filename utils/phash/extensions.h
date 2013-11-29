@@ -89,6 +89,8 @@ struct ext_entry {
 	{"mom"	, TYPE_TEXT, 3},
 	{"tmac"	, TYPE_TEXT, 4},
 	{"pdf"	, TYPE_BINARY, 3},
+	{"tif"	, TYPE_BINARY|TYPE_TIFF, 3},
+	{"tiff"	, TYPE_BINARY|TYPE_TIFF, 4},
 	{"jpg"	, TYPE_BINARY|TYPE_COMPRESSED|TYPE_JPEG, 3},
 	{"jpeg"	, TYPE_BINARY|TYPE_COMPRESSED|TYPE_JPEG, 4},
 	{"mjpeg"	, TYPE_BINARY|TYPE_COMPRESSED|TYPE_MJPEG, 5},

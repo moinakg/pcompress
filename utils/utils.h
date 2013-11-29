@@ -271,7 +271,8 @@ typedef enum {
 	TYPE_MJPEG = 176,
 	TYPE_AUDIO_COMPRESSED = 184,
 	TYPE_EXE64 = 192,
-	TYPE_BMP = 200
+	TYPE_BMP = 200,
+	TYPE_TIFF = 208
 } data_type_t;
 
 /*

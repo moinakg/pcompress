@@ -237,7 +237,9 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		}
 	}
 
-	if (pctx->lzp_preprocess && PC_SUBTYPE(btype) != TYPE_BMP) {
+	if (pctx->lzp_preprocess &&
+	    PC_SUBTYPE(btype) != TYPE_BMP &&
+	    PC_SUBTYPE(btype) != TYPE_TIFF) {
 		int hashsize;
 
 		hashsize = lzp_hash_size(level);
@@ -254,7 +256,8 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	}
 
 	if (pctx->enable_delta2_encode && props->delta2_span > 0 &&
-	    PC_SUBTYPE(btype) != TYPE_DNA_SEQ && PC_SUBTYPE(btype) != TYPE_BMP) {
+	    PC_SUBTYPE(btype) != TYPE_DNA_SEQ && PC_SUBTYPE(btype) != TYPE_BMP &&
+	    PC_SUBTYPE(btype) != TYPE_TIFF) {
 		_dstlen = fromlen;
 		result = delta2_encode((uchar_t *)from, fromlen, to,
 				       &_dstlen, props->delta2_span);
