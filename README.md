@@ -92,10 +92,6 @@ Usage
                 compressed output goes to stdout. If this argument is omitted then
                 source filename is used with the extension '.pz' appended.
 
-NOTE: The option "libbsc" uses  Ilya Grebnov's block sorting compression library
-      from http://libbsc.com/ . It is only available if pcompress in built with
-      that library. See INSTALL file for details.
-      
     To decompress a file compressed using above command:
        pcompress -d <compressed file> <target file>
        

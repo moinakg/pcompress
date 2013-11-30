@@ -11,3 +11,5 @@ test/datafiles
 *~
 core.*
 *.kate-swp
+bsc/bsc
+*.a

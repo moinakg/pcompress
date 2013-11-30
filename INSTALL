@@ -96,11 +96,6 @@ is not the usual GNU Autoconf script.
 			This at present shows some info related to Dedupe
 			efficiency.
 
---with-libbsc=<path_to_libbsc_source>
-			Enable support for libbsc (See: libbsc.com). Full
-			path to the libbsc source tree must be provided. It
-			links the library statically.
-
 --with-zlib=<path to zlib installation tree> (Default: System)
                         Enable building against an alternate Zlib installation.
 
@@ -117,24 +112,6 @@ is not the usual GNU Autoconf script.
 
 --help			Display the help message.
 
-Steps for building with libbsc support
-======================================
-1) Download libbsc source from:  http://libbsc.com/ . Click on the
-   "Download TAR Ball" button. Downloading the 3.1.0 release from the
-   Github project download page will Not work.
-
-2) Extract the gzippped tarball. It will create a directory for example:
-   IlyaGrebnov-libbsc-0b12f29
-
-3) Now cd into the pcompress directory and execute the config script
-   with the full path to the libbsc source directory. For example:
-
-   ./config --with-libbsc=/full/path/to/IlyaGrebnov-libbsc-0b12f29
-
-4) Now run make in the pcompress directory. This will also run make in
-   the libbsc source directory to build it.
-
-5) Additional compilation flags can be passed to make like this:
+Additional compilation flags can be passed to make like this:
    make EXTRA_CPPFLAGS=<...> EXTRA_LDFLAGS=<...>
-
 
