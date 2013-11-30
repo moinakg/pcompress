@@ -40,6 +40,7 @@ struct libbsc_params {
 	int lzpMinLen;
 	int bscCoder;
 	int features;
+	int oldversion;
 };
 
 static void
@@ -67,6 +68,13 @@ void
 libbsc_stats(int show)
 {
 }
+
+int
+libbsc_buf_extra(uint64_t buflen)
+{
+	return (4096);
+}
+
 
 /*
  * BSC uses OpenMP where it does not control thread count
@@ -124,6 +132,10 @@ libbsc_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		bscdat->lzpMinLen = 200;
 		bscdat->bscCoder = LIBBSC_CODER_QLFC_ADAPTIVE;
 	}
+
+	if (file_version < 9) {
+		bscdat->oldversion = 1;
+	}
 	*data = bscdat;
 	rv = bsc_init(bscdat->features);
 	if (rv != LIBBSC_NO_ERROR) {
@@ -176,7 +188,10 @@ libbsc_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	int rv;
 	struct libbsc_params *bscdat = (struct libbsc_params *)data;
 
-	rv = bsc_decompress(src, srclen, dst, *dstlen, bscdat->features);
+	if (bscdat->oldversion)
+		rv = bsc_decompress_old(src, srclen, dst, *dstlen, bscdat->features);
+	else
+		rv = bsc_decompress(src, srclen, dst, *dstlen, bscdat->features);
 	if (rv != LIBBSC_NO_ERROR) {
 		libbsc_err(rv);
 		return (-1);

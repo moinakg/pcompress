@@ -323,10 +323,7 @@ $(KECCAK_OBJS): $(KECCAK_SRCS) $(KECCAK_HDRS)
 $(KECCAK_OBJS_ASM): $(KECCAK_SRCS_ASM) $(KECCAK_HDRS)
 	$(COMPILE) $(KECCAK_FLAGS) $(@:.o=.s) -o $@
 
-$(LIBBSCLIB):
-	(cd $(LIBBSCDIR); make)
-
-$(LIBBSCWRAPOBJ): $(LIBBSCWRAP) $(LIBBSCLIB)
+$(LIBBSCWRAPOBJ): $(LIBBSCWRAP)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(TRANSP_OBJS): $(TRANSP_SRCS) $(TRANSP_HDRS)
@@ -367,14 +364,18 @@ $(MAINOBJS): $(MAINSRCS) $(MAINHDRS)
 $(PROGOBJS): $(PROGSRCS) $(PROGHDRS)
 	$(COMPILE) $(GEN_OPT) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
-$(LIB): $(OBJS)
+$(LIBBSCLIB):
+	(cd $(LIBBSCDIR); make)
+
+$(LIB): $(OBJS)  $(LIBBSCLIB)
 	$(LINK.LIB) -Wl,-soname,$(LIB).$(LIBVER) -o $(LIB).$(LIBVER) $(OBJS) $(LDLIBS)
 	ln -sf $(LIB).$(LIBVER) $(LIB)
 
-$(PROG): $(LIB) $(PROGOBJS)
-	$(LINK.PROG) -o $@ $(PROGOBJS) $(LDLIBS) -L. -l$(LINKLIB)
+./buildtmp/$(PROG):
 	mkdir -p buildtmp
-	cp $@ buildtmp
+	$(LINK.PROG) -o $@ $(PROGOBJS) $(LDLIBS) -L. -l$(LINKLIB)
+
+$(PROG): $(LIB) $(PROGOBJS) ./buildtmp/$(PROG)
 	cat utils/pcompress.sh | sed "s#<PC_PATH>#`pwd`#" > pcompress
 	chmod +x pcompress
 
@@ -389,6 +390,7 @@ clean:
 
 distclean: clean
 	$(RM) Makefile
+	(cd $(LIBBSCDIR); make clean)
 
 install: $(PROG)
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin

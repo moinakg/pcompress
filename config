@@ -31,9 +31,9 @@ ${prog} [<options>]
 --enable-debug		Enable debug mode compilation (default: disabled).
 --disable-allocator	Disable use of internal memory allocator mechanism (default: enabled).
 --enable-debug-stats	Enable printing of some verbose debug info (default: disabled).
---with-libbsc=<path to libbsc source>
-			Enable support for libbsc (See: libbsc.com). Full path to the libbsc
-			source tree must be provided. It links the library statically.
+--with-libbsc=<path to libbsc source> (Default: Internal copy)
+			Full path to external libbsc source tree can be provided. It links the
+			library statically.
 --with-openssl=<path to OpenSSL installation tree> (Default: System)
 			This defaults to the system's OpenSSL library. You can use this option
 			if you want to use an alternate OpenSSL installation.
@@ -60,12 +60,12 @@ debug=0
 allocator=1
 debug_stats=0
 prefix=/usr
-libbsc_dir=
-libbsc_lib=
-libbsclflags=
-libbscwrapobj=
-libbscgenopt=
-libbsccppflags=
+libbsc_dir=./bsc
+libbsc_lib=${libbsc_dir}/libbsc.a
+libbsclflags='\$\(LIBBSCLFLAGS\)'
+libbscwrapobj='\$\(LIBBSCWRAPOBJ\)'
+libbscgenopt='\$\(LIBBSCGEN_OPT\)'
+libbsccppflags='\$\(LIBBSCCPPFLAGS\)'
 openssl_prefix=
 openssl_libdir=
 openssl_incdir=
@@ -162,7 +162,8 @@ do
 			libbscgenopt='\$\(LIBBSCGEN_OPT\)'
 			libbsccppflags='\$\(LIBBSCCPPFLAGS\)'
 		else
-			echo "Libbsc not found in ${path}, not enabling libbsc support.\n"
+			echo "Libbsc not found in ${path}.\n"
+			exit 1
 		fi
 	;;
 	--with-openssl=*)
