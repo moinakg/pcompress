@@ -2050,7 +2050,12 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 				}
 				add_fname(tmpfile1);
 			} else {
-				snprintf(to_filename, sizeof (to_filename), "%s" COMP_EXTN, pctx->to_filename);
+				if (!endswith(pctx->to_filename, COMP_EXTN))
+					snprintf(to_filename, sizeof (to_filename),
+					    "%s" COMP_EXTN, pctx->to_filename);
+				else
+					snprintf(to_filename, sizeof (to_filename),
+					    "%s", pctx->to_filename);
 				if ((compfd = open(to_filename, O_CREAT|O_RDWR, S_IRUSR|S_IWUSR)) == -1) {
 					log_msg(LOG_ERR, 1, "open ");
 					COMP_BAIL;
@@ -3131,8 +3136,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 				}
 			} else {
 				strcpy(apath, pctx->filename);
-				if (!endswith(apath, COMP_EXTN))
-					strcat(apath, COMP_EXTN);
+				strcat(apath, COMP_EXTN);
 				pctx->to_filename = realpath(apath, NULL);
 
 				/* Check if compressed file exists */

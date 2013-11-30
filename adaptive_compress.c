@@ -288,7 +288,7 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 	} else {
 #ifdef ENABLE_PC_LIBBSC
 		if (adat->bsc_data && (PC_SUBTYPE(btype) == TYPE_MARKUP ||
-		    PC_SUBTYPE(btype) == TYPE_BMP)) {
+		    PC_SUBTYPE(btype) == TYPE_BMP || PC_SUBTYPE(btype) == TYPE_DNA_SEQ)) {
 			rv = libbsc_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->bsc_data);
 			if (rv < 0)
 				return (rv);
