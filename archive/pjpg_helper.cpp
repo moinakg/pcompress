@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <utils.h>
 #include <packjpglib.h>
 
 #ifdef	__cplusplus
@@ -62,11 +63,32 @@ typedef unsigned char uchar_t;
 	
 	vice versa for output streams! */
 
+#define	POLAROID_LE 0x64696f72616c6f50
+
 size_t
 packjpg_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf)
 {
 	unsigned int len1;
+	uchar_t *pos;
 
+	/*
+	 * Workaround for packJPG limitation, not a bug per se. Images created with
+	 * Polaroid cameras appear to have some weird huffman data in the middle which
+	 * appears not to be interpreted by any image viewer/editor. This data gets
+	 * stripped by packJPG.
+	 * So the restored images will be visually correct, but, will be smaller than the
+	 * original. So we need to look at the Exif Manufacturer tag for 'Polaroid' and
+	 * skip those images. This should be within the first 512 bytes of the
+	 * file (really...?) so we do a simple buffer scan without trying to parse Exif
+	 * data.
+	 */
+	pos = (uchar_t *)memchr(in_buf, 'P', 512);
+	while (pos) {
+		if (LE64(U64_P(pos)) == POLAROID_LE)
+			return (0);
+		pos++;
+		pos = (uchar_t *)memchr(pos, 'P', 512);
+	}
 	pjglib_init_streams(in_buf, 1, len, *out_buf, 1);
 	len1 = len;
 	if (!pjglib_convert_stream2mem(out_buf, &len1, NULL))
