@@ -211,12 +211,20 @@ adapt_deinit(void **data)
 }
 
 int
+is_bsc_type(int btype)
+{
+	int stype = PC_SUBTYPE(btype);
+	return ((stype == TYPE_MARKUP) | (stype == TYPE_BMP) | (stype == TYPE_DNA_SEQ) |
+	    (stype == TYPE_TIFF) | (stype == TYPE_MP4) | (stype == TYPE_FLAC));
+}
+
+int
 adapt_compress(void *src, uint64_t srclen, void *dst,
 	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data)
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t *src1 = (uchar_t *)src;
-	int rv = 0;
+	int rv = 0, bsc_type = 0;
 
 	if (btype == TYPE_UNKNOWN) {
 		uint64_t i, tot8b, tag1, tag2, tag3;
@@ -262,6 +270,9 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 	 * is no point trying to compress such data, like Jpegs. However some archive headers
 	 * and zero paddings can exist which LZ4 can easily take care of very fast.
 	 */
+#ifdef ENABLE_PC_LIBBSC
+	bsc_type = is_bsc_type(btype);
+#endif
 	if (is_incompressible(btype)) {
 		rv = lz4_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->lz4_data);
 		if (rv < 0)
@@ -269,16 +280,14 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 		rv = ADAPT_COMPRESS_LZ4;
 		lz4_count++;
 
-	} else if (adat->adapt_mode == 2 && PC_TYPE(btype) == TYPE_BINARY &&
-	    PC_SUBTYPE(btype) != TYPE_BMP && PC_SUBTYPE(btype) != TYPE_TIFF) {
+	} else if (adat->adapt_mode == 2 && PC_TYPE(btype) == TYPE_BINARY && !bsc_type) {
 		rv = lzma_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->lzma_data);
 		if (rv < 0)
 			return (rv);
 		rv = ADAPT_COMPRESS_LZMA;
 		lzma_count++;
 
-	} else if (adat->adapt_mode == 1 && PC_TYPE(btype) == TYPE_BINARY &&
-	    PC_SUBTYPE(btype) != TYPE_BMP && PC_SUBTYPE(btype) != TYPE_TIFF) {
+	} else if (adat->adapt_mode == 1 && PC_TYPE(btype) == TYPE_BINARY && !bsc_type) {
 		rv = bzip2_compress(src, srclen, dst, dstlen, level, chdr, btype, NULL);
 		if (rv < 0)
 			return (rv);
@@ -287,9 +296,7 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 
 	} else {
 #ifdef ENABLE_PC_LIBBSC
-		if (adat->bsc_data && (PC_SUBTYPE(btype) == TYPE_MARKUP ||
-		    PC_SUBTYPE(btype) == TYPE_BMP || PC_SUBTYPE(btype) == TYPE_DNA_SEQ ||
-		    PC_SUBTYPE(btype) == TYPE_TIFF)) {
+		if (adat->bsc_data && bsc_type) {
 			rv = libbsc_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->bsc_data);
 			if (rv < 0)
 				return (rv);
