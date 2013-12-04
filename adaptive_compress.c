@@ -215,7 +215,8 @@ is_bsc_type(int btype)
 {
 	int stype = PC_SUBTYPE(btype);
 	return ((stype == TYPE_MARKUP) | (stype == TYPE_BMP) | (stype == TYPE_DNA_SEQ) |
-	    (stype == TYPE_TIFF) | (stype == TYPE_MP4) | (stype == TYPE_FLAC));
+	    (stype == TYPE_TIFF) | (stype == TYPE_MP4) | (stype == TYPE_FLAC) |
+	    (stype == TYPE_AVI));
 }
 
 int

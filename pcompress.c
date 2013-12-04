@@ -212,6 +212,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	int64_t result;
 	uint64_t _dstlen, fromlen;
 	uchar_t *from, *to;
+	int stype;
 	DEBUG_STAT_EN(double strt, en);
 
 	_dstlen = *dstlen;
@@ -219,12 +220,13 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	to = dst;
 	fromlen = srclen;
 	result = 0;
+	stype = PC_SUBTYPE(btype);
 
 	/*
 	 * If Dispack is enabled it has to be done first since Dispack analyses the
 	 * x86 instruction stream in the raw data.
 	 */
-	if (pctx->dispack_preprocess && PC_SUBTYPE(btype) == TYPE_EXE32) {
+	if (pctx->dispack_preprocess && stype == TYPE_EXE32) {
 		_dstlen = fromlen;
 		result = dispack_encode((uchar_t *)from, fromlen, to, &_dstlen);
 		if (result != -1) {
@@ -237,9 +239,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		}
 	}
 
-	if (pctx->lzp_preprocess &&
-	    PC_SUBTYPE(btype) != TYPE_BMP &&
-	    PC_SUBTYPE(btype) != TYPE_TIFF) {
+	if (pctx->lzp_preprocess && stype != TYPE_BMP && stype != TYPE_TIFF) {
 		int hashsize;
 
 		hashsize = lzp_hash_size(level);
@@ -256,8 +256,8 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	}
 
 	if (pctx->enable_delta2_encode && props->delta2_span > 0 &&
-	    PC_SUBTYPE(btype) != TYPE_DNA_SEQ && PC_SUBTYPE(btype) != TYPE_BMP &&
-	    PC_SUBTYPE(btype) != TYPE_TIFF) {
+	    stype != TYPE_DNA_SEQ && stype != TYPE_BMP &&
+	    stype != TYPE_TIFF && stype != TYPE_MP4) {
 		_dstlen = fromlen;
 		result = delta2_encode((uchar_t *)from, fromlen, to,
 				       &_dstlen, props->delta2_span);
