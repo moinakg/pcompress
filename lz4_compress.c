@@ -106,12 +106,6 @@ lz4_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	int _srclen = srclen;
 	uchar_t *dst2;
 
-	/*
-	 * Ignore compressed data in fast modes.
-	 */
-	if (lzdat->level < 3 && PC_TYPE(btype) == TYPE_COMPRESSED)
-		return (-1);
-
 	if (lzdat->level == 1) {
 		rv = LZ4_compress((const char *)src, (char *)dst, _srclen);
 
