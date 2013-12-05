@@ -2946,6 +2946,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 		    case 'a':
 			pctx->archive_mode = 1;
+			pctx->do_compress = 1;
 			break;
 
 		    case 'v':
@@ -2976,6 +2977,19 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 	if ((pctx->do_compress && pctx->do_uncompress) || (!pctx->do_compress && !pctx->do_uncompress)) {
 		return (2);
+	}
+
+	if (pctx->archive_mode && pctx->do_uncompress) {
+		log_msg(LOG_ERR, 0, "'-a' flag is only for archive creation.");
+		return (1);
+	}
+
+	/*
+	 * Default compression algorithm during archiving is Adaptive2.
+	 */
+	if (pctx->archive_mode && pctx->algo == NULL) {
+		pctx->algo = "adapt2";
+		init_algo(pctx, pctx->algo, 1);
 	}
 
 	if (pctx->level == -1 && pctx->do_compress) {
@@ -3204,16 +3218,18 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		}
 
 		/*
-		 * Selectively enable filters while compressing.
+		 * Selectively enable filters while archiving, depending on compression level.
 		 */
 		if (pctx->archive_mode) {
 			struct filter_flags ff;
 
 			ff.enable_packjpg = 0;
-			if (pctx->level > 9) ff.enable_packjpg = 1;
+			if (pctx->level > 10) ff.enable_packjpg = 1;
 			init_filters(&ff);
 			pctx->enable_packjpg = ff.enable_packjpg;
 			if (pctx->level > 8) pctx->dispack_preprocess = 1;
+			if (pctx->level > 4) pctx->enable_delta2_encode = 1;
+			if (pctx->level > 9) pctx->lzp_preprocess = 1;
 		}
 		if (pctx->lzp_preprocess || pctx->enable_delta2_encode || pctx->dispack_preprocess) {
 			pctx->preprocess_mode = 1;

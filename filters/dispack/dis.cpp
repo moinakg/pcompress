@@ -29,6 +29,9 @@
 #include <string.h>
 #include <malloc.h>
 #include <assert.h>
+#include <iostream>
+
+using namespace std;
 
 /* Version history:
  *
@@ -944,10 +947,16 @@ dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 {
 	uchar_t *pos, *hdr, type, *pos_to, *to_last;
 	uint64_t len;
+#ifdef	DEBUG_STATS
+	double strt, en;
+#endif
 
 	if (fromlen < DISFILTER_BLOCK)
 		return (-1);
 
+#ifdef	DEBUG_STATS
+	strt = get_wtime_millis();
+#endif
 	pos = from;
 	len = fromlen;
 	pos_to = to;
@@ -1009,9 +1018,19 @@ dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 		len -= sz;
 	}
 	*dstlen = pos_to - to;
+#ifdef	DEBUG_STATS
+	en = get_wtime_millis();
+	cerr << "Dispack: Processed at " << get_mb_s(fromlen, strt, en) << " MB/s" << endl;
+#endif
 	if ((fromlen - *dstlen) < DIS_MIN_REDUCE) {
+#ifdef	DEBUG_STATS
+		cerr << "Dispack: Failed, reduction too less" << endl;
+#endif
 		return (-1);
 	}
+#ifdef	DEBUG_STATS
+	cerr << "Dispack: srclen: " << fromlen << ", dstlen: " << *dstlen << endl;
+#endif
 	return (0);
 }
 

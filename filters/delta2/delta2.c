@@ -91,10 +91,11 @@
 
 /*
  * Stride values to be checked. As of this implementation strides only
- * upto 8 bytes (uint64_t) are supported.
+ * upto 8 bytes (uint64_t) are supported and common type lengths only
+ * are checked.
  */
-#define	NSTRIDES	4
-static uchar_t strides[NSTRIDES] = {3, 5, 7, 8};
+#define	NSTRIDES	3
+static uchar_t strides[NSTRIDES] = {2, 4, 8};
 
 
 static int delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen,
