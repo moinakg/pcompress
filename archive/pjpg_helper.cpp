@@ -65,6 +65,9 @@ typedef unsigned char uchar_t;
 
 #define	POLAROID_LE 0x64696f72616c6f50
 
+/*
+ * Helper routine to bridge to packJPG C++ lib, without changing packJPG itself.
+ */
 size_t
 packjpg_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf)
 {

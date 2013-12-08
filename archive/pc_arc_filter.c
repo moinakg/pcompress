@@ -44,6 +44,8 @@
 
 #define	PACKJPG_DEF_BUFSIZ	(512 * 1024)
 #define	JPG_SIZE_LIMIT		(8 * 1024 * 1024)
+#define	PJG_APPVERSION1		(25)
+#define	PJG_APPVERSION2		(25)
 
 struct packjpg_filter_data {
 	uchar_t *in_buff;
@@ -126,9 +128,12 @@ write_archive_data(struct archive *aw, uchar_t *out_buf, size_t len, int block_s
 	return (tot);
 }
 
-/*
- * Helper routine to bridge to packJPG C++ lib, without changing packJPG itself.
- */
+int
+pjg_version_supported(char ver)
+{
+	return (ver >= PJG_APPVERSION1 && ver <= PJG_APPVERSION2);
+}
+
 ssize_t
 packjpg_filter(struct filter_info *fi, void *filter_private)
 {
@@ -150,9 +155,14 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		}
 
 		/*
-		 * We are trying to compress and this is not a jpeg. Skip.
+		 * We are trying to compress and this is not a proper jpeg. Skip.
 		 */
-		if (mapbuf[0] != 0xFF && mapbuf[1] != 0xD8) {
+		if (mapbuf[0] != 0xFF || mapbuf[1] != 0xD8) {
+			munmap(mapbuf, len);
+			return (FILTER_RETURN_SKIP);
+		}
+		if (strncmp((char *)&mapbuf[6], "Exif", 4) != 0 &&
+		    strncmp((char *)&mapbuf[6], "JFIF", 4) != 0) {
 			munmap(mapbuf, len);
 			return (FILTER_RETURN_SKIP);
 		}
@@ -187,9 +197,10 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 
 		/*
 		 * We are trying to decompress and this is not a packJPG file.
-		 * Write the raw data and skip.
+		 * Write the raw data and skip. Third byte in PackJPG file is
+		 * version number. We also check if it is supported.
 		 */
-		if (mapbuf[0] != 'J' && mapbuf[1] != 'S') {
+		if (mapbuf[0] != 'J' || mapbuf[1] != 'S' || !pjg_version_supported(mapbuf[2])) {
 			return (write_archive_data(fi->target_arc, pjdat->in_buff,
 			    len, fi->block_size));
 		}

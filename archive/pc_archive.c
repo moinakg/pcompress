@@ -1393,13 +1393,15 @@ detect_type_by_ext(const char *path, int pathlen)
 	ub4 slot;
 	int i, len;
 	uint64_t extnum;
+	char extl[8];
 
 	for (i = pathlen-1; i > 0 && path[i] != '.' && path[i] != PATHSEP_CHAR; i--);
 	if (i == 0 || path[i] != '.') goto out; // If extension not found give up
 	len = pathlen - i - 1;
-	if (len == 0) goto out; // If extension is empty give up
+	if (len == 0 || len > 8) goto out; // If extension is empty give up
 	ext = &path[i+1];
-	slot = phash(ext, len);
+	for (i = 0; i < len; i++) extl[i] = tolower(ext[i]);
+	slot = phash(extl, len);
 	if (slot >= PHASHNKEYS) goto out; // Extension maps outside hash table range, give up
 	extnum = 0;
 
@@ -1454,6 +1456,10 @@ out:
 
 /*
  * Detect a few file types from looking at magic signatures.
+ * NOTE: Jpeg files must be detected via '.jpg' or '.jpeg' (case-insensitive)
+ *	extensions. Do not add Jpeg header detection here. it will break
+ *	context based PackJPG processing. Jpeg files not have proper
+ *	extension must not be processed via PackJPG.
  */
 static int
 detect_type_by_data(uchar_t *buf, size_t len)

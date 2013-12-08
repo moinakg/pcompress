@@ -3230,6 +3230,14 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			if (pctx->level > 8) pctx->dispack_preprocess = 1;
 			if (pctx->level > 4) pctx->enable_delta2_encode = 1;
 			if (pctx->level > 9) pctx->lzp_preprocess = 1;
+			if (pctx->level > 3) {
+				pctx->enable_rabin_global = 1;
+				pctx->enable_rabin_scan = 1;
+				pctx->enable_rabin_split = 1;
+				pctx->rab_blk_size = 2;
+				if (pctx->level > 4) pctx->rab_blk_size = 1;
+				if (pctx->level > 8) pctx->rab_blk_size = 0;
+			}
 		}
 		if (pctx->lzp_preprocess || pctx->enable_delta2_encode || pctx->dispack_preprocess) {
 			pctx->preprocess_mode = 1;
