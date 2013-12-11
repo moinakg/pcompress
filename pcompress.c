@@ -24,7 +24,8 @@
  */
 
 /*
- * pcompress - Do a chunked parallel compression/decompression of a file.
+ * pcompress - Do a chunked parallel compression/decompression and archiving
+ * of one or more files.
  */
 
 #include <stdio.h>
@@ -2797,8 +2798,10 @@ init_pc_context_argstr(pc_ctx_t *pctx, char *args)
 int DLL_EXPORT
 init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 {
-	int opt, num_rem, err, my_optind;
+	int opt, num_rem, err, my_optind, advanced_opts;
 	char *pos;
+	struct filter_flags ff;
+
 
 	pctx->level = -1;
 	err = 0;
@@ -2808,6 +2811,8 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	while (*pos != '/' && pos > argv[0]) pos--;
 	if (*pos == '/') pos++;
 	strcpy(pctx->exec_name, pos);
+	advanced_opts = 0;
+	ff.enable_packjpg = 0;
 
 	pthread_mutex_lock(&opt_parse);
 	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avnmK")) != -1) {
@@ -2859,6 +2864,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			break;
 
 		    case 'B':
+			advanced_opts = 1;
 			pctx->rab_blk_size = atoi(optarg);
 			if (pctx->rab_blk_size < 0 || pctx->rab_blk_size > 5) {
 				log_msg(LOG_ERR, 0, "Average Dedupe block size must be in range 0 (2k), 1 (4k) .. 5 (64k)");
@@ -2887,14 +2893,17 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			break;
 
 		    case 'D':
+			advanced_opts = 1;
 			pctx->enable_rabin_scan = 1;
 			break;
 
 		    case 'G':
+			advanced_opts = 1;
 			pctx->enable_rabin_global = 1;
 			break;
 
 		    case 'E':
+			advanced_opts = 1;
 			pctx->enable_rabin_scan = 1;
 			if (!pctx->enable_delta_encode)
 				pctx->enable_delta_encode = DELTA_NORMAL;
@@ -2916,15 +2925,18 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			break;
 
 		    case 'F':
+			advanced_opts = 1;
 			pctx->enable_fixed_scan = 1;
 			pctx->enable_rabin_split = 0;
 			break;
 
 		    case 'L':
+			advanced_opts = 1;
 			pctx->lzp_preprocess = 1;
 			break;
 
 		    case 'P':
+			advanced_opts = 1;
 			pctx->enable_delta2_encode = 1;
 			break;
 
@@ -2963,6 +2975,16 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 		    case 'K':
 			pctx->no_overwrite_newer = 1;
+			break;
+
+		    case 'j':
+			advanced_opts = 1;
+			ff.enable_packjpg = 1;
+			break;
+
+		    case 'x':
+			advanced_opts = 1;
+			pctx->dispack_preprocess = 1;
 			break;
 
 		    case '?':
@@ -3067,6 +3089,14 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 	if (pctx->enable_rabin_global && pctx->enable_delta_encode) {
 		log_msg(LOG_ERR, 0, "Global Deduplication does not support Delta Compression.");
+		return (1);
+	}
+
+	/*
+	 * Dispack and PackJPG are only valid when archiving files.
+	 */
+	if ((pctx->dispack_preprocess || ff.enable_packjpg) && !pctx->archive_mode) {
+		log_msg(LOG_ERR, 0, "Dispack Executable Preprocessor and PackJPG are only valid when archiving.");
 		return (1);
 	}
 
@@ -3218,16 +3248,23 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		}
 
 		/*
-		 * Selectively enable filters while archiving, depending on compression level.
+		 * Auto-select filters and preprocessing modes based on compresion level.
+		 * This is not done if user explicitly specified advanced options.
 		 */
-		if (pctx->archive_mode) {
-			struct filter_flags ff;
+		if (!advanced_opts) {
+			/*
+			 * Selectively enable filters while archiving, depending on compression level.
+			 */
+			if (pctx->archive_mode) {
+				if (pctx->level > 10) ff.enable_packjpg = 1;
+				init_filters(&ff);
+				pctx->enable_packjpg = ff.enable_packjpg;
+				if (pctx->level > 8) pctx->dispack_preprocess = 1;
+			}
 
-			ff.enable_packjpg = 0;
-			if (pctx->level > 10) ff.enable_packjpg = 1;
-			init_filters(&ff);
-			pctx->enable_packjpg = ff.enable_packjpg;
-			if (pctx->level > 8) pctx->dispack_preprocess = 1;
+			/*
+			 * Enable other preprocessors based on compresion level.
+			 */
 			if (pctx->level > 4) pctx->enable_delta2_encode = 1;
 			if (pctx->level > 9) pctx->lzp_preprocess = 1;
 			if (pctx->level > 3) {

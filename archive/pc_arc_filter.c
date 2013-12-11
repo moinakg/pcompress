@@ -47,7 +47,7 @@
 #define	PJG_APPVERSION1		(25)
 #define	PJG_APPVERSION2		(25)
 
-struct packjpg_filter_data {
+struct scratch_buffer {
 	uchar_t *in_buff;
 	size_t in_bufflen;
 };
@@ -59,18 +59,28 @@ int64_t packjpg_filter(struct filter_info *fi, void *filter_private);
 void
 add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 {
-	struct packjpg_filter_data *pjdat;
+	struct scratch_buffer *sdat;
 	int slot;
 
 	if (ff->enable_packjpg) {
-		pjdat = (struct packjpg_filter_data *)malloc(sizeof (struct packjpg_filter_data));
-		pjdat->in_buff = NULL;
-		pjdat->in_bufflen = 0;
+		sdat = (struct scratch_buffer *)malloc(sizeof (struct scratch_buffer));
+		sdat->in_buff = NULL;
+		sdat->in_bufflen = 0;
 
 		slot = TYPE_JPEG >> 3;
-		typetab[slot].filter_private = pjdat;
+		typetab[slot].filter_private = sdat;
 		typetab[slot].filter_func = packjpg_filter;
 		typetab[slot].filter_name = "packJPG";
+	}
+}
+
+static void
+ensure_buffer(struct scratch_buffer *sdat, uint64_t len)
+{
+	if (sdat->in_bufflen < len) {
+		if (sdat->in_buff) free(sdat->in_buff);
+		sdat->in_bufflen = len;
+		sdat->in_buff = malloc(sdat->in_bufflen);
 	}
 }
 
@@ -137,7 +147,7 @@ pjg_version_supported(char ver)
 ssize_t
 packjpg_filter(struct filter_info *fi, void *filter_private)
 {
-	struct packjpg_filter_data *pjdat = (struct packjpg_filter_data *)filter_private;
+	struct scratch_buffer *sdat = (struct scratch_buffer *)filter_private;
 	uchar_t *mapbuf, *out;
 	uint64_t len, in_size = 0, len1;
 	ssize_t rv;
@@ -171,17 +181,13 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		 * Allocate input buffer and read archive data stream for the entry
 		 * into this buffer.
 		 */
-		if (pjdat->in_bufflen < len) {
-			if (pjdat->in_buff) free(pjdat->in_buff);
-			pjdat->in_bufflen = len;
-			pjdat->in_buff = malloc(pjdat->in_bufflen);
-			if (pjdat->in_buff == NULL) {
-				log_msg(LOG_ERR, 1, "Out of memory.");
-				return (FILTER_RETURN_ERROR);
-			}
+		ensure_buffer(sdat, len);
+		if (sdat->in_buff == NULL) {
+			log_msg(LOG_ERR, 1, "Out of memory.");
+			return (FILTER_RETURN_ERROR);
 		}
 
-		in_size = copy_archive_data(fi->source_arc, pjdat->in_buff);
+		in_size = copy_archive_data(fi->source_arc, sdat->in_buff);
 		if (in_size != len) {
 			log_msg(LOG_ERR, 0, "Failed to read archive data.");
 			return (FILTER_RETURN_ERROR);
@@ -192,8 +198,8 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		 * LibArchive always zero-pads entries to their original size so
 		 * we need to separately store the compressed size.
 		 */
-		in_size = LE64(U64_P(pjdat->in_buff));
-		mapbuf = pjdat->in_buff + 8;
+		in_size = LE64(U64_P(sdat->in_buff));
+		mapbuf = sdat->in_buff + 8;
 
 		/*
 		 * We are trying to decompress and this is not a packJPG file.
@@ -201,7 +207,7 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		 * version number. We also check if it is supported.
 		 */
 		if (mapbuf[0] != 'J' || mapbuf[1] != 'S' || !pjg_version_supported(mapbuf[2])) {
-			return (write_archive_data(fi->target_arc, pjdat->in_buff,
+			return (write_archive_data(fi->target_arc, sdat->in_buff,
 			    len, fi->block_size));
 		}
 	}
