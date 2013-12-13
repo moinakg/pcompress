@@ -202,6 +202,7 @@ typedef struct pc_ctx {
 	int enable_rabin_global;
 	int enable_delta_encode;
 	int enable_delta2_encode;
+	int delta2_nstrides;
 	int enable_rabin_split;
 	int enable_fixed_scan;
 	int preprocess_mode;

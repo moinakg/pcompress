@@ -34,7 +34,12 @@
 extern "C" {
 #endif
 
-int delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh);
+#define	NSTRIDES_STANDARD 3
+#define	NSTRIDES_EXTRA 7
+#define	STRIDE_MAX 8
+#define	STRIDE_MIN 2
+
+int delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh, int nstrides);
 int delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen);
 
 #define	ULL_MAX (18446744073709551615ULL)

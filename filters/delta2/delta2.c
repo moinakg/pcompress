@@ -94,12 +94,12 @@
  * upto 8 bytes (uint64_t) are supported and common type lengths only
  * are checked.
  */
-#define	NSTRIDES	3
-static uchar_t strides[NSTRIDES] = {2, 4, 8};
+#define	NSTRIDES		NSTRIDES_EXTRA
+static uchar_t strides[NSTRIDES] = {2, 4, 8, 3, 5, 6, 7};
 
 
 static int delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen,
-		int rle_thresh, int last_encode, int *hdr_ovr);
+		int rle_thresh, int last_encode, int *hdr_ovr, int nstrides);
 
 /*
  * Perform Delta2 encoding of the given data buffer in src. Delta Encoding
@@ -111,13 +111,14 @@ static int delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint6
  * buffer then delta encoding is aborted.
  */
 int
-delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh)
+delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh, int nstrides)
 {
 	if (srclen > MAX_THRESH) {
 		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 " is too big.\n", srclen));
 		return (-1);
 	}
 
+	if (nstrides > NSTRIDES) return (-1);
 	if (srclen <= (MAIN_HDR + LIT_HDR + DELTA_HDR))
 		return (-1);
 
@@ -131,7 +132,7 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		hdr_ovr = 0;
 		U64_P(dst) = LE64(srclen);
 		dst += MAIN_HDR;
-		rv = delta2_encode_real(src, srclen, dst, dstlen, rle_thresh, 1, &hdr_ovr);
+		rv = delta2_encode_real(src, srclen, dst, dstlen, rle_thresh, 1, &hdr_ovr, nstrides);
 		if (rv == -1)
 			return (rv);
 		*dstlen += MAIN_HDR;
@@ -165,7 +166,7 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 			}
 			dsz = sz;
 			rem = delta2_encode_real(srcpos, sz, dstpos, &dsz, rle_thresh, lenc,
-						 &hdr_ovr);
+						 &hdr_ovr, nstrides);
 			if (rem == -1) {
 				if (pending == 0) {
 					lastdst = dstpos;
@@ -217,7 +218,7 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
  */
 static int
 delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen,
-		   int rle_thresh, int last_encode, int *hdr_ovr)
+		   int rle_thresh, int last_encode, int *hdr_ovr, int nstrides)
 {
 	uint64_t snum, gtot1, gtot2, tot;
 	uint64_t cnt, val, sval;
@@ -233,7 +234,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 	/*
 	 * Estimate which stride length gives the max reduction given rle_thresh.
 	 */
-	for (st = 0; st < NSTRIDES; st++) {
+	for (st = 0; st < nstrides; st++) {
 		int gt;
 
 		snum = 0;
@@ -479,6 +480,10 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 
 		} else {
 			stride = flags;
+			if (stride > STRIDE_MAX) {
+				log_msg(LOG_ERR, 0, "DELTA2 Decode(delta): Invalid stride length: %d. Corrupt data.\n", stride);
+				return (-1);
+			}
 			rcnt = val & MSB_SETZERO_MASK;
 			pos += sizeof (rcnt);
 			sval = LE64(U64_P(pos));

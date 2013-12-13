@@ -261,7 +261,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	    stype != TYPE_TIFF && stype != TYPE_MP4) {
 		_dstlen = fromlen;
 		result = delta2_encode((uchar_t *)from, fromlen, to,
-				       &_dstlen, props->delta2_span);
+				       &_dstlen, props->delta2_span, pctx->delta2_nstrides);
 		if (result != -1) {
 			uchar_t *tmp;
 			tmp = from;
@@ -2760,6 +2760,7 @@ create_pc_context(void)
 	ctx->archive_temp_fd = -1;
 	ctx->pagesize = sysconf(_SC_PAGE_SIZE);
 	ctx->btype = TYPE_UNKNOWN;
+	ctx->delta2_nstrides = NSTRIDES_STANDARD;
 
 	return (ctx);
 }
@@ -3272,9 +3273,10 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 				pctx->enable_rabin_scan = 1;
 				pctx->enable_rabin_split = 1;
 				pctx->rab_blk_size = 2;
-				if (pctx->level > 4) pctx->rab_blk_size = 1;
+				if (pctx->level > 5) pctx->rab_blk_size = 1;
 				if (pctx->level > 8) pctx->rab_blk_size = 0;
 			}
+			if (pctx->level > 9) pctx->delta2_nstrides = NSTRIDES_EXTRA;
 		}
 		if (pctx->lzp_preprocess || pctx->enable_delta2_encode || pctx->dispack_preprocess) {
 			pctx->preprocess_mode = 1;
