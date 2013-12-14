@@ -91,8 +91,7 @@
 
 /*
  * Stride values to be checked. As of this implementation strides only
- * upto 8 bytes (uint64_t) are supported and common type lengths only
- * are checked.
+ * upto 8 bytes (uint64_t) are supported.
  */
 #define	NSTRIDES		NSTRIDES_EXTRA
 static uchar_t strides[NSTRIDES] = {2, 4, 8, 3, 5, 6, 7};
@@ -480,7 +479,7 @@ delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 
 		} else {
 			stride = flags;
-			if (stride > STRIDE_MAX) {
+			if (stride > STRIDE_MAX || stride < STRIDE_MIN) {
 				log_msg(LOG_ERR, 0, "DELTA2 Decode(delta): Invalid stride length: %d. Corrupt data.\n", stride);
 				return (-1);
 			}

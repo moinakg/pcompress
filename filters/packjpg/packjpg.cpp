@@ -1,5 +1,5 @@
 /*
-packJPG v2.5g (09/14/2013)
+packJPG v2.5h (12/07/2013)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 packJPG is a compression program specially designed for further
@@ -225,6 +225,9 @@ v2.5f (02/24/13) (public)
  
 v2.5g (09/14/13) (public)
  - fixed a rare crash bug with manipulated JPEG files
+ 
+v2.5h (12/07/13) (public)
+ - added a warning for inefficient huffman coding (thanks to Moinak Ghosh)
 
 
 Acknowledgements
@@ -254,7 +257,7 @@ For questions and bug reports:
 
 
 ____________________________________
-packJPG by Matthias Stirner, 09/2013
+packJPG by Matthias Stirner, 12/2013
 */
 
 #include <stdio.h>
@@ -672,10 +675,10 @@ INTERN unsigned char orig_set[ 8 ] = { 0 }; // store array for settings
 	----------------------------------------------- */
 
 INTERN const unsigned char appversion = 25;
-INTERN const char*  subversion   = "g";
+INTERN const char*  subversion   = "h";
 INTERN const char*  apptitle     = "packJPG";
 INTERN const char*  appname      = "packjpg";
-INTERN const char*  versiondate  = "09/14/2013";
+INTERN const char*  versiondate  = "12/07/2013";
 INTERN const char*  author       = "Matthias Stirner / Se";
 #if !defined(BUILD_LIB)
 INTERN const char*  website      = "http://www.elektronik.htw-aalen.de/packjpg/";
@@ -2462,6 +2465,12 @@ INTERN bool decode_jpeg( void )
 							&(htrees[ 1 ][ cmpnfo[cmp].huffdc ]),
 							block );
 						
+						// check for non optimal coding
+						if ( ( eob > 1 ) && ( block[ eob - 1 ] == 0 ) ) {
+							sprintf( errormessage, "reconstruction of inefficient coding not supported" );
+							errorlevel = 1;
+						}
+						
 						// fix dc
 						block[ 0 ] += lastdc[ cmp ];
 						lastdc[ cmp ] = block[ 0 ];
@@ -2522,6 +2531,12 @@ INTERN bool decode_jpeg( void )
 							&(htrees[ 0 ][ cmpnfo[cmp].huffdc ]),
 							&(htrees[ 1 ][ cmpnfo[cmp].huffdc ]),
 							block );
+						
+						// check for non optimal coding
+						if ( ( eob > 1 ) && ( block[ eob - 1 ] == 0 ) ) {
+							sprintf( errormessage, "reconstruction of inefficient coding not supported" );
+							errorlevel = 1;
+						}
 						
 						// fix dc
 						block[ 0 ] += lastdc[ cmp ];
@@ -2590,7 +2605,7 @@ INTERN bool decode_jpeg( void )
 									if ( ( eob == cs_from )  && ( peobrun > 0 ) &&
 										( peobrun <	hcodes[ 1 ][ cmpnfo[cmp].huffac ].max_eobrun - 1 ) ) {
 										sprintf( errormessage,
-											"reconstruction of non optimal coding not supported" );
+											"reconstruction of inefficient coding not supported" );
 										errorlevel = 1;
 									}
 									peobrun = eobrun;
@@ -2630,7 +2645,7 @@ INTERN bool decode_jpeg( void )
 									if ( ( eob == cs_from ) && ( peobrun > 0 ) &&
 										( peobrun < hcodes[ 1 ][ cmpnfo[cmp].huffac ].max_eobrun - 1 ) ) {
 										sprintf( errormessage,
-											"reconstruction of non optimal coding not supported" );
+											"reconstruction of inefficient coding not supported" );
 										errorlevel = 1;
 									}
 									
@@ -3384,7 +3399,7 @@ INTERN bool unpack_pjg( void )
 	
 	// init arithmetic compression
 	decoder = new aricoder( str_in, 0 );
-
+	
 	// decode JPG header
 	if ( !pjg_decode_generic( decoder, &hdrdata, &hdrs ) ) return false;
 	// retrieve padbit from stream
@@ -3798,7 +3813,7 @@ INTERN bool jpg_parse_jfif( unsigned char type, unsigned int len, unsigned char*
 		case 0xE9: // APP9 segment
 		case 0xEA: // APP10 segment
 		case 0xEB: // APP11 segment
-		case 0xEC: // APP12segment
+		case 0xEC: // APP12 segment
 		case 0xED: // APP13 segment
 		case 0xEE: // APP14 segment
 		case 0xEF: // APP15 segment
@@ -3807,7 +3822,7 @@ INTERN bool jpg_parse_jfif( unsigned char type, unsigned int len, unsigned char*
 			return true;
 			
 		case 0xD0: // RST0 segment
-		case 0xD1: // RST1segment
+		case 0xD1: // RST1 segment
 		case 0xD2: // RST2 segment
 		case 0xD3: // RST3 segment
 		case 0xD4: // RST4 segment
@@ -3918,7 +3933,7 @@ INTERN int jpg_decode_block_seq( abitreader* huffr, huffTree* dctree, huffTree* 
 			block[ bpos++ ] = ( short ) DEVLI( s, n ); // decode cvli
 		}
 		else if ( hc == 0 ) { // EOB
-			eob = bpos;
+			eob = bpos;			
 			// while( bpos < 64 ) // fill remaining block with zeroes
 			//	block[ bpos++ ] = 0;
 			break;
