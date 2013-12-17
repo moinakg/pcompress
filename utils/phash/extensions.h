@@ -68,6 +68,7 @@ struct ext_entry {
 	{"ps"	, TYPE_TEXT, 2},
 	{"bib"	, TYPE_TEXT, 3},
 	{"lua"	, TYPE_TEXT, 3},
+	{"dtd"	, TYPE_TEXT, 3},
 	{"qml"	, TYPE_TEXT|TYPE_MARKUP, 3},
 	{"fa"	, TYPE_TEXT|TYPE_DNA_SEQ, 2},
 	{"faa"	, TYPE_TEXT|TYPE_DNA_SEQ, 3},

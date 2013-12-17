@@ -211,7 +211,7 @@ lzma_compress(void *src, uint64_t srclen, void *dst,
 		return (-1);
 	}
 
-	if (PC_SUBTYPE(btype) == TYPE_COMPRESSED_LZMA)
+	if (PC_SUBTYPE(btype) == TYPE_COMPRESSED_ZPAQ)
 		return (-1);
 	props->level = level;
 

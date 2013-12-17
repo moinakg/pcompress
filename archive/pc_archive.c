@@ -1516,21 +1516,6 @@ detect_type_by_data(uchar_t *buf, size_t len)
 			return (TYPE_BINARY|TYPE_BMP);
 	}
 
-	// MSDOS COM types
-	if (buf[0] == 0xe9 || buf[0] == 0xeb) {
-		if (LE16(U16_P(buf + 0x1fe)) == 0xaa55)
-			return (TYPE_BINARY|TYPE_EXE32); // MSDOS COM
-		else
-			return (TYPE_BINARY);
-	}
-	if (U16_P(buf + 2) == COM_MAGIC || U16_P(buf + 4) == COM_MAGIC ||
-	    U16_P(buf + 4) == COM_MAGIC || U16_P(buf + 5) == COM_MAGIC ||
-	    U16_P(buf + 13) == COM_MAGIC || U16_P(buf + 18) == COM_MAGIC ||
-	    U16_P(buf + 23) == COM_MAGIC || U16_P(buf + 30) == COM_MAGIC ||
-	    U16_P(buf + 70) == COM_MAGIC) {
-			return (TYPE_BINARY|TYPE_EXE32); // MSDOS COM
-	}
-
 	if (U32_P(buf) == TZINT)
 		return (TYPE_BINARY); // Timezone data
 	if (U32_P(buf) == PPMINT)
@@ -1538,5 +1523,21 @@ detect_type_by_data(uchar_t *buf, size_t len)
 	if (U32_P(buf) == WVPK || U32_P(buf) == TTA1)
 		return (TYPE_BINARY|TYPE_COMPRESSED|TYPE_AUDIO_COMPRESSED);
 
+	// MSDOS COM types, two byte and one byte magic numbers are checked 
+        // after all other multi-byte magic number checks.
+	if (buf[0] == 0xe9 || buf[0] == 0xeb) {
+		if (LE16(U16_P(buf + 0x1fe)) == 0xaa55)
+			return (TYPE_BINARY|TYPE_EXE32); // MSDOS COM
+		else
+			return (TYPE_BINARY);
+	}
+
+	if (U16_P(buf + 2) == COM_MAGIC || U16_P(buf + 4) == COM_MAGIC ||
+	    U16_P(buf + 4) == COM_MAGIC || U16_P(buf + 5) == COM_MAGIC ||
+	    U16_P(buf + 13) == COM_MAGIC || U16_P(buf + 18) == COM_MAGIC ||
+	    U16_P(buf + 23) == COM_MAGIC || U16_P(buf + 30) == COM_MAGIC ||
+	    U16_P(buf + 70) == COM_MAGIC) {
+			return (TYPE_BINARY|TYPE_EXE32); // MSDOS COM
+	}
 	return (TYPE_UNKNOWN);
 }

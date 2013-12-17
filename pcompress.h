@@ -215,6 +215,7 @@ typedef struct pc_ctx {
 	int pagesize;
 	int force_archive_perms;
 	int no_overwrite_newer;
+	int advanced_opts;
 
 	/*
 	 * Archiving related context data.

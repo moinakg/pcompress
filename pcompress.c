@@ -1991,6 +1991,14 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			flags |= FLAG_SINGLE_CHUNK;
 
 			/*
+			 * Disable deduplication if file is too small.
+			 */
+			if (chunksize < RAB_MIN_CHUNK_SIZE) {
+				pctx->enable_rabin_scan = 0;
+				pctx->enable_rabin_global = 0;
+			}
+
+			/*
 			 * Switch to simple Deduplication if global is enabled.
 			 */
 			if (pctx->enable_rabin_global) {
@@ -2799,7 +2807,7 @@ init_pc_context_argstr(pc_ctx_t *pctx, char *args)
 int DLL_EXPORT
 init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 {
-	int opt, num_rem, err, my_optind, advanced_opts;
+	int opt, num_rem, err, my_optind;
 	char *pos;
 	struct filter_flags ff;
 
@@ -2812,7 +2820,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	while (*pos != '/' && pos > argv[0]) pos--;
 	if (*pos == '/') pos++;
 	strcpy(pctx->exec_name, pos);
-	advanced_opts = 0;
+	pctx->advanced_opts = 0;
 	ff.enable_packjpg = 0;
 
 	pthread_mutex_lock(&opt_parse);
@@ -2865,7 +2873,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			break;
 
 		    case 'B':
-			advanced_opts = 1;
+			pctx->advanced_opts = 1;
 			pctx->rab_blk_size = atoi(optarg);
 			if (pctx->rab_blk_size < 0 || pctx->rab_blk_size > 5) {
 				log_msg(LOG_ERR, 0, "Average Dedupe block size must be in range 0 (2k), 1 (4k) .. 5 (64k)");
@@ -2894,17 +2902,17 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			break;
 
 		    case 'D':
-			advanced_opts = 1;
+			pctx->advanced_opts = 1;
 			pctx->enable_rabin_scan = 1;
 			break;
 
 		    case 'G':
-			advanced_opts = 1;
+			pctx->advanced_opts = 1;
 			pctx->enable_rabin_global = 1;
 			break;
 
 		    case 'E':
-			advanced_opts = 1;
+			pctx->advanced_opts = 1;
 			pctx->enable_rabin_scan = 1;
 			if (!pctx->enable_delta_encode)
 				pctx->enable_delta_encode = DELTA_NORMAL;
@@ -2926,18 +2934,18 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			break;
 
 		    case 'F':
-			advanced_opts = 1;
+			pctx->advanced_opts = 1;
 			pctx->enable_fixed_scan = 1;
 			pctx->enable_rabin_split = 0;
 			break;
 
 		    case 'L':
-			advanced_opts = 1;
+			pctx->advanced_opts = 1;
 			pctx->lzp_preprocess = 1;
 			break;
 
 		    case 'P':
-			advanced_opts = 1;
+			pctx->advanced_opts = 1;
 			pctx->enable_delta2_encode = 1;
 			break;
 
@@ -2979,12 +2987,12 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			break;
 
 		    case 'j':
-			advanced_opts = 1;
+			pctx->advanced_opts = 1;
 			ff.enable_packjpg = 1;
 			break;
 
 		    case 'x':
-			advanced_opts = 1;
+			pctx->advanced_opts = 1;
 			pctx->dispack_preprocess = 1;
 			break;
 
@@ -3252,7 +3260,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		 * Auto-select filters and preprocessing modes based on compresion level.
 		 * This is not done if user explicitly specified advanced options.
 		 */
-		if (!advanced_opts) {
+		if (!pctx->advanced_opts) {
 			/*
 			 * Selectively enable filters while archiving, depending on compression level.
 			 */
