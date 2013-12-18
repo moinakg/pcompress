@@ -1467,6 +1467,8 @@ detect_type_by_data(uchar_t *buf, size_t len)
 	// At least a few bytes.
 	if (len < 16) return (TYPE_UNKNOWN);
 
+	if (memcmp(buf, "!<arch>\n", 8) == 0)
+		return (TYPE_BINARY|TYPE_ARCHIVE_AR);
 	if (U32_P(buf) == ELFINT) {  // Regular ELF, check for 32/64-bit, core dump
 		if (*(buf + 16) != 4) {
 			if (*(buf + 4) == 2) {

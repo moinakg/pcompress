@@ -226,8 +226,11 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	/*
 	 * If Dispack is enabled it has to be done first since Dispack analyses the
 	 * x86 instruction stream in the raw data.
+	 * AR archives are typically static libraries. So we Dispack them unconditionally.
+	 * TODO: Is this too much to assume in the generic case? Can we look inside ar archives?
 	 */
-	if (pctx->dispack_preprocess && stype == TYPE_EXE32) {
+	if (pctx->dispack_preprocess && (stype == TYPE_EXE32 || stype == TYPE_EXE64 ||
+	    stype == TYPE_ARCHIVE_AR)) {
 		_dstlen = fromlen;
 		result = dispack_encode((uchar_t *)from, fromlen, to, &_dstlen);
 		if (result != -1) {
