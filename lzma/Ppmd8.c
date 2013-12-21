@@ -109,9 +109,11 @@ void Ppmd8_Construct(CPpmd8 *p)
 
 void Ppmd8_Free(CPpmd8 *p, ISzAlloc *alloc)
 {
-  alloc->Free(alloc, p->Base);
-  p->Size = 0;
-  p->Base = 0;
+  if (p->Base != 0) {
+    alloc->Free(alloc, p->Base);
+    p->Size = 0;
+    p->Base = 0;
+  }
 }
 
 Bool Ppmd8_Alloc(CPpmd8 *p, UInt32 size, ISzAlloc *alloc)

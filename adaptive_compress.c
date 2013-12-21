@@ -82,6 +82,10 @@ extern int lz4_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		       int file_version, compress_op_t op);
 extern int lz4_deinit(void **data);
 
+extern int ppmd_alloc(void *data);
+extern void ppmd_free(void *data);
+extern int ppmd_state_init(void **data, int *level, int alloc);
+
 struct adapt_data {
 	void *lzma_data;
 	void *ppmd_data;
@@ -129,7 +133,7 @@ adapt_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	if (!adat) {
 		adat = (struct adapt_data *)slab_alloc(NULL, sizeof (struct adapt_data));
 		adat->adapt_mode = 1;
-		rv = ppmd_init(&(adat->ppmd_data), level, nthreads, chunksize, file_version, op);
+		rv = ppmd_state_init(&(adat->ppmd_data), level, 0);
 
 		/*
 		 * LZ4 is used to tackle some embedded archive headers and/or zero paddings in
@@ -165,7 +169,7 @@ adapt2_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		adat->bsc_data = NULL;
 		lv = *level;
 		if (lv > 10) lv = 10;
-		rv = ppmd_init(&(adat->ppmd_data), &lv, nthreads, chunksize, file_version, op);
+		rv = ppmd_state_init(&(adat->ppmd_data), level, 0);
 		lv = *level;
 		if (rv == 0)
 			rv = lzma_init(&(adat->lzma_data), &lv, nthreads, chunksize, file_version, op);
@@ -305,7 +309,11 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 			bsc_count++;
 		} else {
 #endif
+			rv = ppmd_alloc(adat->ppmd_data);
+			if (rv < 0)
+				return (rv);
 			rv = ppmd_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->ppmd_data);
+			ppmd_free(adat->ppmd_data);
 			if (rv < 0)
 				return (rv);
 			rv = ADAPT_COMPRESS_PPMD;

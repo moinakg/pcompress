@@ -444,8 +444,8 @@ slab_alloc(void *p, uint64_t size)
 	}
 }
 
-void
-slab_free(void *p, void *address)
+static void
+slab_free_real(void *p, void *address, int do_free)
 {
 	struct bufentry *buf, *pbuf;
 	int found = 0;
@@ -471,7 +471,7 @@ slab_free(void *p, void *address)
 			pthread_mutex_unlock(&hbucket_locks[hindx]);
 			ATOMIC_SUB(hash_entries, 1);
 
-			if (buf->slab == NULL) {
+			if (buf->slab == NULL || do_free) {
 				free(buf->ptr);
 				free(buf);
 				found = 1;
@@ -497,6 +497,18 @@ slab_free(void *p, void *address)
 	}
 }
 
+void
+slab_free(void *p, void *address)
+{
+	slab_free_real(p, address, 0);
+}
+
+void
+slab_release(void *p, void *address)
+{
+	slab_free_real(p, address, 1);
+}
+
 #else
 void
 slab_init() {}
@@ -518,6 +530,12 @@ void
 
 void
 slab_free(void *p, void *address)
+{
+	free(address);
+}
+
+void
+slab_release(void *p, void *address)
 {
 	free(address);
 }

@@ -58,9 +58,58 @@ static int mem_inited = 0;
 
 static ISzAlloc g_Alloc = {
 	slab_alloc,
-	slab_free,
+	slab_release,
 	NULL
 };
+
+int
+ppmd_alloc(void *data)
+{
+	CPpmd8 *_ppmd = (CPpmd8 *)data;
+
+	if (!Ppmd8_Alloc(_ppmd, ppmd8_mem_sz[_ppmd->Order], &g_Alloc)) {
+		log_msg(LOG_ERR, 0, "PPMD: Out of memory.\n");
+		return (-1);
+	}
+	Ppmd8_Construct(_ppmd);
+	return (0);
+}
+
+void
+ppmd_free(void *data)
+{
+	CPpmd8 *_ppmd = (CPpmd8 *)data;
+	Ppmd8_Free(_ppmd, &g_Alloc);
+}
+
+int
+ppmd_state_init(void **data, int *level, int alloc)
+{
+	CPpmd8 *_ppmd;
+
+	pthread_mutex_lock(&mem_init_lock);
+	if (!mem_inited) {
+		slab_cache_add(sizeof (CPpmd8));
+		slab_cache_add(ppmd8_mem_sz[*level]);
+	}
+	pthread_mutex_unlock(&mem_init_lock);
+	_ppmd = (CPpmd8 *)slab_alloc(NULL, sizeof (CPpmd8));
+	if (!_ppmd)
+		return (-1);
+
+	/* Levels 0 - 14 correspond to PPMd model orders 0 - 14. */
+	if (*level > 14) *level = 14;
+	_ppmd->Order = *level;
+
+	_ppmd->Base = 0;
+	_ppmd->Size = 0;
+	*data = _ppmd;
+	if (*level > 9) *level = 9;
+
+	if (alloc)
+		return (ppmd_alloc(*data));
+	return (0);
+}
 
 void
 ppmd_stats(int show)
@@ -77,33 +126,7 @@ int
 ppmd_init(void **data, int *level, int nthreads, uint64_t chunksize,
 	  int file_version, compress_op_t op)
 {
-	CPpmd8 *_ppmd;
-
-	pthread_mutex_lock(&mem_init_lock);
-	if (!mem_inited) {
-		slab_cache_add(sizeof (CPpmd8));
-		slab_cache_add(ppmd8_mem_sz[*level]);
-		mem_inited = 1;
-	}
-	pthread_mutex_unlock(&mem_init_lock);
-	_ppmd = (CPpmd8 *)slab_alloc(NULL, sizeof (CPpmd8));
-	if (!_ppmd)
-		return (-1);
-
-	/* Levels 0 - 14 correspond to PPMd model orders 0 - 14. */
-	if (*level > 14) *level = 14;
-	_ppmd->Order = *level;
-
-	_ppmd->Base = 0;
-	_ppmd->Size = 0;
-	if (!Ppmd8_Alloc(_ppmd, ppmd8_mem_sz[*level], &g_Alloc)) {
-		log_msg(LOG_ERR, 0, "PPMD: Out of memory.\n");
-		return (-1);
-	}
-	Ppmd8_Construct(_ppmd);
-	*data = _ppmd;
-	if (*level > 9) *level = 9;
-	return (0);
+	return (ppmd_state_init(data, level, 1));
 }
 
 int
@@ -111,8 +134,8 @@ ppmd_deinit(void **data)
 {
 	CPpmd8 *_ppmd = (CPpmd8 *)(*data);
 	if (_ppmd) {
-		Ppmd8_Free(_ppmd, &g_Alloc);
-		slab_free(NULL, _ppmd);
+		ppmd_free(*data);
+		slab_release(NULL, _ppmd);
 	}
 	*data = NULL;
 	return (0);

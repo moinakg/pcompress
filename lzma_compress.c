@@ -39,7 +39,7 @@ CLzmaEncProps *p = NULL;
 
 static ISzAlloc g_Alloc = {
 	slab_alloc,
-	slab_free,
+	slab_release,
 	NULL
 };
 
@@ -140,7 +140,7 @@ int
 lzma_deinit(void **data)
 {
 	if (p) {
-		slab_free(NULL, p);
+		slab_release(NULL, p);
 		p = NULL;
 	}
 	*data = NULL;
