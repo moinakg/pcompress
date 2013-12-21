@@ -164,6 +164,7 @@ adapt2_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		adat->ppmd_data = NULL;
 		adat->bsc_data = NULL;
 		lv = *level;
+		if (lv > 10) lv = 10;
 		rv = ppmd_init(&(adat->ppmd_data), &lv, nthreads, chunksize, file_version, op);
 		lv = *level;
 		if (rv == 0)

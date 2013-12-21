@@ -30,6 +30,7 @@
 #include <pcompress.h>
 #include <allocator.h>
 #include <Ppmd8.h>
+#include <pthread.h>
 
 /*
  * PPMd model order to working set memory size mappings.
@@ -51,6 +52,9 @@ static unsigned int ppmd8_mem_sz[] = {
 	(1200 << 20),
 	(1200 << 20)
 };
+
+static pthread_mutex_t mem_init_lock = PTHREAD_MUTEX_INITIALIZER;
+static int mem_inited = 0;
 
 static ISzAlloc g_Alloc = {
 	slab_alloc,
@@ -75,6 +79,13 @@ ppmd_init(void **data, int *level, int nthreads, uint64_t chunksize,
 {
 	CPpmd8 *_ppmd;
 
+	pthread_mutex_lock(&mem_init_lock);
+	if (!mem_inited) {
+		slab_cache_add(sizeof (CPpmd8));
+		slab_cache_add(ppmd8_mem_sz[*level]);
+		mem_inited = 1;
+	}
+	pthread_mutex_unlock(&mem_init_lock);
 	_ppmd = (CPpmd8 *)slab_alloc(NULL, sizeof (CPpmd8));
 	if (!_ppmd)
 		return (-1);
