@@ -345,7 +345,13 @@ adapt_decompress(void *src, uint64_t srclen, void *dst,
 		return (bzip2_decompress(src, srclen, dst, dstlen, level, chdr, btype, NULL));
 
 	} else if (cmp_flags == ADAPT_COMPRESS_PPMD) {
-		return (ppmd_decompress(src, srclen, dst, dstlen, level, chdr, btype, adat->ppmd_data));
+		int rv;
+		rv = ppmd_alloc(adat->ppmd_data);
+		if (rv < 0)
+			return (rv);
+		rv = ppmd_decompress(src, srclen, dst, dstlen, level, chdr, btype, adat->ppmd_data);
+		ppmd_free(adat->ppmd_data);
+		return (rv);
 
 	} else if (cmp_flags == ADAPT_COMPRESS_BSC) {
 #ifdef ENABLE_PC_LIBBSC

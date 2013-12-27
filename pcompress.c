@@ -834,8 +834,13 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 				err = 1;
 				goto uncomp_done;
 			}
-			if (mkdir(to_filename, S_IRUSR|S_IWUSR) == -1) {
+			if (mkdir(to_filename, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) == -1) {
 				log_msg(LOG_ERR, 1, "Unable to create target directory %s.", to_filename);
+				err = 1;
+				goto uncomp_done;
+			}
+			if (stat(to_filename, &sbuf) == -1) {
+				log_msg(LOG_ERR, 1, "Unable to correctly create target directory %s.", to_filename);
 				err = 1;
 				goto uncomp_done;
 			}
@@ -3039,7 +3044,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	 * unless it is explicitly disabled via '-n'.
 	 */
 	if (pctx->enable_archive_sort != -1 && pctx->do_compress) {
-		if ((memcmp(pctx->algo, "lz4", 3) == 0 && pctx->level > 2) || pctx->level > 6)
+		if ((memcmp(pctx->algo, "lz4", 3) == 0 && pctx->level > 1) || pctx->level > 4)
 			pctx->enable_archive_sort = 1;
 	} else {
 		pctx->enable_archive_sort = 0;

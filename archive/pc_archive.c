@@ -375,6 +375,7 @@ read_next_path(pc_ctx_t *pctx, char *fpath, char **namechars, int *fpathlen)
 	short namelen;
 	ssize_t rbytes;
 	uchar_t *buf;
+	int n;
 
 	if (pctx->enable_archive_sort) {
 		member_entry_t *mem1, *mem2;
@@ -436,7 +437,7 @@ read_next_path(pc_ctx_t *pctx, char *fpath, char **namechars, int *fpathlen)
 	 * new mmap.
 	 */
 	if (pctx->temp_mmap_len > 0) {
-		int retried, n;
+		int retried;
 
 		if (pctx->temp_file_pos < pctx->temp_mmap_pos ||
 		    pctx->temp_file_pos - pctx->temp_mmap_pos > pctx->temp_mmap_len ||
@@ -508,6 +509,13 @@ do_mmap:
 			return (-1);
 		}
 		fpath[namelen] = '\0';
+		*fpathlen = namelen;
+
+		n = namelen-1;
+		while (fpath[n] == '/' && n > 0) n--;
+		while (fpath[n] != '/' && fpath[n] != '\\' && n > 0) n--;
+		*namechars = &fpath[n+1];
+		printf("%s\n", fpath);
 	}
 	return (rbytes);
 }
@@ -788,11 +796,16 @@ setup_archiver(pc_ctx_t *pctx, struct stat *sbuf)
 			   creat_write_callback, creat_close_callback);
 	pctx->archive_ctx = arc;
 	pctx->archive_members_fd = fd;
-	pctx->temp_mmap_len = TEMP_MMAP_SIZE;
-	pctx->temp_mmap_buf = mmap(NULL, pctx->temp_mmap_len, PROT_READ,
-				   MAP_SHARED, pctx->archive_members_fd, 0);
-	if (pctx->temp_mmap_buf == NULL) {
-		log_msg(LOG_WARN, 1, "Unable to mmap pathlist file, switching to read().");
+	if (pctx->enable_archive_sort) {
+		pctx->temp_mmap_len = TEMP_MMAP_SIZE;
+		pctx->temp_mmap_buf = mmap(NULL, pctx->temp_mmap_len, PROT_READ,
+					MAP_SHARED, pctx->archive_members_fd, 0);
+		if (pctx->temp_mmap_buf == NULL) {
+			log_msg(LOG_WARN, 1, "Unable to mmap pathlist file, switching to read().");
+			pctx->temp_mmap_len = 0;
+		}
+	} else {
+		pctx->temp_mmap_buf = NULL;
 		pctx->temp_mmap_len = 0;
 	}
 	pctx->temp_mmap_pos = 0;
@@ -1235,17 +1248,21 @@ extractor_thread_func(void *dat) {
 		got_cwd = 0;
 	}
 
-	if (chdir(pctx->to_filename) == -1) {
-		log_msg(LOG_ERR, 1, "Cannot change to dir: %s", pctx->to_filename);
-		goto done;
-	}
-
 	ctr = 1;
 	awd = archive_write_disk_new();
 	archive_write_disk_set_options(awd, flags);
 	archive_write_disk_set_standard_lookup(awd);
 	arc = (struct archive *)(pctx->archive_ctx);
 	archive_read_open(arc, pctx, arc_open_callback, extract_read_callback, extract_close_callback);
+
+	/*
+	 * Change directory after opening the archive, otherwise archive_read_open() can fail
+	 * for relative paths.
+	 */
+	if (chdir(pctx->to_filename) == -1) {
+		log_msg(LOG_ERR, 1, "Cannot change to dir: %s", pctx->to_filename);
+		goto done;
+	}
 
 	/*
 	 * Read archive entries and extract to disk.
