@@ -1,5 +1,5 @@
 /*
-packJPG v2.5h (12/07/2013)
+packJPG v2.5i (12/12/2013)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 packJPG is a compression program specially designed for further
@@ -228,6 +228,9 @@ v2.5g (09/14/13) (public)
  
 v2.5h (12/07/13) (public)
  - added a warning for inefficient huffman coding (thanks to Moinak Ghosh)
+ 
+v2.5i (12/12/13) (public)
+ - fixed possible crash with malformed JPEG (thanks to Moinak Ghosh)
 
 
 Acknowledgements
@@ -3723,6 +3726,11 @@ INTERN bool jpg_parse_jfif( unsigned char type, unsigned int len, unsigned char*
 			imgheight = B_SHORT( segment[ hpos + 1 ], segment[ hpos + 2 ] );
 			imgwidth  = B_SHORT( segment[ hpos + 3 ], segment[ hpos + 4 ] );
 			cmpc      = segment[ hpos + 5 ];
+			if ( ( imgwidth == 0 ) || ( imgheight == 0 ) ) {
+				sprintf( errormessage, "resolution is %ix%i, possible malformed JPEG", imgwidth, imgheight );
+				errorlevel = 2;
+				return false;
+			}
 			if ( cmpc > 4 ) {
 				sprintf( errormessage, "image has %i components, max 4 are supported", cmpc );
 				errorlevel = 2;

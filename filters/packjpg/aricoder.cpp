@@ -280,7 +280,7 @@ model_s::model_s( int max_s, int max_c, int max_o, int c_lim )
 		null_table->links[ i ] = start_table;
 	
 	// alloc memory for storage & contexts
-	storage = ( table_s** ) calloc( max_order + 2, sizeof( table_s* ) );
+	storage = ( table_s** ) calloc( max_order + 3, sizeof( table_s* ) );
 	if ( storage == NULL ) ERROR_EXIT;
 	contexts = storage + 1;
 	
@@ -758,7 +758,7 @@ model_b::model_b( int max_c, int max_o, int c_lim )
 		null_table->links[ i ] = start_table;
 	
 	// alloc memory for storage & contexts
-	storage = ( table** ) calloc( max_order + 2, sizeof( table* ) );
+	storage = ( table** ) calloc( max_order + 3, sizeof( table* ) );
 	if ( storage == NULL ) ERROR_EXIT;
 	contexts = storage + 1;
 	
