@@ -46,6 +46,7 @@ struct filter_info {
 	struct archive_entry *entry;
 	int fd;
 	int compressing, block_size;
+	int *type_ptr;
 };
 
 struct filter_flags {

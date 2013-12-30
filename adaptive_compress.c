@@ -230,8 +230,9 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 	struct adapt_data *adat = (struct adapt_data *)(data);
 	uchar_t *src1 = (uchar_t *)src;
 	int rv = 0, bsc_type = 0;
+	int stype = PC_SUBTYPE(btype);
 
-	if (btype == TYPE_UNKNOWN) {
+	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR) {
 		uint64_t i, tot8b, tag1, tag2, tag3;
 		double tagcnt, pct_tag;
 		uchar_t cur_byte, prev_byte;
@@ -266,6 +267,29 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 			if (tag1 > tag2 - 4 && tag1 < tag2 + 4 && tag3 > (double)tag1 * 0.40 &&
 			    tagcnt > (double)srclen * 0.001)
 				btype |= TYPE_MARKUP;
+		}
+
+	} else if (stype == TYPE_PDF) {
+		uint64_t i, tot8b;
+		uchar_t cur_byte;
+
+		/*
+		 * For PDF files we need to check for uncompressed PDFs. Those are compressed
+		 * using Libbsc.
+		 */
+		tot8b = 0;
+		for (i = 0; i < srclen; i++) {
+			cur_byte = src1[i];
+			tot8b += (cur_byte & 0x80);
+		}
+
+		tot8b /= 0x80;
+		if (adat->adapt_mode == 2 && tot8b > FORTY_PCT(srclen)) {
+			btype = TYPE_BINARY;
+		} else if (adat->adapt_mode == 1 && tot8b > FIFTY_PCT(srclen)) {
+			btype = TYPE_BINARY;
+		} else {
+			btype = TYPE_TEXT|TYPE_MARKUP;
 		}
 	}
 

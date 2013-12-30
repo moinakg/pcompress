@@ -236,7 +236,7 @@ typedef struct pc_ctx {
 	uchar_t *arc_buf;
 	uint64_t arc_buf_size, arc_buf_pos;
 	int arc_closed, arc_writing;
-	uchar_t btype, ctype;
+	int btype, ctype;
 	int min_chunk;
 	int enable_packjpg;
 

@@ -2832,7 +2832,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	ff.enable_packjpg = 0;
 
 	pthread_mutex_lock(&opt_parse);
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avnmK")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avmK")) != -1) {
 		int ovr;
 		int64_t chunksize;
 
@@ -2982,10 +2982,6 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			pctx->verbose = 1;
 			break;
 
-		    case 'n':
-			pctx->enable_archive_sort = -1;
-			break;
-
 		    case 'm':
 			pctx->force_archive_perms = 1;
 			break;
@@ -3020,6 +3016,11 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 	if (pctx->archive_mode && pctx->do_uncompress) {
 		log_msg(LOG_ERR, 0, "'-a' flag is only for archive creation.");
+		return (1);
+	}
+
+	if (pctx->archive_mode && pctx->pipe_mode) {
+		log_msg(LOG_ERR, 0, "Full pipeline mode is meaningless with archiver.");
 		return (1);
 	}
 

@@ -246,7 +246,7 @@ typedef enum {
 	/*
 	 * Sub-types.
 	 */
-#define	NUM_SUB_TYPES	26
+#define	NUM_SUB_TYPES	28
 	TYPE_EXE32 = 8,
 	TYPE_JPEG = 16,
 	TYPE_MARKUP = 24,
@@ -272,7 +272,9 @@ typedef enum {
 	TYPE_AUDIO_COMPRESSED = 184,
 	TYPE_EXE64 = 192,
 	TYPE_BMP = 200,
-	TYPE_TIFF = 208
+	TYPE_TIFF = 208,
+	TYPE_PDF = 216,
+	TYPE_ARCHIVE_TAR = 224
 } data_type_t;
 
 /*

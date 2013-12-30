@@ -842,7 +842,7 @@ setup_extractor(pc_ctx_t *pctx)
 }
 
 static ssize_t
-process_by_filter(int fd, int typ, struct archive *target_arc,
+process_by_filter(int fd, int *typ, struct archive *target_arc,
     struct archive *source_arc, struct archive_entry *entry, int cmp)
 {
 	struct filter_info fi;
@@ -854,10 +854,11 @@ process_by_filter(int fd, int typ, struct archive *target_arc,
 	fi.fd = fd;
 	fi.compressing = cmp;
 	fi.block_size = AW_BLOCK_SIZE;
-	wrtn = (*(typetab[(typ >> 3)].filter_func))(&fi, typetab[(typ >> 3)].filter_private);
+	fi.type_ptr = typ;
+	wrtn = (*(typetab[(*typ >> 3)].filter_func))(&fi, typetab[(*typ >> 3)].filter_private);
 	if (wrtn == FILTER_RETURN_ERROR) {
 		log_msg(LOG_ERR, 0, "Error invoking filter module: %s",
-		    typetab[(typ >> 3)].filter_name);
+		    typetab[(*typ >> 3)].filter_name);
 	}
 	return (wrtn);
 }
@@ -890,7 +891,8 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 		if (typetab[(typ >> 3)].filter_func != NULL) {
 			int64_t rv;
 
-			rv = process_by_filter(fd, typ, arc, NULL, entry, 1); 
+			pctx->ctype = typ;
+			rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry, 1); 
 			if (rv == FILTER_RETURN_ERROR) {
 				close(fd);
 				return (-1);
@@ -934,7 +936,7 @@ do_map:
 					int64_t rv;
 					munmap(mapbuf, len);
 
-					rv = process_by_filter(fd, typ, arc, NULL, entry, 1); 
+					rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry, 1); 
 					if (rv == FILTER_RETURN_ERROR) {
 						return (-1);
 					} else if (rv == FILTER_RETURN_SKIP) {
@@ -1149,7 +1151,7 @@ copy_data_out(struct archive *ar, struct archive *aw, struct archive_entry *entr
 		if (typetab[(typ >> 3)].filter_func != NULL) {
 			int64_t rv;
 
-			rv = process_by_filter(-1, typ, aw, ar, entry, 0); 
+			rv = process_by_filter(-1, &typ, aw, ar, entry, 0); 
 			if (rv == FILTER_RETURN_ERROR) {
 				archive_set_error(ar, archive_errno(aw),
 				    "%s", archive_error_string(aw));
@@ -1231,7 +1233,8 @@ extractor_thread_func(void *dat) {
 	 * Extract all security attributes if we are root.
 	 */
 	if (pctx->force_archive_perms || geteuid() == 0) {
-		flags |= ARCHIVE_EXTRACT_OWNER;
+		if (geteuid() == 0)
+			flags |= ARCHIVE_EXTRACT_OWNER;
 		flags |= ARCHIVE_EXTRACT_PERM;
 		flags |= ARCHIVE_EXTRACT_ACL;
 		flags |= ARCHIVE_EXTRACT_XATTR;
@@ -1475,17 +1478,21 @@ out:
  * Detect a few file types from looking at magic signatures.
  * NOTE: Jpeg files must be detected via '.jpg' or '.jpeg' (case-insensitive)
  *	extensions. Do not add Jpeg header detection here. it will break
- *	context based PackJPG processing. Jpeg files not have proper
+ *	context based PackJPG processing. Jpeg files not having proper
  *	extension must not be processed via PackJPG.
  */
 static int
 detect_type_by_data(uchar_t *buf, size_t len)
 {
 	// At least a few bytes.
-	if (len < 16) return (TYPE_UNKNOWN);
+	if (len < 512) return (TYPE_UNKNOWN);
 
 	if (memcmp(buf, "!<arch>\n", 8) == 0)
 		return (TYPE_BINARY|TYPE_ARCHIVE_AR);
+	if (memcmp(&buf[257], "ustar\0", 6) == 0 || memcmp(&buf[257], "ustar\040\040\0", 8) == 0)
+		return (TYPE_BINARY|TYPE_ARCHIVE_TAR);
+	if (memcmp(buf, "%PDF-", 5) == 0)
+		return (TYPE_BINARY|TYPE_PDF);
 	if (U32_P(buf) == ELFINT) {  // Regular ELF, check for 32/64-bit, core dump
 		if (*(buf + 16) != 4) {
 			if (*(buf + 4) == 2) {
