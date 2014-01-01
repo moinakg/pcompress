@@ -215,12 +215,15 @@ adapt_deinit(void **data)
 	return (rv);
 }
 
+/*
+ * Identify the types that BSC can compress better than others.
+ */
 int
 is_bsc_type(int btype)
 {
 	int stype = PC_SUBTYPE(btype);
 	return ((stype == TYPE_MARKUP) | (stype == TYPE_BMP) | (stype == TYPE_DNA_SEQ) |
-	    (stype == TYPE_MP4) | (stype == TYPE_FLAC) | (stype == TYPE_AVI));
+	    (stype == TYPE_MP4) | (stype == TYPE_FLAC) | (stype == TYPE_AVI) | (stype == TYPE_DICOM));
 }
 
 int
@@ -237,8 +240,8 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 		double tagcnt, pct_tag;
 		uchar_t cur_byte, prev_byte;
 		/*
-		* Count number of 8-bit binary bytes and XML tags in source.
-		*/
+		 * Count number of 8-bit binary bytes and XML tags in source.
+		 */
 		tot8b = 0;
 		tag1 = 0;
 		tag2 = 0;
@@ -255,6 +258,9 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 				prev_byte = cur_byte;
 		}
 
+		/*
+		 * Heuristics for detecting BINARY vs generic TEXT vs XML data.
+		 */
 		tot8b /= 0x80;
 		tagcnt = tag1 + tag2 + tag3;
 		pct_tag = tagcnt / (double)srclen;

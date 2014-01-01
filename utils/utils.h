@@ -274,7 +274,8 @@ typedef enum {
 	TYPE_BMP = 200,
 	TYPE_TIFF = 208,
 	TYPE_PDF = 216,
-	TYPE_ARCHIVE_TAR = 224
+	TYPE_ARCHIVE_TAR = 224,
+	TYPE_DICOM = 232
 } data_type_t;
 
 /*

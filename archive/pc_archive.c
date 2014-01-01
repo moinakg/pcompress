@@ -1493,6 +1493,22 @@ detect_type_by_data(uchar_t *buf, size_t len)
 		return (TYPE_BINARY|TYPE_ARCHIVE_TAR);
 	if (memcmp(buf, "%PDF-", 5) == 0)
 		return (TYPE_BINARY|TYPE_PDF);
+
+	// Try to detect DICOM medical image file. BSC compresses these better.
+	if (len > 127) {
+		size_t i;
+
+		// DICOM files should have either DICM or ISO_IR within the first 128 bytes
+		for (i = 0; i < 128; i++) {
+			if (buf[i] == 'D')
+				if (memcmp(&buf[i], "DICM", 4) == 0)
+					return (TYPE_BINARY|TYPE_DICOM);
+			if (buf[i] == 'I')
+				if (memcmp(&buf[i], "ISO_IR ", 7) == 0)
+					return (TYPE_BINARY|TYPE_DICOM);
+		}
+	}
+
 	if (U32_P(buf) == ELFINT) {  // Regular ELF, check for 32/64-bit, core dump
 		if (*(buf + 16) != 4) {
 			if (*(buf + 4) == 2) {
