@@ -82,7 +82,7 @@ AE_IFIFO   Named pipe (fifo)
 #define	AW_BLOCK_SIZE		(256 * 1024)
 
 typedef struct member_entry {
-	char name[NAMELEN];
+	uchar_t name[NAMELEN];
 	uint32_t file_pos; // 32-bit file position to limit memory usage.
 	uint64_t size;
 } member_entry_t;
@@ -515,7 +515,6 @@ do_mmap:
 		while (fpath[n] == '/' && n > 0) n--;
 		while (fpath[n] != '/' && fpath[n] != '\\' && n > 0) n--;
 		*namechars = &fpath[n+1];
-		printf("%s\n", fpath);
 	}
 	return (rbytes);
 }
@@ -531,7 +530,6 @@ add_pathname(const char *fpath, const struct stat *sb,
 	uchar_t *buf;
 	const char *basename;
 
-	if (tflag == FTW_DP) return (0);
 	if (tflag == FTW_DNR || tflag == FTW_NS) {
 		log_msg(LOG_WARN, 0, "Cannot access %s\n", fpath);
 		return (0);
@@ -616,17 +614,39 @@ add_pathname(const char *fpath, const struct stat *sb,
 		dot = strrchr(basename, '.');
 
 		// Small NAMELEN so these loops will be unrolled by compiler.
-		for (i = 0; i < NAMELEN; i++) member->name[i] = 0;
-		i = 0;
-		if (!dot) {
-			while (basename[i] != '\0' && i < NAMELEN) {
-				member->name[i] = basename[i]; i++;
+		if (tflag != FTW_DP) {
+			/*
+			 * If not a directory then we store upto first 4 chars of
+			 * the extension, if present, or first 4 chars of the
+			 * filename.
+			 */
+			for (i = 0; i < NAMELEN; i++) member->name[i] = 0;
+
+			i = 0;
+			if (!dot) {
+				while (basename[i] != '\0' && i < NAMELEN) {
+					member->name[i] = basename[i]; i++;
+				}
+			} else {
+				dot++;
+				while (dot[i] != '\0' && i < NAMELEN) {
+					member->name[i] = dot[i]; i++;
+				}
 			}
 		} else {
-			dot++;
-			while (dot[i] != '\0' && i < NAMELEN) {
-				member->name[i] = dot[i]; i++;
-			}
+			/*
+			 * If this is directory then we store 0xff in the 4 bytes
+			 * and invert the size value. This is done to cause directories
+			 * to be always sorted after other pathname entries and to
+			 * be sorted in descending order of nesting depth.
+			 * If we are extracting all permissions then read-only directory
+			 * permissions cannot be set before all their child members are
+			 * extracted. The following ensures directories are sorted after
+			 * other pathnames and they are sorted in descending order of
+			 * their nesting depth.
+			 */
+			for (i = 0; i < NAMELEN; i++) member->name[i] = 255;
+			member->size = INT64_MAX - ftwbuf->level;
 		}
 	}
 cont:
@@ -729,7 +749,11 @@ setup_archiver(pc_ctx_t *pctx, struct stat *sbuf)
 		a_state.arc_size = 0;
 		a_state.fcount = 0;
 		if (S_ISDIR(sb.st_mode)) {
-			err = nftw(fn->filename, add_pathname, 1024, FTW_PHYS);
+			/*
+			 * Depth-First scan, FTW_DEPTH, is needed to handle restoring
+			 * all directory permissions correctly.
+			 */
+			err = nftw(fn->filename, add_pathname, 1024, FTW_PHYS | FTW_DEPTH);
 		} else {
 			int tflag;
 			struct FTW ftwbuf;
