@@ -2832,7 +2832,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	ff.enable_packjpg = 0;
 
 	pthread_mutex_lock(&opt_parse);
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avmK")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avmKjx")) != -1) {
 		int ovr;
 		int64_t chunksize;
 

@@ -272,6 +272,8 @@ Advanced usage
     as opposed to automatic settings. If advanced options are used then auto-setting
     of parameters get disabled. The various advanced options are discussed below.
 
+    Chunk-level Deduplication
+    -------------------------
     Attempt Polynomial fingerprinting based deduplication on a per-chunk basis:
        pcompress -D ...
 
@@ -285,35 +287,11 @@ Advanced usage
                           effect greater final compression ratio at the cost of
                           higher processing overhead.
 
-       -L       Enable LZP pre-compression. This improves compression ratio of all
-                algorithms with some extra CPU and very low RAM overhead. Using
-                delta encoding in conjunction with this may not always be beneficial.
-                However Adaptive Delta Encoding is beneficial along with this.
-
-       -P       Enable Adaptive Delta Encoding. It can improve compresion ratio further
-                for data containing tables of numerical values especially if those are
-                in an arithmetic series. In this implementation basic Delta Encoding is
-                combined with Run-Length encoding and Matrix transpose
-       NOTE -   Both -L and -P can be used together to give maximum benefit on most
-                datasets.
-
        -F       Perform Fixed Block Deduplication. This is faster than fingerprinting
                 based content-aware deduplication in some cases. However this is mostly
                 usable for disk dumps especially virtual machine images. This generally
                 gives lower dedupe ratio than content-aware dedupe (-D) and does not
                 support delta compression.
-
-       -B <0..5>
-                Specify an average Dedupe block size. 0 - 2K, 1 - 4K, 2 - 8K ... 5 - 64K.
-                Default deduplication block size is 4KB for Global Deduplication and 2KB
-                otherwise.
-       -B 0
-                This uses blocks as small as 2KB for deduplication. This option can be
-                used for datasets of a few GBs to a few hundred TBs in size depending on
-                available RAM.
-                  
-       -M       Display memory allocator statistics.
-       -C       Display compression statistics.
 
     Global Deduplication
     --------------------
@@ -351,6 +329,38 @@ Advanced usage
                   
                 In pipe mode Global Deduplication always uses a segmented similarity based
                 index. It allows efficient network transfer of large data.
+                  
+       -B <0..5>
+                Specify an average Dedupe block size. 0 - 2K, 1 - 4K, 2 - 8K ... 5 - 64K.
+                Default deduplication block size is 4KB for Global Deduplication and 2KB
+                otherwise.
+       -B 0
+                This uses blocks as small as 2KB for deduplication. This option can be
+                used for datasets of a few GBs to a few hundred TBs in size depending on
+                available RAM.
+
+       -L       Enable LZP pre-compression. This improves compression ratio of all
+                algorithms with some extra CPU and very low RAM overhead. Using
+                delta encoding in conjunction with this may not always be beneficial.
+                However Adaptive Delta Encoding is beneficial along with this.
+
+       -P       Enable Adaptive Delta Encoding. It can improve compresion ratio further
+                for data containing tables of numerical values especially if those are
+                in an arithmetic series. In this implementation basic Delta Encoding is
+                combined with Run-Length encoding and Matrix transpose
+       NOTE -   Both -L and -P can be used together to give maximum benefit on most
+                datasets.
+
+       -x       Perform Dispack Encoding. This is useful to translate x86 call and jmp
+                relative offsets to absolute values which compress better. The given
+                chunk is split into 32KB blocks and some heuristics are used per block
+                to identify whether it represents x86 instruction stream or not. This
+                works only when archiving.
+
+       -j       Enable PackJPG processing for Jpeg files. This works only when archiving.
+
+       -M       Display memory allocator statistics.
+       -C       Display compression statistics.
 
 Environment Variables
 =====================
