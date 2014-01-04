@@ -124,7 +124,7 @@ Standard Usage
                  [-t <number>] [-S <chunk checksum>] [<target file or '-'>]
 
        Takes a single file as input and produces a compressed file. Archiving is not performed.
-       This can also work as compression pipeline.
+       This can also work in streaming mode.
 
        -c <algorithm>
                 See above. Also see section "Compression Algorithms" for details.
@@ -138,7 +138,7 @@ Standard Usage
                       chunks may not produce better compression. Smaller chunks can result
                       in better data analysis here.
 
-       -p       Make Pcompress work in full pipeline mode. Data is ingested via stdin
+       -p       Make Pcompress work in streaming mode. Data is ingested via stdin
                 compressed and output via stdout. No filenames are used.
 
        <target file>
