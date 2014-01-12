@@ -1205,6 +1205,7 @@ copy_data_out(struct archive *ar, struct archive *aw, struct archive_entry *entr
 			return (r);
 		}
 	}
+	return (ARCHIVE_OK);
 }
 
 static int
@@ -1235,6 +1236,34 @@ archive_extract_entry(struct archive *a, struct archive_entry *entry,
 	return (r);
 }
 
+static int
+copy_data_skip(struct archive *ar, struct archive_entry *entry, int typ)
+{
+	int64_t offset;
+	const void *buff;
+	size_t size;
+	int r;
+
+	for (;;) {
+		r = archive_read_data_block(ar, &buff, &size, &offset);
+		if (r == ARCHIVE_EOF)
+			return (ARCHIVE_OK);
+		if (r != ARCHIVE_OK)
+			return (r);
+	}
+	return (ARCHIVE_OK);
+}
+
+static int
+archive_list_entry(struct archive *a, struct archive_entry *entry, int typ)
+{
+	printf("%s\n", archive_entry_pathname(entry));
+	if (!archive_entry_size_is_set(entry) || archive_entry_size(entry) > 0) {
+		return (copy_data_skip(a, entry, typ));
+	}
+	return (ARCHIVE_OK);
+}
+
 /*
  * Extract Thread function. Read an uncompressed archive from the decompressor stage
  * and extract members to disk.
@@ -1248,37 +1277,43 @@ extractor_thread_func(void *dat) {
 	struct archive_entry *entry;
 	struct archive *awd, *arc;
 
-	flags = ARCHIVE_EXTRACT_TIME;
-	flags |= ARCHIVE_EXTRACT_SECURE_SYMLINKS;
-	flags |= ARCHIVE_EXTRACT_SECURE_NODOTDOT;
-	flags |= ARCHIVE_EXTRACT_SPARSE;
+	/* Silence compiler. */
+	awd = NULL;
+	got_cwd = 0;
 
-	/*
-	 * Extract all security attributes if we are root.
-	 */
-	if (pctx->force_archive_perms || geteuid() == 0) {
-		if (geteuid() == 0)
-			flags |= ARCHIVE_EXTRACT_OWNER;
-		flags |= ARCHIVE_EXTRACT_PERM;
-		flags |= ARCHIVE_EXTRACT_ACL;
-		flags |= ARCHIVE_EXTRACT_XATTR;
-		flags |= ARCHIVE_EXTRACT_FFLAGS;
-		flags |= ARCHIVE_EXTRACT_MAC_METADATA;
+	if (!pctx->list_mode) {
+		flags = ARCHIVE_EXTRACT_TIME;
+		flags |= ARCHIVE_EXTRACT_SECURE_SYMLINKS;
+		flags |= ARCHIVE_EXTRACT_SECURE_NODOTDOT;
+		flags |= ARCHIVE_EXTRACT_SPARSE;
+
+		/*
+		* Extract all security attributes if we are root.
+		*/
+		if (pctx->force_archive_perms || geteuid() == 0) {
+			if (geteuid() == 0)
+				flags |= ARCHIVE_EXTRACT_OWNER;
+			flags |= ARCHIVE_EXTRACT_PERM;
+			flags |= ARCHIVE_EXTRACT_ACL;
+			flags |= ARCHIVE_EXTRACT_XATTR;
+			flags |= ARCHIVE_EXTRACT_FFLAGS;
+			flags |= ARCHIVE_EXTRACT_MAC_METADATA;
+		}
+
+		if (pctx->no_overwrite_newer)
+			flags |= ARCHIVE_EXTRACT_NO_OVERWRITE_NEWER;
+
+		got_cwd = 1;
+		if (getcwd(cwd, PATH_MAX) == NULL) {
+			log_msg(LOG_WARN, 1, "Cannot get current directory.");
+			got_cwd = 0;
+		}
+
+		awd = archive_write_disk_new();
+		archive_write_disk_set_options(awd, flags);
+		archive_write_disk_set_standard_lookup(awd);
 	}
-
-	if (pctx->no_overwrite_newer)
-		flags |= ARCHIVE_EXTRACT_NO_OVERWRITE_NEWER;
-
-	got_cwd = 1;
-	if (getcwd(cwd, PATH_MAX) == NULL) {
-		log_msg(LOG_WARN, 1, "Cannot get current directory.");
-		got_cwd = 0;
-	}
-
 	ctr = 1;
-	awd = archive_write_disk_new();
-	archive_write_disk_set_options(awd, flags);
-	archive_write_disk_set_standard_lookup(awd);
 	arc = (struct archive *)(pctx->archive_ctx);
 	archive_read_open(arc, pctx, arc_open_callback, extract_read_callback, extract_close_callback);
 
@@ -1286,9 +1321,11 @@ extractor_thread_func(void *dat) {
 	 * Change directory after opening the archive, otherwise archive_read_open() can fail
 	 * for relative paths.
 	 */
-	if (chdir(pctx->to_filename) == -1) {
-		log_msg(LOG_ERR, 1, "Cannot change to dir: %s", pctx->to_filename);
-		goto done;
+	if (!pctx->list_mode) {
+		if (chdir(pctx->to_filename) == -1) {
+			log_msg(LOG_ERR, 1, "Cannot change to dir: %s", pctx->to_filename);
+			goto done;
+		}
 	}
 
 	/*
@@ -1342,7 +1379,11 @@ extractor_thread_func(void *dat) {
 		}
 #endif
 
-		rv = archive_extract_entry(arc, entry, awd, typ);
+		if (!pctx->list_mode) {
+			rv = archive_extract_entry(arc, entry, awd, typ);
+		} else {
+			rv = archive_list_entry(arc, entry, typ);
+		}
 		if (rv != ARCHIVE_OK) {
 			log_msg(LOG_WARN, 0, "%s: %s", archive_entry_pathname(entry),
 			    archive_error_string(arc));
@@ -1359,8 +1400,10 @@ extractor_thread_func(void *dat) {
 		ctr++;
 	}
 
-	if (got_cwd) {
-		rv = chdir(cwd);
+	if (!pctx->list_mode) {
+		if (got_cwd) {
+			rv = chdir(cwd);
+		}
 	}
 	archive_read_free(arc);
 	archive_write_free(awd);

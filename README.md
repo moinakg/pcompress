@@ -147,13 +147,13 @@ Standard Usage
 
     Decompression and Archive extraction
     ------------------------------------
-       pcompress -d <compressed file or '-'> [-m] [-K] [<target file or directory>]
+       pcompress -d <compressed file or '-'> [-m] [-K] [-i] [<target file or directory>]
 
        -m        Enable restoring *all* permissions, ACLs, Extended Attributes etc.
                  Equivalent to the '-p' option in tar. Ownership is only extracted if run as
                  root user.
-
        -K        Do not overwrite newer files.
+       -i        Only list contents of the archive, do not extract.
 
        -m and -K are only meaningful if the compressed file is an archive. For single file
        compressed mode these options are ignored.

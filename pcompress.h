@@ -239,6 +239,7 @@ typedef struct pc_ctx {
 	int btype, ctype;
 	int min_chunk;
 	int enable_packjpg;
+	int list_mode;
 
 	unsigned int chunk_num;
 	uint64_t largest_chunk, smallest_chunk, avg_chunk;

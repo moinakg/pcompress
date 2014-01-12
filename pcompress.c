@@ -137,7 +137,8 @@ usage(pc_ctx_t *pctx)
 "       %s -d <compressed file or '-'> [-m] [-K] [<target file or directory>]\n\n"
 "       -m        Enable restoring *all* permissions, ACLs, Extended Attributes etc.\n"
 "                 Equivalent to the '-p' option in tar.\n"
-"       -K        Do not overwrite newer files.\n\n"
+"       -K        Do not overwrite newer files.\n"
+"       -i        Only list contents of the archive, do not extract.\n\n"
 "       -m and -K are only meaningful if the compressed file is an archive. For single file\n"
 "       compressed mode these options are ignored.\n\n"
 "       <compressed file>\n"
@@ -848,6 +849,11 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 	} else {
 		const char *origf;
 
+		if (pctx->list_mode) {
+			log_msg(LOG_ERR, 0, "Nothing to list. The compressed file is not an archive.");
+			err = 1;
+			goto uncomp_done;
+		}
 		if (to_filename == NULL) {
 			char *pos;
 
@@ -2827,11 +2833,13 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	ff.enable_packjpg = 0;
 
 	pthread_mutex_lock(&opt_parse);
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avmKjx")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avmKjxi")) != -1) {
 		int ovr;
 		int64_t chunksize;
 
 		switch (opt) {
+		    case 'i':
+			pctx->list_mode = 1; // List mode also sets decompress flag
 		    case 'd':
 			pctx->do_uncompress = 1;
 			break;
