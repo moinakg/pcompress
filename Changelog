@@ -1,3 +1,120 @@
+== 3.0 Major Beta Release ==
+Basic capability to list contents of an archive without extracting to disk.
+Bump version and update command help text.
+Update README with additional option details.
+Change nftw() to depth-first scan to handle restoring directory permissions correctly.
+When sorting cause directories to be sorted after files and in descending order of nesting level.
+Take out stray printf().
+Detect some DICOM formats and use BSC for DICOM data.
+Overhaul documentation part #1
+Detect and handle uncompressed PDF files using libbsc.
+Force binary/text data detection for tar archives.
+Get rid of unnecessary CLI option.
+Add full pipeline mode check when archiving.
+Update to PackJPG 2.5i.
+Fixes crash with malformed Jpeg.
+Fix issue #12.
+Fix issue #13.
+Create output directory with correct mode.
+Fix the flow where pathname list is not sorted.
+Fix ppmd decompression bug introduced in previous commit.
+Reduce compression level for automatic pathname sorting.
+Change to extraction directory only after opening archive.
+Free PPMD buffer after compression, rather than caching.
+Introduce new API in allocator to release buffer to OS.
+Release LZMA buffers after use.
+Drastically reduce memory consumption of PPMD8 in adaptive mode (Use lower max model order).
+Detect AR archives and set the type.
+Re-use a less common type code for AR.
+Use Dispack generically for all executables and AR archives.
+Move MSDOS COM single-byte magic number checks to last in the list.
+Move advanced options flag into context structure.
+Include dtd files as text type.
+Update PackJPG to version 2.5h.
+Fix missing bounds checking in Delta2.
+Check harder with more strides in Delta2 for extreme compression levels.
+Make LibArchive filter process buffer more generic.
+Include explicit CLI flags for PackJPG and Dispack.
+Avoid auto-selection of filters if advanced options are specified.
+Add more robust checks for Jpeg and packJPG format files in filter routine.
+Use case-insensitive checks for extension names.
+Enable more features based on compression level, when archiving.
+Do not use Libbsc for TIFFs. Not all TIFFs compress well with Libbsc.
+Fix DEBUG-STATS build for Dispack.
+Use adapt2 as default compression in archive mode.
+Add more filter auto-selection by compression level in archive mode.
+Replace odd stride lengths in Delta2 with standard numeric type lengths and improve performance.
+Remove fast path exit to allow compressing headers and zero paddings via LZ4.
+Use libbsc for AVI and MP4 files.
+Use Libbsc for MP4 and FLAC files.
+Change some rare file type codes to indicate some common types.
+Use Libbsc for TIFF images.
+Workaround for packJPG limitation.
+Remove external Libbsc option.
+Add forked and optimized copy of LGPL version of Libbsc.
+Strip out Sort Transform from Libbsc copy.
+Reduce Libbsc memory use.
+Avoid redundant adler32 of data block in Libbsc.
+Use Libbsc for DNA Sequence data instead of PPMD. Faster, better compression.
+Fix pz extension handling for real.
+Avoid Delta2,LZP for TIFF files. Negatively impacts compression.
+Use libbsc/ppmd for BMP files.
+Fix extension based hashing.
+Do not append .pz extension to filenames already having it.
+Some code formatting changes.
+Fix PackJPG library usage. PackJPG interface doc is incomplete, ugh!
+Handle the case where PackJPG expands the file rather than compressing.
+Fix Dispack decoding.
+Add Dispack filter with auto-detection of x86 executables in archive mode.
+More elaborate magic header based detection of 32-bit and 64-bit x86 binaries.
+Always use fast-mode LZ4 in Adaptive modes.
+Optimize preprocessed compression and avoid a bunch of memory copies.
+Fix a crash.
+Add a few more file types.
+More comments.
+Fix fd leak.
+Fix issues when handling Jpegs where packJPG borks.
+Add fast handling of totally incompressible data (like Jpegs) in adaptive modes.
+Add function to indicate totally incompressible data when archiving.
+Reformat if statements in some places to reduce branching.
+Enable auto-filtering of archive entries based on compression level.
+Miscellaneous fixes.
+Work in progress changes for packJPG encoding and decoding.
+Enhance custom LibArchive filter functionlity.
+Add basic framework for file type based filters during libarchive stage.
+Add packJPG filter for Jpeg files (not active yet).
+Directory format changes for clarity.
+Add own implementation of archive entry extraction to allow custom filters.
+Fix magic number check for endianness.
+Structured handling of file types.
+Handling of already compressed data based on compression algorithm.
+Add a few more extension types.
+Leverage file type detection(archiver) to improve compression performance.
+Use detected file/data type(archiver) for Adaptive compression modes.
+Update type flags and add more extensions.
+Add file type detection based on magic values.
+Add extension based file type detection and setting segment data type.
+Use Bob Jenkins Minimal Perfect Hash to check for known extensions.
+Use semaphore signaling and direct buffer copy for extraction.
+Clear off private xattrs when extracting.
+Enable pathname sorting only for high compression levels.
+Replace slow pipe with direct memory copy for archive extraction.
+Avoid using pipe during archive creation. Use semaphores and direct memory copy.
+Use mmap to read from the pathlist file for performance.
+Functionality to sort pathnames based on file extension and size.
+More changes for archiving.
+Allow multiple filenames on command line when archiving.
+Remove unneded small block writes with libarchive.
+Make log_msg() add newline by default.
+Archiving support using Libarchive.
+Change all perror() calls to use logger.
+Make the config script a little verbose.
+Ability to specify output compressed pathname.
+Fix log level handling.
+Add a simple log facility.
+Refactor all printfs to use log facility.
+Cleanup pointer casting in code to use macros.
+
 == 2.4 Bugfix Release ==
 Add identifiers to error messages for clarity.
 Fix init of dedupe block size.
@@ -23,6 +140,7 @@ Reduce memory threshold for switching to Similarity based Deduplication.
 Avoid unnecessary re-hashing of 64-bit keys of the segment index.
 Update free memory computation to include cached buffers.
 Fix a potential rare corner case.
+
 == 2.3 Update Release ==
 Fix multiple crashes for some corner cases.
 Increase max block size for variable dedup block sizes greater than 16KB.
@@ -42,6 +160,7 @@ Remove an rpath entry meant for testing.
 Make default symbol visibility to hidden with explicit public visibility specified.
 Add missing static scope to a few more places.
 Make Pcompress functionality into a library - initial changes.
+
 == 2.2 Bugfix Release ==
 Update invalid environment variable handling to actually fail rather than auto-correct.
 Fix a crash with invalid PCOMPRESS_CHUNK_HASH_GLOBAL.
@@ -51,6 +170,7 @@ Correspond segment size to chunk size for Segmented Dedupe for better accuracy.
 Add a testcase for issue #10.
 Fix issue #10.
 Fix issue #8.
+
 == 2.1 Update Release ==
 Add more tests covering Segmented Global Dedupe.
 Fix some tests.
@@ -80,6 +200,7 @@ Use closer min-values sampling for improved segmented dedupe accuracy.
 Update proper checksum info in README.
 Fix sizing of similarity hash buffer.
 Tweak index size computation.
+
 == 2.0 Major Release ==
 Add test cases for Global Deduplication.
 Update documentation and code comments.
@@ -129,6 +250,7 @@ Fix location of sem_wait().
 More comments.
 Add check to disable Delta Compression with Global deduplication for now.
 Implement Global Deduplication.
+
 == 1.4.0 Update Release ==
 Update couple more test parameters with new crypto options.
 Update README and test cases with new crypto options.
@@ -168,6 +290,7 @@ Update xxhash comment.
 Reduce dedupe hash table collisions by half.
 Improve Deduplication performance by another 95%.
 Start sliding window scanning near minimum chunk size boundaries to avoid scanning whole chunk.
+
 == 1.3.0 Major Performance Release ==
 Fix return from parallel versions of Keccak_Hash() function.
 Add parallel versions of various checksums for single-segment, single-thread compression.
@@ -318,6 +441,7 @@ Portability to Debian based distros.
 Enable SSE4/AVX detection for AMD platforms (Bulldozer has both).
 Portable long long int print formatting to silence gcc 4.6 warnings.
 Add another example invocation.
+
 == 0.9.0 Major Release ==
 Implement HMAC verification for chunk header.
 Do not ask for decryption passwd twice.
@@ -330,6 +454,7 @@ Couple of minor fixes.
 Incorporate SSE/AVX optimized Intel SHA-256 implementation.
 Add support for runtime cpuid detection.
 Add support for SHA256 and SHA512 digests from OpenSSL library.
+
 == 0.8.6 Update Release ==
 Fix polynomial computation.
 Fix incorrect block length when doing fixed-block dedupe.
@@ -422,6 +547,7 @@ Fix buffer sizing for LZ4.
 Fix exit condition checks in LZ4 decompression wrapper.
 Fix buffer size calculation when decompressing LZ4, Zlib and Bzip2 compressed chunks.
 Slight SSE optimization in LZ4HC.
+
 == 0.6 Alpha bugfix release ==
 Fix crash when algo init function returns error.
 Fix LZFX error handling.
