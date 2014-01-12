@@ -7,10 +7,8 @@ GCC 4.4 (with mpfr, ppl and cloog support packages for loop
 	 vectorization).
 libz (zlib) and development packages.
 Libbz2 and development packages.
-Libbsc source tree if BSC support is desired.
-	 See below:
-	 "Steps for building with libbsc support".
 OpenSSL version 0.9.8 or greater.
+Libarchive and its development packages.
 
 Basic Installation
 ==================
@@ -103,14 +101,29 @@ is not the usual GNU Autoconf script.
                         Enable building against an alternate Bzip2 and library
                         installation.
 
+--with-libarchive=<path to libarchive installation tree> (Default: System)
+                        Enable building against an alternate libarchive installation.
+
+                        NOTE:
+                        Pcompress only uses basic Libarchive functionality of
+                        creating PAX archives. No other functionality or filter
+                        support is used. So a local static libarchive build with
+                        most features disabled can be used with this option.
+
 --no-sse-detect         Do not try to detect the CPU's SSE capability. This
                         mode will simply use SSE2 as the fallback default.
                         Using SSE4 and later improves performance significantly.
+
+--no-1.3-archive-compat Disable compatibility with compressed archives created with Pcompress
+                        version 1.3 (default: retain compatibility). Hash formats changed from
+                        version 1.3 to 1.4 so this option is required if files created using
+                        1.3 need to be decompressed by version 1.4 onwards.
 
 --use-key256            Use 256-bit encryption keys. Default key length is
                         128-bit.
 
 --help			Display the help message.
+
 
 Additional compilation flags can be passed to make like this:
    make EXTRA_CPPFLAGS=<...> EXTRA_LDFLAGS=<...>

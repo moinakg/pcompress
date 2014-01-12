@@ -50,6 +50,7 @@ ${prog} [<options>]
 --help			Display this help message.
 
 _EOF
+exit 0
 }
 
 arg1=$1
