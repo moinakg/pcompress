@@ -437,7 +437,7 @@ do
 		"${pref}/local/lib64" "${pref}/usr/local/lib64" "${pref}/local/lib" "${pref}/usr/local/lib" \
 		"${pref}/local/lib/x86_64-linux-gnu" "${pref}/usr/local/lib/x86_64-linux-gnu" \
 		"${use_prefix}/lib64" "${use_prefix}/lib" "${use_prefix}/lib/x86_64-linux-gnu" \
-		"${use_prefix}/usr/lib/x86_64-linux-gnu"
+		"${use_prefix}/usr/lib/x86_64-linux-gnu" "${use_prefix}/.libs" "${use_prefix}"
 	do
 		if [ -d ${lib} ]
 		then
@@ -515,20 +515,50 @@ do
 	then
 		use_prefix="$prefix"
 	fi
+	found=0
 	for inc in "${pref}/include" "${pref}/usr/include" \
 		"${pref}/local/include" "${pref}/usr/local/include" \
-		"${use_prefix}/include" "${use_prefix}/usr/include"
+		"${use_prefix}/include" "${use_prefix}/usr/include" \
+		"${use_prefix}/libarchive" "${use_prefix}"
 	do
 		if [ -d ${inc} ]
 		then
 			if [ -f "${inc}/${hdrf}" ]
 			then
 				eval "${var}=\"-I${inc}\""
+				found=1
 				break
 			fi
 		fi
 	done
+	if [ $found -ne 1 ]
+	then
+		echo "Cannot find header $hdrf"
+		exit 1
+	fi
 done
+
+echo "Checking for Libarchive version ..."
+cat << _EOF > tst.c
+#include <stdlib.h>
+#include <archive.h>
+
+int
+main(void)
+{
+	int flags = ARCHIVE_READDISK_NO_TRAVERSE_MOUNTS;
+
+        return (0);
+}
+_EOF
+
+gcc ${extra_opt_flags} ${libarchive_inc} -L${libarchive_libdir} -O0 -g tst.c -o tst -larchive >/dev/null 2>&1
+if [ $? -ne 0 ]
+then
+        echo "Libarchive version 3.0 or newer is required."
+	exit 1
+fi
+rm -f tst tst.c
 
 echo "Generating Makefile ..."
 linkvar="LINK"

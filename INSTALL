@@ -8,7 +8,7 @@ GCC 4.4 (with mpfr, ppl and cloog support packages for loop
 libz (zlib) and development packages.
 Libbz2 and development packages.
 OpenSSL version 0.9.8 or greater.
-Libarchive and its development packages.
+Libarchive 3.x or greater and its development packages.
 
 Basic Installation
 ==================
