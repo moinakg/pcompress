@@ -499,7 +499,17 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 	window_pos = 0;
 	ctx->valid = 0;
 	cur_roll_checksum = 0;
-	if (*size < ctx->rabin_poly_avg_block_size) return (0);
+	if (*size < ctx->rabin_poly_avg_block_size) {
+		/*
+		 * Must ensure that we are signaling the index semaphores before skipping
+		 * in order to maintain proper sequencing and avoid deadlocks.
+		 */
+		if (ctx->arc) {
+			sem_wait(ctx->index_sem);
+			sem_post(ctx->index_sem_next);
+		}
+		return (0);
+	}
 	DEBUG_STAT_EN(strt = get_wtime_millis());
 
 	if (ctx->dedupe_flag == RABIN_DEDUPE_FIXED) {
