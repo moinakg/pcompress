@@ -86,6 +86,9 @@ extern int ppmd_alloc(void *data);
 extern void ppmd_free(void *data);
 extern int ppmd_state_init(void **data, int *level, int alloc);
 
+extern int lz4_buf_extra(uint64_t buflen);
+extern int libbsc_buf_extra(uint64_t buflen);
+
 struct adapt_data {
 	void *lzma_data;
 	void *ppmd_data;
@@ -119,8 +122,14 @@ adapt_stats(int show)
 void
 adapt_props(algo_props_t *data, int level, uint64_t chunksize)
 {
+	int ext1, ext2;
+
 	data->delta2_span = 200;
 	data->deltac_min_distance = EIGHTM;
+	ext1 = lz4_buf_extra(chunksize);
+	ext2 = libbsc_buf_extra(chunksize);
+	if (ext2 > ext1) ext1 = ext2;
+	data->buf_extra = ext1;
 }
 
 int

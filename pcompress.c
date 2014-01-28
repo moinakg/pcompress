@@ -2127,11 +2127,6 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	 * We also keep extra 8-byte space for the last chunk's size.
 	 */
 	compressed_chunksize = chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
-	if (chunksize + props.buf_extra > compressed_chunksize) {
-		compressed_chunksize += (chunksize + props.buf_extra - 
-		    compressed_chunksize);
-	}
-
 	if (pctx->_props_func) {
 		pctx->_props_func(&props, level, chunksize);
 		if (chunksize + props.buf_extra > compressed_chunksize) {
