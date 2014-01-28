@@ -1120,7 +1120,7 @@ archiver_thread_func(void *dat) {
 			archive_entry_set_size(entry, archive_entry_size(entry));
 		}
 		if (pctx->verbose)
-			log_msg(LOG_INFO, 0, "%5d/%5d %8d %s", ctr, pctx->archive_members_count,
+			log_msg(LOG_INFO, 0, "%5d/%5d %8" PRIu64 " %s", ctr, pctx->archive_members_count,
 			    archive_entry_size(entry), name);
 
 		archive_entry_linkify(resolver, &entry, &spare_entry);
@@ -1389,7 +1389,7 @@ extractor_thread_func(void *dat) {
 			    archive_error_string(arc));
 
 		} else if (pctx->verbose) {
-			log_msg(LOG_INFO, 0, "%5d %8d %s", ctr, archive_entry_size(entry),
+			log_msg(LOG_INFO, 0, "%5d %8" PRIu64 " %s", ctr, archive_entry_size(entry),
 			    archive_entry_pathname(entry));
 		}
 
