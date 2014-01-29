@@ -2819,7 +2819,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	pctx->level = -1;
 	err = 0;
 	pctx->keylen = DEFAULT_KEYLEN;
-	pctx->chunksize = DEFAULT_CHUNKSIZE;
+	pctx->chunksize = 0;
 	pos = argv[0] + strlen(argv[0]);
 	while (*pos != '/' && pos > argv[0]) pos--;
 	if (*pos == '/') pos++;
@@ -3295,6 +3295,13 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		}
 		if (pctx->lzp_preprocess || pctx->enable_delta2_encode || pctx->dispack_preprocess) {
 			pctx->preprocess_mode = 1;
+		}
+		if (pctx->chunksize == 0) {
+			if (pctx->level < 9) {
+				pctx->chunksize = DEFAULT_CHUNKSIZE;
+			} else {
+				pctx->chunksize = DEFAULT_CHUNKSIZE + (pctx->level - 8) * DEFAULT_CHUNKSIZE/4;
+			}
 		}
 	} else if (pctx->do_uncompress) {
 		struct filter_flags ff;
