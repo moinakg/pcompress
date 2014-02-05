@@ -854,7 +854,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 			err = 1;
 			goto uncomp_done;
 		}
-		if (to_filename == NULL) {
+		if (to_filename == NULL && !pctx->pipe_mode) {
 			char *pos;
 
 			/*
@@ -882,14 +882,16 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 				log_msg(LOG_WARN, 0, "Using %s for output file name.", to_filename);
 			}
 		}
-		origf = to_filename;
-		if ((to_filename = realpath(origf, NULL)) != NULL) {
-			free((void *)(to_filename));
-			log_msg(LOG_ERR, 0, "File %s exists", origf);
-			err = 1;
-			goto uncomp_done;
+		if (!pctx->pipe_mode) {
+			origf = to_filename;
+			if ((to_filename = realpath(origf, NULL)) != NULL) {
+				free((void *)(to_filename));
+				log_msg(LOG_ERR, 0, "File %s exists", origf);
+				err = 1;
+				goto uncomp_done;
+			}
+			to_filename = (char *)origf;
 		}
-		to_filename = (char *)origf;
 	}
 
 	compressed_chunksize = chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
