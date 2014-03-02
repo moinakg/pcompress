@@ -3288,8 +3288,10 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			if (pctx->level > 3) {
 				if (pctx->chunksize >= RAB_MIN_CHUNK_SIZE_GLOBAL)
 					pctx->enable_rabin_global = 1;
-				pctx->enable_rabin_scan = 1;
-				pctx->enable_rabin_split = 1;
+				if (pctx->chunksize >= RAB_MIN_CHUNK_SIZE) {
+					pctx->enable_rabin_scan = 1;
+					pctx->enable_rabin_split = 1;
+				}
 				pctx->rab_blk_size = 2;
 				if (pctx->level > 5) pctx->rab_blk_size = 1;
 				if (pctx->level > 8) pctx->rab_blk_size = 0;
