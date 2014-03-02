@@ -1,3 +1,18 @@
+== 3.1 Bugfix Release ==
+Avoid auto-selection variable chunking for buffer sizes below threshold.
+Do not auto-select Global Dedupe for below threshold buffers.
+Fix issue #18.
+Do not try to generate a target filename in pipe mode.
+Scale default compression buffer size for levels > 8.
+Fix issue #17.
+Use LZ4 and Libbsc extra padding space for the compression buffer in adaptive modes.
+Fix issue #16.
+Fix issue #15.
+Fix issue #14
+Updated fix for issue #12
+Add check for correct Libarchive version.
+Update header checks to abort if not found.
+
 == 3.0 Major Beta Release ==
 Basic capability to list contents of an archive without extracting to disk.
 Bump version and update command help text.
