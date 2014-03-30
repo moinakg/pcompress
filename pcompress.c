@@ -2243,6 +2243,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 				COMP_BAIL;
 			}
 
+			tdat->rctx->show_chunks = pctx->show_chunks;
 			tdat->rctx->index_sem = &(tdat->index_sem);
 			tdat->rctx->id = i;
 		}
@@ -2906,7 +2907,10 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			break;
 
 		    case 'C':
-			pctx->hide_cmp_stats = 0;
+			if (pctx->hide_cmp_stats)
+				pctx->hide_cmp_stats = 0;
+			else
+				pctx->show_chunks = 1;
 			break;
 
 		    case 'D':

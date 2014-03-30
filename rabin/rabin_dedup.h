@@ -188,6 +188,7 @@ typedef struct {
 	uint32_t pagesize;
 	int out_fd;
 	int id;
+	int show_chunks; // Debug display of chunks (offset, length)
 } dedupe_context_t;
 
 extern dedupe_context_t *create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, 

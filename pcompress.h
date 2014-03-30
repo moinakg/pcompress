@@ -198,6 +198,7 @@ typedef struct pc_ctx {
 	int nthreads;
 	int hide_mem_stats;
 	int hide_cmp_stats;
+	int show_chunks;
 	int enable_rabin_scan;
 	int enable_rabin_global;
 	int enable_delta_encode;

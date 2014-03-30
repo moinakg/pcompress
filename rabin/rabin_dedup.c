@@ -293,6 +293,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	ctx->deltac_min_distance = props->deltac_min_distance;
 	ctx->pagesize = sysconf(_SC_PAGE_SIZE);
 	ctx->similarity_cksums = NULL;
+	ctx->show_chunks = 0;
 	if (arc) {
 		arc->pagesize = ctx->pagesize;
 		if (rab_blk_sz < 3)
@@ -679,6 +680,9 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 				ctx->g_blocks[blknum].offset = last_offset;
 			}
 			DEBUG_STAT_EN(if (length >= ctx->rabin_poly_max_block_size) ++max_count);
+			if (ctx->show_chunks) {
+				fprintf(stderr, "Block offset: %" PRIu64 ", length: %u\n", last_offset, length);
+			}
 
 			/*
 			 * Reset the heap structure and find the K min values if Delta Compression
@@ -725,6 +729,9 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		} else {
 			ctx->g_blocks[blknum].length = length;
 			ctx->g_blocks[blknum].offset = last_offset;
+		}
+		if (ctx->show_chunks) {
+			fprintf(stderr, "Block offset: %" PRIu64 ", length: %u\n", last_offset, length);
 		}
 
 		if (ctx->delta_flag) {

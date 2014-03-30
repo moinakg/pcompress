@@ -361,6 +361,9 @@ Advanced usage
 
        -M       Display memory allocator statistics.
        -C       Display compression statistics.
+       -CC      Display compression statistics and print the offset and length of each
+                variable length dedupe block if variable block deduplication is being
+                used. This has no effect for fixed block deduplication.
 
 Environment Variables
 =====================
