@@ -23,8 +23,11 @@
 #
 
 PROG= pcompress
-LIB=libpcompress.so
+SO_SUFFIX=@SO_SUFFIX@
+LIB=libpcompress.$(SO_SUFFIX)
 LINKLIB=pcompress
+GCC=@GCC@
+GPP=@GPP@
 LIBVER=1
 MAINSRCS = utils/utils.c allocator.c lzma_compress.c ppmd_compress.c \
 	adaptive_compress.c lzfx_compress.c lz4_compress.c none_compress.c \
@@ -225,18 +228,18 @@ $(SKEIN_BLOCK_OBJ) @SHA2ASM_OBJS@ @SHA2_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) 
 $(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS) $(XXHASH_OBJS) $(BLAKE2_OBJS) \
 @CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS) $(ARCHIVEOBJS) $(PJPGOBJS) $(DISPACKOBJS)
 
-DEBUG_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
-DEBUG_COMPILE = gcc -g -c @EXTRA_OPT_FLAGS@ -fPIC
-DEBUG_COMPILE_cpp = g++ -g -c @EXTRA_OPT_FLAGS@ -fPIC
+DEBUG_LINK = $(GPP) -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
+DEBUG_COMPILE = $(GCC) -g -c @EXTRA_OPT_FLAGS@ -fPIC
+DEBUG_COMPILE_cpp = $(GPP) -g -c @EXTRA_OPT_FLAGS@ -fPIC
 DEBUG_VEC_FLAGS = 
 DEBUG_LOOP_OPTFLAGS = 
 DEBUG_GEN_OPT = -O -fno-omit-frame-pointer @LIBBSCGEN_OPT@ -fopenmp
 DEBUG_CPPFLAGS = $(COMMON_CPPFLAGS)
 DEBUG_FPTR_FLAG = 
 
-RELEASE_LINK = g++ -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
-RELEASE_COMPILE = gcc -c @EXTRA_OPT_FLAGS@ -fPIC -fvisibility=hidden
-RELEASE_COMPILE_cpp = g++ -c @EXTRA_OPT_FLAGS@ -fPIC -fvisibility=hidden
+RELEASE_LINK = $(GPP) -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
+RELEASE_COMPILE = $(GCC) -c @EXTRA_OPT_FLAGS@ -fPIC -fvisibility=hidden
+RELEASE_COMPILE_cpp = $(GPP) -c @EXTRA_OPT_FLAGS@ -fPIC -fvisibility=hidden
 RELEASE_VEC_FLAGS = $(COMMON_VEC_FLAGS)
 RELEASE_LOOP_OPTFLAGS = $(COMMON_LOOP_OPTFLAGS)
 RELEASE_CPPFLAGS = $(COMMON_CPPFLAGS) -DNDEBUG

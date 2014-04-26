@@ -37,14 +37,20 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <errno.h>
+#ifndef __APPLE__
 #include <link.h>
+#endif
 #include <signal.h>
 #include <rabin_dedup.h>
 #include <cpuid.h>
 #include <xxhash.h>
 #include <pc_archive.h>
 
+#ifndef __APPLE__
 #include <sys/sysinfo.h>
+#else
+#include <sys/sysctl.h>
+#endif
 
 #define _IN_UTILS_
 #include "utils.h"

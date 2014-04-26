@@ -88,6 +88,25 @@ crypto_compat_flags="-D__HASH_COMPATIBILITY_"
 salsa20_stream_c=
 salsa20_stream_asm='\$\(XSALSA20_STREAM_ASM\)'
 salsa20_debug=
+so_suffix=so
+
+if [ -x /bin/echo ]
+then
+	ECHO=/bin/echo
+elif [ -x /usr/bin/echo ]
+then
+	ECHO=/usr/bin/echo
+fi
+
+if [ "x$GCC" = "x" ]
+then
+	GCC=gcc
+fi
+
+if [ "x$GPP" = "x" ]
+then
+	GPP=g++
+fi
 
 rm -rf ./buildtmp
 mkdir ./buildtmp
@@ -106,7 +125,7 @@ main(void)
 }
 _EOF
 
-gcc tst.c -o tst
+${GCC} tst.c -o tst
 if [ $? -ne 0 ]
 then
 	echo "ERROR:"
@@ -123,7 +142,7 @@ bitness=`./tst`
 if [ $bitness -lt 8 ]
 then
 	# Hmmm maybe default compilation is 32-bit. Re-try with m64 flag.
-	gcc -m64 tst.c -o tst
+	${GCC} -m64 tst.c -o tst
 	if [ $? -ne 0 ]
 	then
 		rm -f tst tst.c
@@ -197,6 +216,10 @@ skeinblock='\$\(SKEIN_BLOCK_C\)'
 if [ "$OS" = "Linux" ]
 then
 	plat=$(uname -m)
+elif [ "$OS" = "Darwin" ]
+then
+	plat=$(uname -m)
+	so_suffix=dylib
 elif [ "$OS" = "SunOS" ]
 then
 	plat=$(isainfo -v)
@@ -207,7 +230,7 @@ fi
 
 # Check GCC version
 echo "Checking GCC version ..."
-vers=`gcc -dumpversion`
+vers=`${GCC} -dumpversion`
 OIFS="$IFS"
 IFS=.
 set -- ${vers}
@@ -222,10 +245,10 @@ then
 fi
 
 # SSE Detection
-echo -n "Checking for CPU SSE version ... "
+${ECHO} -n "Checking for CPU SSE version ... "
 if [ $sse_detect -eq 1 ]
 then
-	gcc -o sse_level ./utils/sse_level.c ./utils/cpuid.c -I./utils
+	${GCC} -o sse_level ./utils/sse_level.c ./utils/cpuid.c -I./utils
 	if [ $? -ne 0 ]
 	then
 		echo "ERROR:"
@@ -304,10 +327,10 @@ for lib in "${openssl_prefix}/lib64" "${openssl_prefix}/usr/lib64" \
 do
 	if [ -d ${lib} ]
 	then
-		if [ -f "${lib}/libcrypto.so" -o -h "${lib}/libcrypto.so" ]
+		if [ -f "${lib}/libcrypto.${so_suffix}" -o -h "${lib}/libcrypto.${so_suffix}" ]
 		then
 			openssl_libdir="${lib}"
-			(cd ./buildtmp; ln -s ${openssl_libdir}/libcrypto.so)
+			(cd ./buildtmp; ln -s ${openssl_libdir}/libcrypto.${so_suffix})
 			break
 		else
 			if [ -f "${lib}/libcrypto.a" ]
@@ -367,7 +390,7 @@ main(void)
 }
 __EOF
 
-gcc ${extra_opt_flags} -I${openssl_incdir} -L${openssl_libdir} tst.c -o tst
+${GCC} ${extra_opt_flags} -I${openssl_incdir} -L${openssl_libdir} tst.c -o tst
 if [ $? -ne 0 ]
 then
 	echo "Unable to compile OpenSSL test program please check OpenSSL installation."
@@ -381,7 +404,7 @@ then
 fi
 
 # Check for HMAC_CTX_copy function
-echo -n "Checking if the OpenSSL library provides HMAC_CTX_copy function ... "
+${ECHO} -n "Checking if the OpenSSL library provides HMAC_CTX_copy function ... "
 cat << __EOF > tst.c
 #include <stdlib.h>
 #include <openssl/sha.h>
@@ -404,7 +427,7 @@ main(void)
 }
 __EOF
 
-gcc ${extra_opt_flags} -I${openssl_incdir} -L${openssl_libdir} -O0 -g tst.c -o tst -lcrypto >/dev/null 2>&1
+${GCC} ${extra_opt_flags} -I${openssl_incdir} -L${openssl_libdir} -O0 -g tst.c -o tst -lcrypto >/dev/null 2>&1
 if [ $? -ne 0 ]
 then
 	openssl_incdir="${openssl_incdir} -D__OSSL_OLD__"
@@ -441,10 +464,10 @@ do
 	do
 		if [ -d ${lib} ]
 		then
-			if [ -f "${lib}/${libname}.so" -o -h "${lib}/${libname}.so" ]
+			if [ -f "${lib}/${libname}.${so_suffix}" -o -h "${lib}/${libname}.${so_suffix}" ]
 			then
 				eval "${libname}_libdir=${lib},--enable-new-dtags"
-				(cd ./buildtmp; ln -s ${lib}/${libname}.so)
+				(cd ./buildtmp; ln -s ${lib}/${libname}.${so_suffix})
 				break
 			else
 				if [ -f "${lib}/${libname}.a" ]
@@ -552,7 +575,7 @@ main(void)
 }
 _EOF
 
-gcc ${extra_opt_flags} ${libarchive_inc} -L${libarchive_libdir} -O0 -g tst.c -o tst -larchive >/dev/null 2>&1
+${GCC} ${extra_opt_flags} ${libarchive_inc} -L${libarchive_libdir} -O0 -g tst.c -o tst -larchive >/dev/null 2>&1
 if [ $? -ne 0 ]
 then
         echo "Libarchive version 3.0 or newer is required."
@@ -613,6 +636,9 @@ debugstatscppflagsval=
 [ $debug_stats -eq 1 ] && debugstatscppflagsval='\$\(DEBUG_STATS_CPPFLAGS\)'
 
 cat Makefile.in | sed "
+s#@GCC@#${GCC}#g
+s#@GPP@#${GPP}#g
+s#@SO_SUFFIX@#${so_suffix}#g
 s#@${linkvar}@#\\\$\\(${typ}_${linkvar}\\)#g
 s#@${compilevar}@#\\\$\\(${typ}_${compilevar}\\)#g
 s#@${compilecppvar}@#\\\$\\(${typ}_${compilecppvar}\\)#g
