@@ -40,6 +40,13 @@
 #include <assert.h>
 #include <string.h>
 #include <cpuid.h>
+#if defined(sun) || defined(__sun)
+#include <sys/byteorder.h>
+#elif defined(__APPLE__)
+#include <libkern/OSByteOrder.h>
+#else
+#include <byteswap.h>
+#endif
 
 #ifdef	__cplusplus
 extern "C" {
@@ -52,6 +59,7 @@ extern "C" {
 
 #define	ONE_PB (1125899906842624ULL)
 #define	ONE_TB (1099511627776ULL)
+#define ONE_GB (1024UL * 1024UL * 1024UL)
 #define	TWO_MB (2UL * 1024UL * 1024UL)
 #define	FOUR_MB FOURM
 #define	EIGHT_MB EIGHTM
@@ -89,9 +97,15 @@ typedef int32_t bsize_t;
 #		define ntohll(x) (x)
 #	endif
 #	if !defined(sun) && !defined (__sun)
-#		define LE64(x) __bswap_64(x)
-#		define LE32(x) __bswap_32(x)
-#		define LE16(x) __bswap_16(x)
+#		if defined(__APPLE__)
+#			define LE64(x) OSSwapInt64(x)
+#			define LE32(x) OSSwapInt32(x)
+#			define LE16(x) OSSwapInt16(x)
+#		else
+#			define LE64(x) __bswap_64(x)
+#			define LE32(x) __bswap_32(x)
+#			define LE16(x) __bswap_16(x)
+#		endif
 #	else
 #		define LE64(x) BSWAP_64(x)
 #		define LE32(x) BSWAP_32(x)
@@ -99,11 +113,20 @@ typedef int32_t bsize_t;
 #	endif
 #else
 #	if !defined(sun) && !defined (__sun)
-#		ifndef htonll
-#			define htonll(x) __bswap_64(x)
-#		endif
-#		ifndef ntohll
-#			define ntohll(x) __bswap_64(x)
+#		if defined(__APPLE__)
+#			ifndef htonll
+#				define htonll(x) OSSwapInt64(x)
+#			endif
+#			ifndef ntohll
+#				define ntohll(x) OSSwapInt64(x)
+#			endif
+#		else
+#			ifndef htonll
+#				define htonll(x) __bswap_64(x)
+#			endif
+#			ifndef ntohll
+#				define ntohll(x) __bswap_64(x)
+#			endif
 #		endif
 #	endif
 #	define LE64(x) (x)
@@ -163,6 +186,11 @@ typedef int32_t bsize_t;
 #define	I64_P(x) *((int64_t *)(x))
 #define	I32_P(x) *((int32_t *)(x))
 #define	I16_P(x) *((int16_t *)(x))
+
+#ifdef __APPLE__
+#define	CLOCK_MONOTONIC 0
+#define CLOCK_REALTIME  1
+#endif
 
 /*
  * Public checksum properties. CKSUM_MAX_BYTES must be updated if a
@@ -295,7 +323,7 @@ typedef enum {
 #define	PC_TYPE(x)	((x) & PC_TYPE_MASK)
 
 #ifndef _IN_UTILS_
-extern processor_info_t proc_info;
+extern processor_cap_t proc_info;
 #endif
 
 extern void err_exit(int show_errno, const char *format, ...);

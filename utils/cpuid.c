@@ -133,7 +133,7 @@ NOINLINE_ATTR cpuid_get_raw_data(struct cpu_raw_data_t* data)
 }
 
 void
-cpuid_basic_identify(processor_info_t *pc)
+cpuid_basic_identify(processor_cap_t *pc)
 {
 	struct cpu_raw_data_t raw;
 	cpuid_get_raw_data(&raw);

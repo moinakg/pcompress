@@ -38,11 +38,6 @@
 #include <strings.h>
 #include <limits.h>
 #include <unistd.h>
-#if defined(sun) || defined(__sun)
-#include <sys/byteorder.h>
-#else
-#include <byteswap.h>
-#endif
 #include <libgen.h>
 #include <utils.h>
 #include <pcompress.h>

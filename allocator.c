@@ -280,7 +280,7 @@ slab_cleanup(int quiet)
 }
 
 void *
-slab_calloc(void *p, uint64_t items, uint64_t size) {
+slab_calloc(void *p, size_t items, size_t size) {
 	void *ptr;
 
 	if (bypass) return(calloc(items, size));
@@ -376,7 +376,7 @@ slab_cache_add(uint64_t size)
 }
 
 void *
-slab_alloc(void *p, uint64_t size)
+slab_alloc(void *p, size_t size)
 {
 	uint64_t div;
 	struct slabentry *slab;
@@ -517,13 +517,13 @@ void
 slab_cleanup(int quiet) {}
 
 void
-*slab_alloc(void *p, uint64_t size)
+*slab_alloc(void *p, size_t size)
 {
 	return (malloc(size));
 }
 
 void
-*slab_calloc(void *p, uint64_t items, uint64_t size)
+*slab_calloc(void *p, size_t items, size_t size)
 {
 	return (calloc(items, size));
 }

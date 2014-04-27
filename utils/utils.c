@@ -50,12 +50,17 @@
 #include <sys/sysinfo.h>
 #else
 #include <sys/sysctl.h>
+#include <mach/mach.h>
+#include <mach/mach_host.h>
+#include <mach/mach_time.h>
+
+static mach_timebase_info_data_t sTimebaseInfo;
 #endif
 
 #define _IN_UTILS_
 #include "utils.h"
 
-processor_info_t proc_info;
+processor_cap_t proc_info;
 pthread_mutex_t f_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int cur_log_level = 2;
 static log_dest_t ldest = {LOG_OUTPUT, LOG_INFO, NULL};
@@ -66,6 +71,9 @@ void
 init_pcompress() {
 	cpuid_basic_identify(&proc_info);
 	XXH32_module_init();
+#ifdef __APPLE__
+	(void) mach_timebase_info(&sTimebaseInfo);
+#endif
 }
 
 /*
@@ -349,12 +357,37 @@ set_threadcounts(algo_props_t *props, int *nthreads, int nprocs, algo_threads_ty
 uint64_t
 get_total_ram()
 {
+#ifndef __APPLE__
 	uint64_t phys_pages, page_size;
 
 	page_size = sysconf(_SC_PAGESIZE);
 	phys_pages = sysconf(_SC_PHYS_PAGES);
 	return (phys_pages * page_size);
+#else
+	int mib[2];
+	int64_t size;
+	size_t len;
+	mib[0] = CTL_HW;
+	mib[1] = HW_MEMSIZE;
+	size = 0;
+	len = sizeof (size);
+	if (sysctl(mib, 2, &size, &len, NULL, 0) == 0)
+		return (uint64_t)size;
+	return (ONE_GB);
+#endif
 }
+
+#ifdef __APPLE__
+int
+clock_gettime(int clk_id, struct timespec *ts)
+{
+	if (clk_id == CLOCK_MONOTONIC) {
+		uint64_t abstime = mach_absolute_time();
+		return (abstime * sTimebaseInfo.numer / sTimebaseInfo.denom);
+	}
+	return (0);
+}
+#endif
 
 double
 get_wtime_millis(void)
@@ -380,15 +413,37 @@ get_mb_s(uint64_t bytes, double strt, double en)
 void
 get_sys_limits(my_sysinfo *msys_info)
 {
-	struct sysinfo sys_info;
 	unsigned long totram;
 	int rv;
 	char *val;
 
+#ifdef __APPLE__
+	mach_port_t             host_port = mach_host_self();
+	unsigned int		host_size = HOST_VM_INFO64_COUNT;
+	vm_size_t               pagesize;
+	vm_statistics64_data_t    vm_stat;
+
+	host_page_size(host_port, &pagesize);
+	rv = host_statistics64(host_port, HOST_VM_INFO64, (host_info64_t)&vm_stat, &host_size);
+	if (rv != KERN_SUCCESS) {
+		vm_stat.free_count = (100 * 1024 * 1024) / pagesize; // 100M arbitrary
+	}
+	uint64_t mem_used = (vm_stat.active_count + vm_stat.inactive_count + vm_stat.wire_count) * pagesize;
+	msys_info->freeram = vm_stat.free_count * pagesize;
+	msys_info->totalram = mem_used + msys_info->freeram;
+	msys_info->totalswap = 0;
+	msys_info->freeswap = 0;
+	msys_info->mem_unit = pagesize;
+	msys_info->sharedram = vm_stat.wire_count * pagesize;
+
+#else
+	struct sysinfo sys_info;
 	rv = sysinfo(&sys_info);
 
 	if (rv == -1) {
+		memset(&sys_info, 0, sizeof (struct sysinfo));
 		sys_info.freeram = 100 * 1024 * 1024; // 100M arbitrary
+		sys_info.mem_unit = 1;
 	}
 	msys_info->totalram = sys_info.totalram * sys_info.mem_unit;
 	msys_info->freeram = sys_info.freeram * sys_info.mem_unit + sys_info.bufferram * sys_info.mem_unit;
@@ -396,13 +451,14 @@ get_sys_limits(my_sysinfo *msys_info)
 	msys_info->freeswap = sys_info.freeswap * sys_info.mem_unit;
 	msys_info->mem_unit = sys_info.mem_unit;
 	msys_info->sharedram = sys_info.sharedram * sys_info.mem_unit;
+#endif
 
 	/*
 	 * If free memory is less than half of total memory (excluding shared allocations),
 	 * and at least 75% of swap is free then adjust free memory value to 75% of
 	 * total memory excluding shared allocations.
 	 */
-	totram = msys_info->totalram - sys_info.sharedram;
+	totram = msys_info->totalram - msys_info->sharedram;
 	if (msys_info->freeram <= (totram >> 1) &&
 	    msys_info->freeswap >= ((msys_info->totalswap >> 1) + (msys_info->totalswap >> 2))) {
 		msys_info->freeram = (totram >> 1) + (totram >> 2);

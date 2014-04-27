@@ -72,7 +72,7 @@ typedef struct {
 	int xop_avail;
 	int aes_avail;
 	proc_type_t proc_type;
-} processor_info_t;
+} processor_cap_t;
 
 /**
  * This contains only the most basic CPU data, required to do identification
@@ -94,7 +94,7 @@ struct cpu_raw_data_t {
 };
 
 void cpuid_get_raw_data(struct cpu_raw_data_t* data);
-void cpuid_basic_identify(processor_info_t *pc);
+void cpuid_basic_identify(processor_cap_t *pc);
 
 #endif /* __x86_64__ */
 

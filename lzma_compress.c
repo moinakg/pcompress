@@ -201,10 +201,11 @@ int
 lzma_compress(void *src, uint64_t srclen, void *dst,
 	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data)
 {
-	uint64_t props_len = LZMA_PROPS_SIZE;
+	SizeT props_len = LZMA_PROPS_SIZE;
 	SRes res;
 	Byte *_dst;
 	CLzmaEncProps *props = (CLzmaEncProps *)data;
+	SizeT dlen;
 
 	if (*dstlen < LZMA_PROPS_SIZE) {
 		lzerr(SZ_ERROR_DESTLEN, 1);
@@ -217,8 +218,10 @@ lzma_compress(void *src, uint64_t srclen, void *dst,
 
 	_dst = (Byte *)dst;
 	*dstlen -= LZMA_PROPS_SIZE;
-	res = LzmaEncode(_dst + LZMA_PROPS_SIZE, dstlen, (const uchar_t *)src, srclen,
+	dlen = *dstlen;
+	res = LzmaEncode(_dst + LZMA_PROPS_SIZE, &dlen, (const uchar_t *)src, srclen,
 	    props, (uchar_t *)_dst, &props_len, 0, NULL, &g_Alloc, &g_Alloc);
+	*dstlen = dlen;
 
 	if (res != 0) {
 		lzerr(res, 1);
@@ -233,20 +236,24 @@ int
 lzma_decompress(void *src, uint64_t srclen, void *dst,
 	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data)
 {
-	uint64_t _srclen;
+	SizeT _srclen;
 	const uchar_t *_src;
 	SRes res;
 	ELzmaStatus status;
+	SizeT dlen;
 
 	_srclen = srclen - LZMA_PROPS_SIZE;
 	_src = (uchar_t *)src + LZMA_PROPS_SIZE;
+	dlen = *dstlen;
 
-	if ((res = LzmaDecode((uchar_t *)dst, dstlen, _src, &_srclen,
+	if ((res = LzmaDecode((uchar_t *)dst, &dlen, _src, &_srclen,
 	    (uchar_t *)src, LZMA_PROPS_SIZE, LZMA_FINISH_ANY,
 	    &status, &g_Alloc)) != SZ_OK) {
+		*dstlen = dlen;
 		lzerr(res, 0);
 		return (-1);
 	}
+	*dstlen = dlen;
 	return (0);
 }
 

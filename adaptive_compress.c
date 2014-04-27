@@ -27,11 +27,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
+/*
 #if defined(sun) || defined(__sun)
 #include <sys/byteorder.h>
 #else
 #include <byteswap.h>
 #endif
+*/
 #include <utils.h>
 #include <pcompress.h>
 #include <allocator.h>

@@ -174,7 +174,7 @@ ppmd_decompress(void *src, uint64_t srclen, void *dst,
 	CPpmd8 *_ppmd = (CPpmd8 *)data;
 	Byte *_src = (Byte *)src;
 	Byte *_dst = (Byte *)dst;
-	uint64_t i;
+	SizeT i;
 	int res;
 
 	_ppmd->buf = (Byte *)_src;
