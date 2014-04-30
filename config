@@ -74,6 +74,8 @@ sha256asmobjs=
 sha256objs=
 keylen=
 yasm=yasm
+yasm_params_linux="-f x64 -f elf64 -X gnu -g dwarf2 -D LINUX"
+yasm_params_osx="-f macho64 -X gnu -p gas"
 keccak_srcs=
 keccak_hdrs=
 keccak_srcs_asm=
@@ -274,7 +276,10 @@ fi
 echo $plat | egrep 'x86_64|amd64' > /dev/null
 if [ $? -eq 0 ]
 then
-	skeinblock='\$\(SKEIN_BLOCK_ASM\)'
+	if [ "$OS" != "Darwin" ]
+	then
+		skeinblock='\$\(SKEIN_BLOCK_ASM\)'
+	fi
 	yasm=
 
 	#
@@ -302,6 +307,17 @@ then
 	then
 		echo "Yasm version 1.1 or later is required to build on x64 platforms"
 		exit 1
+	fi
+
+	if [ "$OS" = "Linux" ]
+	then
+		yasm="${yasm} ${yasm_params_linux}"
+	elif [ "$OS" = "Darwin" ]
+	then
+		yasm="${yasm} ${yasm_params_osx}"
+	elif [ "$OS" = "SunOS" ]
+	then
+		yasm="${yasm} ${yasm_params_linux}"
 	fi
 
 	if [ $debug -eq 1 ]
@@ -436,7 +452,7 @@ else
 	echo "Yes."
 fi
 
-rm -f tst*
+rm -rf tst*
 openssl_libdir="${openssl_libdir},--enable-new-dtags"
 
 # Detect other library packages
@@ -581,7 +597,7 @@ then
         echo "Libarchive version 3.0 or newer is required."
 	exit 1
 fi
-rm -f tst tst.c
+rm -rf tst* tst.c
 
 echo "Generating Makefile ..."
 linkvar="LINK"

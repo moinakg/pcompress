@@ -166,7 +166,7 @@ SHA2ASM_SRCS = crypto/sha2/intel/sha512_avx.asm crypto/sha2/intel/sha512_sse4.as
 SHA2ASM_OBJS = $(SHA2ASM_SRCS:.asm=.o)
 SHA2_OBJS = $(SHA2_SRCS:.c=.o)
 
-YASM = @YASM@ -f x64 -f elf64 -X gnu -g dwarf2 -D LINUX
+YASM = @YASM@
 LIBBSCWRAP = libbsc_compress.c
 LIBBSCWRAPOBJ = libbsc_compress.o
 LIBBSCDIR = @LIBBSCDIR@

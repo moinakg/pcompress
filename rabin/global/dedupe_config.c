@@ -247,7 +247,7 @@ read_config(char *configfile, archive_config_t *cfg)
 			}
 		} else if (strncmp(line, "ARCHIVESZ", 9) == 0) {
 			int ovr;
-			ssize_t arch_sz;
+			int64_t arch_sz;
 			ovr = parse_numeric(&arch_sz, pos);
 			if (ovr == 1) {
 				log_msg(LOG_ERR, 0, "ARCHIVESZ value too large.\n");

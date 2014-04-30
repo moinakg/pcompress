@@ -97,7 +97,7 @@ extern "C" {
 void APS_NAMESPACE(SHA512_Init) (SHA512_Context *sc);
 void APS_NAMESPACE(SHA512_Update) (SHA512_Context *sc, const void *data, size_t len);
 void APS_NAMESPACE(SHA512_Final) (SHA512_Context *sc, uint8_t hash[SHA512_HASH_SIZE]);
-int  APS_NAMESPACE(Init_SHA512) (processor_info_t *pc);
+int  APS_NAMESPACE(Init_SHA512) (processor_cap_t *pc);
 
 /* As are SHA-512/256 and SHA-512/224 */
 #define SHA512t256_Context SHA512_Context

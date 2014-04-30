@@ -29,7 +29,7 @@
 int
 main(void)
 {
-	processor_info_t pc;
+	processor_cap_t pc;
 	cpuid_basic_identify(&pc);
 	if (pc.sse_level == 3 && pc.sse_sub_level == 1) {
 		printf("ssse%d", pc.sse_level);
