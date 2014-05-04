@@ -115,8 +115,8 @@ arc_open_callback(struct archive *arc, void *ctx)
 {
 	pc_ctx_t *pctx = (pc_ctx_t *)ctx;
 
-	sem_init(&(pctx->read_sem), 0, 0);
-	sem_init(&(pctx->write_sem), 0, 0);
+	Sem_Init(&(pctx->read_sem), 0, 0);
+	Sem_Init(&(pctx->write_sem), 0, 0);
 	pctx->arc_buf = NULL;
 	pctx->arc_buf_pos = 0;
 	pctx->arc_buf_size = 0;
@@ -130,7 +130,7 @@ creat_close_callback(struct archive *arc, void *ctx)
 
 	pctx->arc_closed = 1;
 	if (pctx->arc_buf) {
-		sem_post(&(pctx->read_sem));
+		Sem_Post(&(pctx->read_sem));
 	} else {
 		pctx->arc_buf_pos = 0;
 	}
@@ -150,7 +150,7 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 	}
 
 	if (!pctx->arc_writing) {
-		sem_wait(&(pctx->write_sem));
+		Sem_Wait(&(pctx->write_sem));
 	}
 
 	if (pctx->arc_buf == NULL || pctx->arc_buf_size == 0) {
@@ -182,8 +182,8 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 						pctx->ctype = pctx->btype;
 				} else {
 					pctx->arc_writing = 0;
-					sem_post(&(pctx->read_sem));
-					sem_wait(&(pctx->write_sem));
+					Sem_Post(&(pctx->read_sem));
+					Sem_Wait(&(pctx->write_sem));
 					tbuf = pctx->arc_buf + pctx->arc_buf_pos;
 					pctx->arc_writing = 1;
 					if (remaining > 0)
@@ -199,8 +199,8 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 			pctx->arc_buf_pos += nlen;
 			buff += nlen;
 			pctx->arc_writing = 0;
-			sem_post(&(pctx->read_sem));
-			sem_wait(&(pctx->write_sem));
+			Sem_Post(&(pctx->read_sem));
+			Sem_Wait(&(pctx->write_sem));
 			pctx->arc_writing = 1;
 		} else {
 			memcpy(tbuf, buff, remaining);
@@ -208,7 +208,7 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 			remaining = 0;
 			if (pctx->arc_buf_pos == pctx->arc_buf_size) {
 				pctx->arc_writing = 0;
-				sem_post(&(pctx->read_sem));
+				Sem_Post(&(pctx->read_sem));
 			}
 			break;
 		}
@@ -234,8 +234,8 @@ archiver_read(void *ctx, void *buf, uint64_t count)
 	pctx->arc_buf_size = count;
 	pctx->arc_buf_pos = 0;
 	pctx->btype = TYPE_UNKNOWN;
-	sem_post(&(pctx->write_sem));
-	sem_wait(&(pctx->read_sem));
+	Sem_Post(&(pctx->write_sem));
+	Sem_Wait(&(pctx->read_sem));
 	pctx->arc_buf = NULL;
 	return (pctx->arc_buf_pos);
 }
@@ -248,8 +248,8 @@ archiver_close(void *ctx)
 	pctx->arc_closed = 1;
 	pctx->arc_buf = NULL;
 	pctx->arc_buf_size = 0;
-	sem_post(&(pctx->write_sem));
-	sem_post(&(pctx->read_sem));
+	Sem_Post(&(pctx->write_sem));
+	Sem_Post(&(pctx->read_sem));
 	return (0);
 }
 
@@ -260,7 +260,7 @@ extract_close_callback(struct archive *arc, void *ctx)
 
 	pctx->arc_closed = 1;
 	if (pctx->arc_buf) {
-		sem_post(&(pctx->write_sem));
+		Sem_Post(&(pctx->write_sem));
 	} else {
 		pctx->arc_buf_size = 0;
 	}
@@ -280,10 +280,10 @@ extract_read_callback(struct archive *arc, void *ctx, const void **buf)
 	}
 
 	if (!pctx->arc_writing) {
-		sem_wait(&(pctx->read_sem));
+		Sem_Wait(&(pctx->read_sem));
 	} else {
-		sem_post(&(pctx->write_sem));
-		sem_wait(&(pctx->read_sem));
+		Sem_Post(&(pctx->write_sem));
+		Sem_Wait(&(pctx->read_sem));
 	}
 
 	if (pctx->arc_buf == NULL || pctx->arc_buf_size == 0) {
@@ -315,8 +315,8 @@ archiver_write(void *ctx, void *buf, uint64_t count)
 
 	pctx->arc_buf = buf;
 	pctx->arc_buf_size = count;
-	sem_post(&(pctx->read_sem));
-	sem_wait(&(pctx->write_sem));
+	Sem_Post(&(pctx->read_sem));
+	Sem_Wait(&(pctx->write_sem));
 	pctx->arc_buf = NULL;
 	return (pctx->arc_buf_size);
 }

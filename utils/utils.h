@@ -40,6 +40,8 @@
 #include <assert.h>
 #include <string.h>
 #include <sys/time.h>
+#include <pthread.h>
+#include <semaphore.h>
 #include <cpuid.h>
 #if defined(sun) || defined(__sun)
 #include <sys/byteorder.h>
@@ -406,6 +408,20 @@ int is_incompressible(int type);
 #ifdef __APPLE__
 int clock_gettime(int clk_id, struct timespec *ts);
 #endif
+
+/*
+ * Routines to handle compatibility.
+ */
+typedef struct _compat_sem {
+	char name[15];
+	sem_t sem, *sem1;
+} Sem_t;
+
+int Sem_Init(Sem_t *sem, int pshared, int value);
+int Sem_Destroy(Sem_t *sem);
+int Sem_Post(Sem_t *sem);
+int Sem_Wait(Sem_t *sem);
+
 
 /*
  * Roundup v to the nearest power of 2. From Bit Twiddling Hacks:

@@ -403,10 +403,10 @@ perform_decompress(void *dat)
 
 	pctx = tdat->pctx;
 redo:
-	sem_wait(&tdat->start_sem);
+	Sem_Wait(&tdat->start_sem);
 	if (unlikely(tdat->cancel)) {
 		tdat->len_cmp = 0;
-		sem_post(&tdat->cmp_done_sem);
+		Sem_Post(&tdat->cmp_done_sem);
 		return (0);
 	}
 
@@ -461,7 +461,7 @@ redo:
 			pctx->main_cancel = 1;
 			tdat->len_cmp = 0;
 			pctx->t_errored = 1;
-			sem_post(&tdat->cmp_done_sem);
+			Sem_Post(&tdat->cmp_done_sem);
 			return (NULL);
 		}
 		DEBUG_STAT_EN(en = get_wtime_millis());
@@ -480,7 +480,7 @@ redo:
 			 */
 			pctx->main_cancel = 1;
 			tdat->len_cmp = 0;
-			sem_post(&tdat->cmp_done_sem);
+			Sem_Post(&tdat->cmp_done_sem);
 			return (NULL);
 		}
 		DEBUG_STAT_EN(en = get_wtime_millis());
@@ -511,7 +511,7 @@ redo:
 			pctx->main_cancel = 1;
 			tdat->len_cmp = 0;
 			pctx->t_errored = 1;
-			sem_post(&tdat->cmp_done_sem);
+			Sem_Post(&tdat->cmp_done_sem);
 			return (NULL);
 		}
 
@@ -638,7 +638,7 @@ redo:
 		 * to wait for the previous thread's dedupe recovery to complete.
 		 */
 		if (pctx->enable_rabin_global) {
-			sem_wait(tdat->rctx->index_sem);
+			Sem_Wait(tdat->rctx->index_sem);
 		}
 	}
 
@@ -658,7 +658,7 @@ redo:
 	}
 
 cont:
-	sem_post(&tdat->cmp_done_sem);
+	Sem_Post(&tdat->cmp_done_sem);
 	goto redo;
 }
 
@@ -1269,10 +1269,10 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		tdat->level = level;
 		tdat->data = NULL;
 		tdat->props = &props;
-		sem_init(&(tdat->start_sem), 0, 0);
-		sem_init(&(tdat->cmp_done_sem), 0, 0);
-		sem_init(&(tdat->write_done_sem), 0, 1);
-		sem_init(&(tdat->index_sem), 0, 0);
+		Sem_Init(&(tdat->start_sem), 0, 0);
+		Sem_Init(&(tdat->cmp_done_sem), 0, 0);
+		Sem_Init(&(tdat->write_done_sem), 0, 1);
+		Sem_Init(&(tdat->index_sem), 0, 0);
 
 		if (pctx->_init_func) {
 			if (pctx->_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize,
@@ -1329,7 +1329,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		}
 	}
 	// When doing global dedupe first thread does not wait to start dedupe recovery.
-	sem_post(&(dary[0]->index_sem));
+	Sem_Post(&(dary[0]->index_sem));
 
 	if (pctx->encrypt_type) {
 		/* Erase encryption key bytes stored as a plain array. No longer reqd. */
@@ -1362,7 +1362,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		for (p = 0; p < nprocs; p++) {
 			np = p;
 			tdat = dary[p];
-			sem_wait(&tdat->write_done_sem);
+			Sem_Wait(&tdat->write_done_sem);
 			if (pctx->main_cancel) break;
 			tdat->id = pctx->chunk_num;
 			if (tdat->rctx) tdat->rctx->id = tdat->id;
@@ -1443,7 +1443,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 					UNCOMP_BAIL;
 				}
 			}
-			sem_post(&tdat->start_sem);
+			Sem_Post(&tdat->start_sem);
 			++(pctx->chunk_num);
 		}
 	}
@@ -1453,7 +1453,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		for (p = 0; p < nprocs; p++) {
 			if (p == np) continue;
 			tdat = dary[p];
-			sem_wait(&tdat->write_done_sem);
+			Sem_Wait(&tdat->write_done_sem);
 		}
 	}
 uncomp_done:
@@ -1463,8 +1463,8 @@ uncomp_done:
 			tdat = dary[i];
 			tdat->cancel = 1;
 			tdat->len_cmp = 0;
-			sem_post(&tdat->start_sem);
-			sem_post(&tdat->cmp_done_sem);
+			Sem_Post(&tdat->start_sem);
+			Sem_Post(&tdat->cmp_done_sem);
 			pthread_join(tdat->thr, NULL);
 		}
 		pthread_join(writer_thr, NULL);
@@ -1490,6 +1490,11 @@ uncomp_done:
 			if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan)) {
 				destroy_dedupe_context(dary[i]->rctx);
 			}
+			Sem_Destroy(&(dary[i]->start_sem));
+			Sem_Destroy(&(dary[i]->cmp_done_sem));
+			Sem_Destroy(&(dary[i]->write_done_sem));
+			Sem_Destroy(&(dary[i]->index_sem));
+
 			slab_free(NULL, dary[i]);
 		}
 		slab_free(NULL, dary);
@@ -1504,6 +1509,8 @@ uncomp_done:
 			close(pctx->archive_temp_fd);
 			unlink(pctx->archive_temp_file);
 		}
+		Sem_Destroy(&(pctx->read_sem));
+		Sem_Destroy(&(pctx->write_sem));
 	}
 
 	if (!pctx->hide_cmp_stats) show_compression_stats(pctx);
@@ -1522,10 +1529,10 @@ perform_compress(void *dat) {
 
 	pctx = tdat->pctx;
 redo:
-	sem_wait(&tdat->start_sem);
+	Sem_Wait(&tdat->start_sem);
 	if (unlikely(tdat->cancel)) {
 		tdat->len_cmp = 0;
-		sem_post(&tdat->cmp_done_sem);
+		Sem_Post(&tdat->cmp_done_sem);
 		return (0);
 	}
 
@@ -1699,7 +1706,7 @@ plain_index:
 			pctx->main_cancel = 1;
 			tdat->len_cmp = 0;
 			pctx->t_errored = 1;
-			sem_post(&tdat->cmp_done_sem);
+			Sem_Post(&tdat->cmp_done_sem);
 			return (0);
 		}
 		DEBUG_STAT_EN(en = get_wtime_millis());
@@ -1781,7 +1788,7 @@ plain_index:
 		U32_P(mac_ptr) = htonl(crc);
 	}
 	
-	sem_post(&tdat->cmp_done_sem);
+	Sem_Post(&tdat->cmp_done_sem);
 	goto redo;
 }
 
@@ -1797,7 +1804,7 @@ writer_thread(void *dat) {
 repeat:
 	for (p = 0; p < w->nprocs; p++) {
 		tdat = w->dary[p];
-		sem_wait(&tdat->cmp_done_sem);
+		Sem_Wait(&tdat->cmp_done_sem);
 		if (tdat->len_cmp == 0) {
 			goto do_cancel;
 		}
@@ -1824,16 +1831,16 @@ repeat:
 do_cancel:
 			pctx->main_cancel = 1;
 			tdat->cancel = 1;
-			sem_post(&tdat->start_sem);
+			Sem_Post(&tdat->start_sem);
 			if (tdat->rctx && pctx->enable_rabin_global)
-				sem_post(tdat->rctx->index_sem_next);
-			sem_post(&tdat->write_done_sem);
+				Sem_Post(tdat->rctx->index_sem_next);
+			Sem_Post(&tdat->write_done_sem);
 			return (0);
 		}
 		if (tdat->decompressing && tdat->rctx && pctx->enable_rabin_global) {
-			sem_post(tdat->rctx->index_sem_next);
+			Sem_Post(tdat->rctx->index_sem_next);
 		}
-		sem_post(&tdat->write_done_sem);
+		Sem_Post(&tdat->write_done_sem);
 	}
 	goto repeat;
 }
@@ -2198,10 +2205,10 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		tdat->data = NULL;
 		tdat->rctx = NULL;
 		tdat->props = &props;
-		sem_init(&(tdat->start_sem), 0, 0);
-		sem_init(&(tdat->cmp_done_sem), 0, 0);
-		sem_init(&(tdat->write_done_sem), 0, 1);
-		sem_init(&(tdat->index_sem), 0, 0);
+		Sem_Init(&(tdat->start_sem), 0, 0);
+		Sem_Init(&(tdat->cmp_done_sem), 0, 0);
+		Sem_Init(&(tdat->write_done_sem), 0, 1);
+		Sem_Init(&(tdat->index_sem), 0, 0);
 
 		if (pctx->_init_func) {
 			if (pctx->_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize,
@@ -2249,7 +2256,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			tdat->rctx->index_sem_next = &(dary[(i + 1) % nprocs]->index_sem);
 		}
 		// When doing global dedupe first thread does not wait to access the index.
-		sem_post(&(dary[0]->index_sem));
+		Sem_Post(&(dary[0]->index_sem));
 	}
 
 	w.dary = dary;
@@ -2396,7 +2403,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			tdat = dary[p];
 			if (pctx->main_cancel) break;
 			/* Wait for previous chunk compression to complete. */
-			sem_wait(&tdat->write_done_sem);
+			Sem_Wait(&tdat->write_done_sem);
 			if (pctx->main_cancel) break;
 
 			if (rbytes == 0) { /* EOF */
@@ -2479,7 +2486,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			}
 
 			/* Signal the compression thread to start */
-			sem_post(&tdat->start_sem);
+			Sem_Post(&tdat->start_sem);
 			++(pctx->chunk_num);
 
 			if (single_chunk) {
@@ -2512,7 +2519,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		for (p = 0; p < nprocs; p++) {
 			if (p == np) continue;
 			tdat = dary[p];
-			sem_wait(&tdat->write_done_sem);
+			Sem_Wait(&tdat->write_done_sem);
 		}
 	} else {
 		err = 1;
@@ -2535,8 +2542,8 @@ comp_done:
 			tdat = dary[i];
 			tdat->cancel = 1;
 			tdat->len_cmp = 0;
-			sem_post(&tdat->start_sem);
-			sem_post(&tdat->cmp_done_sem);
+			Sem_Post(&tdat->start_sem);
+			Sem_Post(&tdat->cmp_done_sem);
 			pthread_join(tdat->thr, NULL);
 			if (pctx->encrypt_type)
 				hmac_cleanup(&tdat->chunk_hmac);
@@ -2601,6 +2608,11 @@ comp_done:
 			}
 			if (pctx->_deinit_func)
 				pctx->_deinit_func(&(dary[i]->data));
+			Sem_Destroy(&(dary[i]->start_sem));
+			Sem_Destroy(&(dary[i]->cmp_done_sem));
+			Sem_Destroy(&(dary[i]->write_done_sem));
+			Sem_Destroy(&(dary[i]->index_sem));
+
 			slab_free(NULL, dary[i]);
 		}
 		slab_free(NULL, dary);
@@ -2622,6 +2634,8 @@ comp_done:
 			fn = fn->next;
 			slab_free(NULL, fn1);
 		}
+		Sem_Destroy(&(pctx->read_sem));
+		Sem_Destroy(&(pctx->write_sem));
 	}
 	if (!pctx->hide_cmp_stats) show_compression_stats(pctx);
 	pctx->_stats_func(!pctx->hide_cmp_stats);

@@ -182,8 +182,8 @@ typedef struct {
 	int level, delta_flag, dedupe_flag, deltac_min_distance;
 	uint64_t file_offset; // For global dedupe
 	archive_config_t *arc;
-	sem_t *index_sem;
-	sem_t *index_sem_next;
+	Sem_t *index_sem;
+	Sem_t *index_sem_next;
 	uchar_t *similarity_cksums;
 	uint32_t pagesize;
 	int out_fd;

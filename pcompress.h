@@ -233,7 +233,7 @@ typedef struct pc_ctx {
 	uint64_t temp_mmap_pos, temp_file_pos;
 	uint64_t temp_mmap_len;
 	struct fn_list *fn;
-	sem_t read_sem, write_sem;
+	Sem_t read_sem, write_sem;
 	uchar_t *arc_buf;
 	uint64_t arc_buf_size, arc_buf_pos;
 	int arc_closed, arc_writing;
@@ -276,10 +276,10 @@ struct cmp_data {
 	compress_func_ptr compress;
 	compress_func_ptr decompress;
 	int cancel;
-	sem_t start_sem;
-	sem_t cmp_done_sem;
-	sem_t write_done_sem;
-	sem_t index_sem;
+	Sem_t start_sem;
+	Sem_t cmp_done_sem;
+	Sem_t write_done_sem;
+	Sem_t index_sem;
 	void *data;
 	pthread_t thr;
 	mac_ctx_t chunk_hmac;

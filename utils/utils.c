@@ -636,3 +636,82 @@ is_incompressible(int type)
 	ic = (st == TYPE_JPEG) | (st == TYPE_PACKJPG) | (st == TYPE_AUDIO_COMPRESSED);
 	return (ic);
 }
+
+/************************************************************
+ * Portability wrappers for synchronization primitives.
+ ***********************************************************/
+#ifdef __APPLE__
+pthread_mutex_t semctr_mutex = PTHREAD_MUTEX_INITIALIZER;
+unsigned int __sem__ctr = 0;
+
+static unsigned int
+semctr_next()
+{
+	unsigned int val;
+	pthread_mutex_lock(&semctr_mutex);
+	val = __sem__ctr;
+	__sem__ctr++;
+	pthread_mutex_unlock(&semctr_mutex);
+	return val;
+}
+
+int
+Sem_Init(Sem_t *sem, int pshared, int value)
+{
+	sprintf(sem->name, "%u", semctr_next());
+	sem->sem1 = sem_open(sem->name, O_CREAT|O_EXCL, S_IRUSR|S_IWUSR, value);
+	if (sem->sem1 == SEM_FAILED)
+		return (-1);
+	if (!pshared)
+		sem_unlink(sem->name);
+	return (0);
+}
+
+int
+Sem_Destroy(Sem_t *sem)
+{
+	if (sem_close(sem->sem1) == -1)
+		return (-1);
+	sem_unlink(sem->name);
+	return (0);
+}
+
+int
+Sem_Post(Sem_t *sem)
+{
+	return (sem_post(sem->sem1));
+}
+
+int
+Sem_Wait(Sem_t *sem)
+{
+	return (sem_wait(sem->sem1));
+}
+
+#else
+
+int
+Sem_Init(Sem_t *sem, int pshared, int value)
+{
+	return(sem_init(&sem->sem, pshared, value));
+}
+
+int
+Sem_Destroy(Sem_t *sem)
+{
+	return (sem_destroy(&sem->sem));
+}
+
+int
+Sem_Post(Sem_t *sem)
+{
+	return (sem_post(&sem->sem));
+}
+
+int
+Sem_Wait(Sem_t *sem)
+{
+	return (sem_wait(&sem->sem));
+}
+#endif
+

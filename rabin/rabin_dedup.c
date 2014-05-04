@@ -506,8 +506,8 @@ dedupe_compress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size, uint64_t of
 		 * in order to maintain proper sequencing and avoid deadlocks.
 		 */
 		if (ctx->arc) {
-			sem_wait(ctx->index_sem);
-			sem_post(ctx->index_sem_next);
+			Sem_Wait(ctx->index_sem);
+			Sem_Post(ctx->index_sem_next);
 		}
 		return (0);
 	}
@@ -765,8 +765,8 @@ process_blocks:
 	DEBUG_STAT_EN(fprintf(stderr, "Original size: %" PRId64 ", blknum: %u\n", *size, blknum));
 	DEBUG_STAT_EN(fprintf(stderr, "Number of maxlen blocks: %u\n", max_count));
 	if (blknum <=2 && ctx->arc) {
-		sem_wait(ctx->index_sem);
-		sem_post(ctx->index_sem_next);
+		Sem_Wait(ctx->index_sem);
+		Sem_Post(ctx->index_sem_next);
 	}
 	if (blknum > 2) {
 		uint64_t pos, matchlen, pos1 = 0;
@@ -828,7 +828,7 @@ process_blocks:
 				 */
 				length = 0;
 				DEBUG_STAT_EN(w1 = get_wtime_millis());
-				sem_wait(ctx->index_sem);
+				Sem_Wait(ctx->index_sem);
 				DEBUG_STAT_EN(w2 = get_wtime_millis());
 				for (i=0; i<blknum; i++) {
 					hash_entry_t *he;
@@ -878,7 +878,7 @@ process_blocks:
 				/*
 				 * Signal the next thread in sequence to access the index.
 				 */
-				sem_post(ctx->index_sem_next);
+				Sem_Post(ctx->index_sem_next);
 
 				/*
 				 * Write final pending block length value (if any).
@@ -1002,7 +1002,7 @@ process_blocks:
 					 */
 					if (i == 0) {
 						DEBUG_STAT_EN(w1 = get_wtime_millis());
-						sem_wait(ctx->index_sem);
+						Sem_Wait(ctx->index_sem);
 						DEBUG_STAT_EN(w2 = get_wtime_millis());
 					}
 
@@ -1010,7 +1010,7 @@ process_blocks:
 					len = (blks-i) * sizeof (global_blockentry_t);
 					if (db_segcache_write(cfg, ctx->id, (uchar_t *)&(ctx->g_blocks[i]),
 					    len, blks-i, ctx->file_offset) == -1) {
-						sem_post(ctx->index_sem_next);
+						Sem_Post(ctx->index_sem_next);
 						ctx->valid = 0;
 						return (0);
 					}
@@ -1067,7 +1067,7 @@ process_blocks:
 				/*
 				 * Signal the next thread in sequence to access the index.
 				 */
-				sem_post(ctx->index_sem_next);
+				Sem_Post(ctx->index_sem_next);
 
 				/*
 				 * Now go through all the matching segments for all the current segments
@@ -1583,7 +1583,7 @@ dedupe_decompress(dedupe_context_t *ctx, uchar_t *buf, uint64_t *size)
 		blknum -= 2;
 		src1 = buf + RABIN_HDR_SIZE + dedupe_index_sz;
 
-		sem_wait(ctx->index_sem);
+		Sem_Wait(ctx->index_sem);
 		for (blk=0; blk<blknum;) {
 			len = LE32(U32_P(g_dedupe_idx));
 			g_dedupe_idx += RABIN_ENTRY_SIZE;
