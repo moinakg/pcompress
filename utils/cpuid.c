@@ -59,6 +59,7 @@
 #define	SSE3_FLAG	0x1
 #define	SSSE3_FLAG	0x200
 #define	AVX_FLAG		0x10000000
+#define	AVX2_FLAG		(1U << 5)
 #define	XOP_FLAG		0x800
 #define	AES_FLAG		0x2000000
 
@@ -177,6 +178,9 @@ cpuid_basic_identify(processor_cap_t *pc)
 		pc->avx_level = 0;
 		if (raw.basic_cpuid[1][2] & AVX_FLAG) {
 			pc->avx_level = 1;
+		}
+		if (raw.basic_cpuid[7][1] & AVX2_FLAG) {
+			pc->avx_level = 2;
 		}
 
 		if (raw.basic_cpuid[1][2] & AES_FLAG) {
