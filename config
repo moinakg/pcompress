@@ -75,8 +75,8 @@ sha256objs=
 keylen=
 yasm=yasm
 yasm_params_linux="-f x64 -f elf64 -X gnu -g dwarf2 -D LINUX"
-yasm_params_osx="-f macho64"
-yasm_params_gas_osx="-f macho64 -X gnu -p gas"
+yasm_params_osx="-f macho64 --prefix=_"
+yasm_params_gas_osx="-f macho64 -X gnu -p gas --prefix=_"
 yasm_params_gas=
 keccak_srcs=
 keccak_hdrs=
@@ -353,7 +353,7 @@ if [ "$OS" = "Darwin" ]
 then
 	crypto_asm_compile='\$\(CRYPTO_ASM_COMPILE2\)'
 	use_clang_as="-Wa,-q"
-	soname_opt="install_name,@rpath/"
+	soname_opt="install_name,"
 	rpath="-rpath,"
 	dtag_val=""
 	lrt=""

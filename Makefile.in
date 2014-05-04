@@ -383,7 +383,7 @@ $(PROGOBJS): $(PROGSRCS) $(PROGHDRS)
 	$(COMPILE) $(GEN_OPT) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(LIBBSCLIB):
-	(cd $(LIBBSCDIR); make CC=$(GCC))
+	(cd $(LIBBSCDIR); make CC=$(GPP))
 
 $(LIB): $(OBJS)  $(LIBBSCLIB)
 	$(LINK.LIB) -Wl,-soname$(LIB).$(LIBVER) -o $(LIB).$(LIBVER) $(OBJS) $(LDLIBS)
