@@ -75,7 +75,9 @@ sha256objs=
 keylen=
 yasm=yasm
 yasm_params_linux="-f x64 -f elf64 -X gnu -g dwarf2 -D LINUX"
-yasm_params_osx="-f macho64 -X gnu -p gas"
+yasm_params_osx="-f macho64"
+yasm_params_gas_osx="-f macho64 -X gnu -p gas"
+yasm_params_gas=
 keccak_srcs=
 keccak_hdrs=
 keccak_srcs_asm=
@@ -92,6 +94,11 @@ salsa20_stream_asm='\$\(XSALSA20_STREAM_ASM\)'
 salsa20_debug=
 so_suffix=so
 crypto_asm_compile='\$\(CRYPTO_ASM_COMPILE1\)'
+use_clang_as=
+soname_opt="soname,"
+rpath="-R"
+dtag_val=',--enable-new-dtags'
+lrt="-lrt"
 
 if [ -x /bin/echo ]
 then
@@ -317,7 +324,7 @@ then
 	elif [ "$OS" = "Darwin" ]
 	then
 		yasm="${yasm} ${yasm_params_osx}"
-		crypto_asm_compile='\$\(CRYPTO_ASM_COMPILE2\)'
+		yasm_params_gas="${yasm} ${yasm_params_gas_osx}"
 
 	elif [ "$OS" = "SunOS" ]
 	then
@@ -340,6 +347,16 @@ then
 	fi
 else
 	keccak_srcs='\$\(KECCAK_SRC_OPT64\)'
+fi
+
+if [ "$OS" = "Darwin" ]
+then
+	crypto_asm_compile='\$\(CRYPTO_ASM_COMPILE2\)'
+	use_clang_as="-Wa,-q"
+	soname_opt="install_name,@rpath/"
+	rpath="-rpath,"
+	dtag_val=""
+	lrt=""
 fi
 
 # Detect OpenSSL library
@@ -462,7 +479,7 @@ else
 fi
 
 rm -rf tst*
-openssl_libdir="${openssl_libdir},--enable-new-dtags"
+openssl_libdir="${openssl_libdir}${dtag_val}"
 
 # Detect other library packages
 for libspec in "libbz2:${bzlib_prefix}" "libz:${zlib_prefix}" "libarchive:${libarchive_prefix}"
@@ -491,13 +508,13 @@ do
 		then
 			if [ -f "${lib}/${libname}.${so_suffix}" -o -h "${lib}/${libname}.${so_suffix}" ]
 			then
-				eval "${libname}_libdir=${lib},--enable-new-dtags"
+				eval "${libname}_libdir=${lib}${dtag_val}"
 				(cd ./buildtmp; ln -s ${lib}/${libname}.${so_suffix})
 				break
 			else
 				if [ -f "${lib}/${libname}.a" ]
 				then
-					eval "${libname}_libdir=${lib},--enable-new-dtags"
+					eval "${libname}_libdir=${lib}${dtag_val}"
 					(cd ./buildtmp; ln -s ${lib}/${libname}.a)
 					break
 				fi
@@ -664,7 +681,13 @@ cat Makefile.in | sed "
 s#@GCC@#${GCC}#g
 s#@GPP@#${GPP}#g
 s#@CRYPTO_ASM_COMPILE@#${crypto_asm_compile}#g
+s#@USE_CLANG_AS@#${use_clang_as}#g
 s#@SO_SUFFIX@#${so_suffix}#g
+s#@YASM_GAS@#${yasm_params_gas}#g
+s#@RPATH@#${rpath}#g
+s#@LRT@#${lrt}#g
+s#soname#${soname_opt}#g
+s#@DTAGS@#${dtag_val}#g
 s#@${linkvar}@#\\\$\\(${typ}_${linkvar}\\)#g
 s#@${compilevar}@#\\\$\\(${typ}_${compilevar}\\)#g
 s#@${compilecppvar}@#\\\$\\(${typ}_${compilecppvar}\\)#g

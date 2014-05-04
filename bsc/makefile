@@ -1,6 +1,5 @@
 SHELL = /bin/sh
 
-CC = g++
 AR = ar
 RANLIB = ranlib
 

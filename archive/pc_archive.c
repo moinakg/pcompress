@@ -1332,8 +1332,10 @@ extractor_thread_func(void *dat) {
 	 * Read archive entries and extract to disk.
 	 */
 	while ((rv = archive_read_next_header(arc, &entry)) != ARCHIVE_EOF) {
+#ifndef	__APPLE__
 		const char *xt_name, *xt_value;
 		size_t xt_size;
+#endif
 		int typ;
 
 		if (rv != ARCHIVE_OK)

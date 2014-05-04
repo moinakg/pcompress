@@ -54,7 +54,7 @@ struct scratch_buffer {
 
 extern size_t packjpg_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf);
 
-int64_t packjpg_filter(struct filter_info *fi, void *filter_private);
+ssize_t packjpg_filter(struct filter_info *fi, void *filter_private);
 
 void
 add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
