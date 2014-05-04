@@ -401,10 +401,9 @@ test: all
 	(cd test; ulimit -c unlimited; sh ./run_test.sh $(TESTSUITE) ) 2>&1 | tee test.log
 
 clean:
-	$(RM) $(PROG) $(OBJS) $(PROGOBJS) $(BAKFILES) $(LIB) $(LIB).$(LIBVER)
+	$(RM) buildtmp/$(PROG) $(OBJS) $(PROGOBJS) $(BAKFILES) $(LIB) $(LIB).$(LIBVER)
 	$(RM) test.log
 	$(RM_RF) test/datafiles
-	$(RM_RF) buildtmp
 
 distclean: clean
 	$(RM) Makefile
