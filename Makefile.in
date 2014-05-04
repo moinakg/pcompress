@@ -184,6 +184,9 @@ KECCAK_SRC_COMMON = crypto/keccak/genKAT.c crypto/keccak/KeccakDuplex.c \
 KECCAK_SRC_OPT64 = $(KECCAK_SRC_COMMON) crypto/keccak/KeccakF-1600-opt64.c
 KECCAK_SRC_OPT64_ASM1 = $(KECCAK_SRC_COMMON) crypto/keccak/KeccakF-1600-x86-64-asm.c
 KECCAK_SRC_OPT64_ASM2 = crypto/keccak/KeccakF-1600-x86-64-gas.s
+KECCAK_SRC_OPT64_ASM3 = crypto/keccak/KeccakF-1600-x86-64-gas_yasm.s
+KECCAK_OBJS_OPT64_ASM2 = $(KECCAK_SRC_OPT64_ASM2:.s=.o)
+KECCAK_OBJS_OPT64_ASM3 = $(KECCAK_SRC_OPT64_ASM3:.s=.o)
 
 KECCAK_HDRS_COMMON = crypto/keccak/KeccakDuplex.h crypto/keccak/KeccakNISTInterface.h \
 	crypto/keccak/KeccakSponge.h crypto/keccak/KeccakF-1600-interface.h
@@ -199,6 +202,10 @@ KECCAK_SRCS_ASM = @KECCAK_SRCS_ASM@
 KECCAK_HDRS = @KECCAK_HDRS@
 KECCAK_OBJS = $(KECCAK_SRCS:.c=.o)
 KECCAK_OBJS_ASM = $(KECCAK_SRCS_ASM:.s=.o)
+
+CRYPTO_ASM_COMPILE1 = $(COMPILE) $(GEN_OPT) $(CRYPTO_CPPFLAGS) $(CPPFLAGS)
+CRYPTO_ASM_COMPILE2 = $(YASM)
+CRYPTO_ASM_COMPILE = @CRYPTO_ASM_COMPILE@
 
 BAKFILES = *~ lzma/*~ lzfx/*~ lz4/*~ rabin/*~ bsdiff/*~ filters/lzp/*~ utils/*~ crypto/sha2/*~ \
 	crypto/sha2/intel/*~ crypto/aes/*~ crypto/scrypt/*~ crypto/*~ rabin/global/*~ \
@@ -323,8 +330,13 @@ $(SHA2ASM_OBJS): $(SHA2ASM_SRCS)
 $(KECCAK_OBJS): $(KECCAK_SRCS) $(KECCAK_HDRS)
 	$(COMPILE) $(KECCAK_FLAGS) $(@:.o=.c) -o $@
 
-$(KECCAK_OBJS_ASM): $(KECCAK_SRCS_ASM) $(KECCAK_HDRS)
+$(KECCAK_OBJS_OPT64_ASM2): $(KECCAK_SRC_OPT64_ASM2)
 	$(COMPILE) $(KECCAK_FLAGS) $(@:.o=.s) -o $@
+
+$(KECCAK_OBJS_OPT64_ASM3): $(KECCAK_SRC_OPT64_ASM3)
+	$(YASM) $(@:.o=.s) -o $@
+
+$(KECCAK_OBJS_ASM): $(KECCAK_SRCS_ASM) $(KECCAK_HDRS)
 
 $(LIBBSCWRAPOBJ): $(LIBBSCWRAP)
 	$(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
@@ -336,7 +348,7 @@ $(CRYPTO_OBJS): $(CRYPTO_SRCS) $(CRYPTO_HDRS) $(CRYPTO_ASM_OBJS)
 	$(COMPILE) $(GEN_OPT) $(CRYPTO_CPPFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
 $(CRYPTO_ASM_OBJS): $(CRYPTO_ASM_SRCS) $(CRYPTO_ASM_HDRS)
-	$(COMPILE) $(GEN_OPT) $(CRYPTO_CPPFLAGS) $(CPPFLAGS) -o $@ $(@:.o=.s)
+	$(CRYPTO_ASM_COMPILE) -o $@ $(@:.o=.s)
 
 $(CRYPTO_COMPAT_OBJS): $(CRYPTO_COMPAT_SRCS) $(CRYPTO_COMPAT_HDRS)
 	$(COMPILE) $(GEN_OPT) $(CRYPTO_CPPFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@

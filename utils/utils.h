@@ -39,6 +39,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <string.h>
+#include <sys/time.h>
 #include <cpuid.h>
 #if defined(sun) || defined(__sun)
 #include <sys/byteorder.h>
@@ -401,6 +402,10 @@ void rm_fname(char *fn);
  * Some types (like Jpeg) are totally incompressible.
  */
 int is_incompressible(int type);
+
+#ifdef __APPLE__
+int clock_gettime(int clk_id, struct timespec *ts);
+#endif
 
 /*
  * Roundup v to the nearest power of 2. From Bit Twiddling Hacks:

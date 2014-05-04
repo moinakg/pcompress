@@ -64,7 +64,7 @@ extern "C" {
 	blake2bp_funcptr			blake2bp;
   };
 
-  static void blake2_module_init(struct blake2_dispatch *dsp, processor_info_t *pc)
+  static void blake2_module_init(struct blake2_dispatch *dsp, processor_cap_t *pc)
   {
     dsp->blake2b_init		= blake2b_init_sse2;
     dsp->blake2b_init_key	= blake2b_init_key_sse2;

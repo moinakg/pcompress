@@ -91,6 +91,7 @@ salsa20_stream_c=
 salsa20_stream_asm='\$\(XSALSA20_STREAM_ASM\)'
 salsa20_debug=
 so_suffix=so
+crypto_asm_compile='\$\(CRYPTO_ASM_COMPILE1\)'
 
 if [ -x /bin/echo ]
 then
@@ -312,9 +313,12 @@ then
 	if [ "$OS" = "Linux" ]
 	then
 		yasm="${yasm} ${yasm_params_linux}"
+
 	elif [ "$OS" = "Darwin" ]
 	then
 		yasm="${yasm} ${yasm_params_osx}"
+		crypto_asm_compile='\$\(CRYPTO_ASM_COMPILE2\)'
+
 	elif [ "$OS" = "SunOS" ]
 	then
 		yasm="${yasm} ${yasm_params_linux}"
@@ -326,7 +330,12 @@ then
 		keccak_hdrs='\$\(KECCAK_HDRS_OPT64\)'
 	else
 		keccak_srcs='\$\(KECCAK_SRC_OPT64_ASM1\)'
-		keccak_srcs_asm='\$\(KECCAK_SRC_OPT64_ASM2\)'
+		if [ "$OS" != "Darwin" ]
+		then
+			keccak_srcs_asm='\$\(KECCAK_SRC_OPT64_ASM2\)'
+		else
+			keccak_srcs_asm='\$\(KECCAK_SRC_OPT64_ASM3\)'
+		fi
 		keccak_hdrs='\$\(KECCAK_HDRS_OPT64_ASM\)'
 	fi
 else
@@ -654,6 +663,7 @@ debugstatscppflagsval=
 cat Makefile.in | sed "
 s#@GCC@#${GCC}#g
 s#@GPP@#${GPP}#g
+s#@CRYPTO_ASM_COMPILE@#${crypto_asm_compile}#g
 s#@SO_SUFFIX@#${so_suffix}#g
 s#@${linkvar}@#\\\$\\(${typ}_${linkvar}\\)#g
 s#@${compilevar}@#\\\$\\(${typ}_${compilevar}\\)#g

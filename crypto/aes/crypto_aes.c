@@ -78,7 +78,7 @@ setkey_func_ptr enc_setkey;
 encrypt_func_ptr enc_encrypt;
 
 void
-aes_module_init(processor_info_t *pc)
+aes_module_init(processor_cap_t *pc)
 {
 	enc_setkey = AES_set_encrypt_key;
 	enc_encrypt = AES_encrypt;
