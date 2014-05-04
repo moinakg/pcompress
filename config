@@ -40,7 +40,9 @@ ${prog} [<options>]
 			Enable building against an alternate Bzip2 and library installation.
 --with-libarchive=<path to libarchive installation tree> (Default: System)
 			Enable building against an alternate libarchive installation.
---no-sse-detect		Do NOT attempt to probe the system's SSE/AVX capability for build flags. 
+--no-sse-detect		Do NOT attempt to probe the system's SSE capability for build flags. 
+			Implies '--no-avx-detect' below.
+--no-avx-detect		Do NOT attempt to probe the system's AVX apability for build flags.
 --no-1.3-archive-compat Disable compatibility with compressed archives created with Pcompress
 			version 1.3 (default: retain compatibility). Hash formats changed from
 			version 1.3 to 1.4 so this option is required if files created using
@@ -86,6 +88,7 @@ zlib_prefix=
 bzlib_prefix=
 libarchive_prefix=
 sse_detect=1
+avx_detect=1
 sse_opt_flags="-msse2"
 crypto_compat_objs='\$\(CRYPTO_COMPAT_OBJS\)'
 crypto_compat_flags="-D__HASH_COMPATIBILITY_"
@@ -195,6 +198,7 @@ do
 	;;
 	--no-sse-detect)
 		sse_detect=0
+		avx_detect=0
 	;;
 	--no-1.3-archive-compat)
 		crypto_compat_objs=""
@@ -254,8 +258,6 @@ then
 	exit 1
 fi
 
-# SSE Detection
-${ECHO} -n "Checking for CPU SSE version ... "
 if [ $sse_detect -eq 1 ]
 then
 	${GCC} -o sse_level ./utils/sse_level.c ./utils/cpuid.c -I./utils
@@ -266,6 +268,12 @@ then
 		echo ""
 		exit 1
 	fi
+fi
+
+if [ $sse_detect -eq 1 ]
+then
+	# SSE Detection
+	${ECHO} -n "Checking for CPU SSE version ... "
 	sse_ver=`./sse_level`
 	if [ $? -ne 0 ]
 	then
@@ -276,10 +284,30 @@ then
 		exit 1
 	fi
 	echo $sse_ver
-	rm -f sse_level
 	sse_opt_flags="-m${sse_ver}"
 fi
 
+if [ $avx_detect -eq 1 -a $sse_detect -eq 1 ]
+then
+	${ECHO} -n "Checking for CPU AVX version ... "
+	avx_ver=`./sse_level --avx`
+	if [ $? -ne 0 ]
+	then
+		rm -f sse_level
+		echo "ERROR:"
+		echo "SSE/AVX version detection utility. Try configuring with --no-sse-check option."
+		echo ""
+		exit 1
+	fi
+	if [ "x$avx_ver" = "x" ]
+	then
+		echo None
+	else
+		echo $avx_ver
+		sse_opt_flags="${sse_opt_flags} -m${avx_ver}"
+	fi
+fi
+rm -f sse_level
 
 echo $plat | egrep 'x86_64|amd64' > /dev/null
 if [ $? -eq 0 ]

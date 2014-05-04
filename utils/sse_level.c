@@ -23,24 +23,48 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <utils.h>
 #include <cpuid.h>
 
+void
+usage(void)
+{
+	printf("Usage: sse_level [--avx]\n");
+	exit(1);
+}
+
 int
-main(void)
+main(int argc, char *argv[])
 {
 	processor_cap_t pc;
+	int avx_detect = 0;
 	cpuid_basic_identify(&pc);
-	if (pc.sse_level == 3 && pc.sse_sub_level == 1) {
-		printf("ssse%d", pc.sse_level);
-		pc.sse_sub_level = 0;
-	} else {
-		printf("sse%d", pc.sse_level);
+
+	if (argc > 1) {
+		if (strcmp(argv[1], "--avx") == 0)
+			avx_detect = 1;
+		else
+			usage();
 	}
-	if (pc.sse_sub_level > 0)
-		printf(".%d\n", pc.sse_sub_level);
-	else
-		printf("\n");
+	if (!avx_detect) {
+		if (pc.sse_level == 3 && pc.sse_sub_level == 1) {
+			printf("ssse%d", pc.sse_level);
+			pc.sse_sub_level = 0;
+		} else {
+			printf("sse%d", pc.sse_level);
+		}
+		if (pc.sse_sub_level > 0)
+			printf(".%d\n", pc.sse_sub_level);
+		else
+			printf("\n");
+	} else {
+		if (pc.avx_level == 1)
+			printf("avx\n");
+		else if (pc.avx_level == 2)
+			printf("avx2\n");
+	}
+
 	return (0);
 }
 
