@@ -181,7 +181,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 	 */
 	pthread_mutex_lock(&init_lock);
 	if (!inited) {
-		int term, pow, j;
+		unsigned int term, pow, j;
 		uint64_t val, poly_pow;
 
 		poly_pow = 1;

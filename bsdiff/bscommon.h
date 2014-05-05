@@ -62,9 +62,12 @@ static bsize_t
 BUFREAD(bufio_t *bio, uchar_t *buf, bsize_t len)
 {
 	bsize_t actual;
+	unsigned int tot;
 
 	actual = len;
-	if (bio->pos + len > bio->buflen) {
+	tot = len;
+	tot += bio->pos;
+	if (tot > bio->buflen) {
 		actual = bio->buflen - bio->pos;
 	}
 	if (actual == 0) return (0);
