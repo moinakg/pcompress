@@ -102,6 +102,8 @@ soname_opt="soname,"
 rpath="-R"
 dtag_val=',--enable-new-dtags'
 lrt="-lrt"
+default_opt="O3"
+max_opt="O3"
 
 if [ -x /bin/echo ]
 then
@@ -388,6 +390,7 @@ then
 	rpath="-rpath,"
 	dtag_val=""
 	lrt=""
+	max_opt="O2"
 fi
 
 # Detect OpenSSL library
@@ -718,6 +721,7 @@ s#@YASM_GAS@#${yasm_params_gas}#g
 s#@RPATH@#${rpath}#g
 s#@LRT@#${lrt}#g
 s#soname#${soname_opt}#g
+s#${default_opt}#${max_opt}#g
 s#@DTAGS@#${dtag_val}#g
 s#@${linkvar}@#\\\$\\(${typ}_${linkvar}\\)#g
 s#@${compilevar}@#\\\$\\(${typ}_${compilevar}\\)#g

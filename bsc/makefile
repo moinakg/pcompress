@@ -24,7 +24,7 @@ CFLAGS = -g -Wall -fPIC
 CFLAGS += -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
 
 # Comment out CFLAGS line below to disable optimizations
-CFLAGS += -O3 -fomit-frame-pointer -fstrict-aliasing 
+CFLAGS += -O2 -fomit-frame-pointer -fstrict-aliasing -ftree-vectorize $(OPTFLAGS)
 
 # Comment out CFLAGS line below to disable OpenMP optimizations
 CFLAGS += -fopenmp -DLIBBSC_OPENMP_SUPPORT
