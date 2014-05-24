@@ -45,15 +45,15 @@
 #include <xxhash.h>
 #include <pc_archive.h>
 
-#ifndef __APPLE__
-#include <sys/sysinfo.h>
-#else
+#ifdef __APPLE__
 #include <sys/sysctl.h>
 #include <mach/mach.h>
 #include <mach/mach_host.h>
 #include <mach/mach_time.h>
 
 static mach_timebase_info_data_t sTimebaseInfo;
+#else
+#include <sys/sysinfo.h>
 #endif
 
 #define _IN_UTILS_
@@ -635,6 +635,17 @@ is_incompressible(int type)
 
 	ic = (st == TYPE_JPEG) | (st == TYPE_PACKJPG) | (st == TYPE_AUDIO_COMPRESSED);
 	return (ic);
+}
+
+int
+file_exists(char *path)
+{
+	FILE *fh = fopen(path, "r");
+	if (fh != NULL) {
+		fclose(fh);
+		return (1);
+	}
+	return (0);
 }
 
 /************************************************************

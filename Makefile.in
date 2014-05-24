@@ -408,6 +408,7 @@ clean:
 distclean: clean
 	$(RM) Makefile
 	(cd $(LIBBSCDIR); make clean)
+	$(RM_RF) buildtmp
 
 install: $(PROG)
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin

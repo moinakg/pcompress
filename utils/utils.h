@@ -348,6 +348,7 @@ extern int chk_dir(char *dir);
 extern void init_algo_props(algo_props_t *props);
 extern void init_pcompress();
 extern char *get_temp_dir();
+extern int file_exists(char *path);
 
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, uint64_t srclen, void *dst,

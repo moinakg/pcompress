@@ -35,7 +35,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include <libgen.h>
-#include <pcompress.h>
+#include "pcompress.h"
 #include <ctype.h>
 #include <utils.h>
 

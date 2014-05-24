@@ -41,6 +41,7 @@ typedef struct _hash_entry {
 	uchar_t cksum[1];
 } hash_entry_t;
 
+
 archive_config_t *init_global_db(char *configfile);
 int setup_db_config_s(archive_config_t *cfg, uint32_t chunksize, uint64_t *user_chunk_sz,
 		 int *pct_interval, const char *algo, cksum_t ck, cksum_t ck_sim,

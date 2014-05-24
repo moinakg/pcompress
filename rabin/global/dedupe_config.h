@@ -88,7 +88,7 @@ typedef struct {
 	struct seg_map_fd *seg_fd_r; // One read-only fd per thread for mapping in portions of the
 		       // segment metadata cache.
 	int valid;
-	void *dbdata;
+	void *db_index;
 } archive_config_t;
 
 #pragma pack(1)

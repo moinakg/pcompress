@@ -31,12 +31,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
-#include <utils.h>
-#include <allocator.h>
 #include <pthread.h>
-#include <xxhash.h>
 #include <sys/mman.h>
 
+#include "utils/utils.h"
+#include "allocator.h"
+#include "utils/xxhash.h"
 #include "index.h"
 
 /*
@@ -51,6 +51,7 @@ typedef struct {
 	uint64_t memlimit;
 	uint64_t memused;
 	int hash_entry_size, intervals, hash_slots;
+	char *index_file;
 } index_t;
 
 archive_config_t *
@@ -70,6 +71,14 @@ init_global_db(char *configfile)
 		return (NULL);
 
 	return (cfg);
+}
+
+int
+init_on_disk_index(archive_config_t *cfg)
+{
+        if (file_exists()) {
+
+        }
 }
 
 void
@@ -307,7 +316,7 @@ init_global_db_s(char *path, char *tmppath, uint32_t chunksize, uint64_t user_ch
 		}
 	}
 	cfg->segcache_pos = 0;
-	cfg->dbdata = indx;
+	cfg->db_index = indx;
 	return (cfg);
 }
 
@@ -475,7 +484,7 @@ db_lookup_insert_s(archive_config_t *cfg, uchar_t *sim_cksum, int interval,
 		   uint64_t item_offset, uint32_t item_size, int do_insert)
 {
 	uint32_t htab_entry;
-	index_t *indx = (index_t *)(cfg->dbdata);
+	index_t *indx = (index_t *)(cfg->db_index);
 	hash_entry_t **htab, *ent, **pent;
 
 	assert((cfg->similarity_cksum_sz & (sizeof (size_t) - 1)) == 0);
@@ -549,7 +558,7 @@ void
 destroy_global_db_s(archive_config_t *cfg)
 {
 	int i;
-	index_t *indx = (index_t *)(cfg->dbdata);
+	index_t *indx = (index_t *)(cfg->db_index);
 
 	cleanup_indx(indx);
 	if (cfg->pct_interval > 0) {
