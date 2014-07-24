@@ -326,10 +326,10 @@ Advanced usage
                 from the temp file and actual deduplication is performed. This allows the
                 in-memory index size to be approximately 0.0025% of the total dataset size and
                 requires very few disk reads for every 2048 blocks processed.
-                  
+
                 In pipe mode Global Deduplication always uses a segmented similarity based
                 index. It allows efficient network transfer of large data.
-                  
+
        -B <0..5>
                 Specify an average Dedupe block size. 0 - 2K, 1 - 4K, 2 - 8K ... 5 - 64K.
                 Default deduplication block size is 4KB for Global Deduplication and 2KB

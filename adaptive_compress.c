@@ -129,8 +129,12 @@ adapt_props(algo_props_t *data, int level, uint64_t chunksize)
 	data->delta2_span = 200;
 	data->deltac_min_distance = EIGHTM;
 	ext1 = lz4_buf_extra(chunksize);
+
+#ifdef ENABLE_PC_LIBBSC
 	ext2 = libbsc_buf_extra(chunksize);
 	if (ext2 > ext1) ext1 = ext2;
+#endif
+
 	data->buf_extra = ext1;
 }
 

@@ -43,7 +43,11 @@
 #include <pcompress.h>
 #include <allocator.h>
 #include <rabin_dedup.h>
+
+#ifndef _MPLV2_LICENSE_
 #include <lzp.h>
+#endif
+
 #include <transpose.h>
 #include <delta2/delta2.h>
 #include <crypto/crypto_utils.h>
