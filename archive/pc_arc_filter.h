@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 #ifndef	_PC_ARCHIVE_FILTER_H
@@ -67,4 +67,4 @@ void add_filters_by_type(struct type_data *typetab, struct filter_flags *ff);
 }
 #endif
 
-#endif	
+#endif

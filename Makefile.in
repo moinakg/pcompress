@@ -223,7 +223,7 @@ BASE_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_P
 	-I./crypto/xsalsa20 -I./archive -pedantic -Wall -I./filters -fno-strict-aliasing \
 	-Wno-unused-but-set-variable -Wno-enum-compare \
 	@COMPAT_CPPFLAGS@ @XSALSA20_DEBUG@ @LIBARCHIVE_INC@ -I./filters/packjpg
-COMMON_CPPFLAGS = $(BASE_CPPFLAGS) -std=gnu99 
+COMMON_CPPFLAGS = $(BASE_CPPFLAGS) -std=gnu99
 COMMON_CPPFLAGS_cpp = $(BASE_CPPFLAGS)
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block

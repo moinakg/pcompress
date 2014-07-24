@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 #ifndef	_PCOMPRESS_H
@@ -48,6 +48,12 @@ extern "C" {
 #define	UTILITY_VERSION	"3.1"
 #define	MASK_CRYPTO_ALG	0x30
 #define	MAX_LEVEL	14
+
+#ifndef _MPLV2_LICENSE_
+#define	LICENSE_STRING "LGPLv3"
+#else
+#define	LICENSE_STRING "MPLv2"
+#endif
 
 #define	COMPRESSED	1
 #define	UNCOMPRESSED	0

@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 #include <sys/types.h>
@@ -150,7 +150,7 @@ int
 libbsc_deinit(void **data)
 {
 	struct libbsc_params *bscdat = (struct libbsc_params *)(*data);
-	
+
 	if (bscdat) {
 		slab_free(NULL, bscdat);
 	}

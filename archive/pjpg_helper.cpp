@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 /*
@@ -32,6 +32,8 @@
 #include <stdio.h>
 #include <errno.h>
 #include <utils.h>
+
+#ifndef _MPLV2_LICENSE_
 #include <packjpglib.h>
 
 #ifdef	__cplusplus
@@ -103,4 +105,5 @@ packjpg_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf)
 
 #ifdef	__cplusplus
 }
+#endif
 #endif

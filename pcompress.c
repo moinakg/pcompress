@@ -78,7 +78,8 @@ usage(pc_ctx_t *pctx)
 {
 
 	fprintf(stderr,
-"\nPcompress Version %s\n\n"
+"\nPcompress Version %s\n"
+"License: %s\n\n"
 "See README.md for detailed usage.\n\n"
 "Standard Usage\n"
 "==============\n"
@@ -144,7 +145,7 @@ usage(pc_ctx_t *pctx)
 "                 Default output name if omitted: <input filename>.out\n\n"
 "                 If Archiving was done then this should be the name of a directory into which\n"
 "                 extracted files are restored. Default if omitted: Current directory.\n\n",
-	    UTILITY_VERSION, pctx->exec_name, pctx->exec_name, pctx->exec_name);
+	    UTILITY_VERSION, LICENSE_STRING, pctx->exec_name, pctx->exec_name, pctx->exec_name);
 	fprintf(stderr,
 "    Encryption\n"
 "    ----------\n"
@@ -187,10 +188,10 @@ show_compression_stats(pc_ctx_t *pctx)
 /*
  * Wrapper functions to pre-process the buffer and then call the main compression routine.
  * At present only LZP pre-compression is used below. Some extra metadata is added:
- * 
+ *
  * Byte 0: A flag to indicate which pre-processor was used.
  * Byte 1 - Byte 8: Size of buffer after pre-processing
- * 
+ *
  * It is possible for a buffer to be only pre-processed and not compressed by the final
  * algorithm if the final one fails to compress for some reason. However the vice versa
  * is not allowed.
@@ -234,6 +235,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		}
 	}
 
+#ifndef _MPLV2_LICENSE_
 	if (pctx->lzp_preprocess && stype != TYPE_BMP && stype != TYPE_TIFF) {
 		int hashsize;
 
@@ -249,6 +251,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 			type |= PREPROC_TYPE_LZP;
 		}
 	}
+#endif
 
 	if (pctx->enable_delta2_encode && props->delta2_span > 0 &&
 	    stype != TYPE_DNA_SEQ && stype != TYPE_BMP &&
@@ -349,6 +352,7 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 	}
 
 	if (type & PREPROC_TYPE_LZP) {
+#ifndef _MPLV2_LICENSE_
 		int hashsize;
 		hashsize = lzp_hash_size(level);
 		result = lzp_decompress((const uchar_t *)src, (uchar_t *)dst, srclen,
@@ -362,6 +366,10 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 			log_msg(LOG_ERR, 0, "LZP decompression failed.");
 			return (result);
 		}
+#else
+		log_msg(LOG_ERR, 0, "LZP feature not available in this build (MPLv2). Aborting.");
+		return (-1);
+#endif
 	}
 
 	if (type & PREPROC_TYPE_DISPACK) {
@@ -2960,10 +2968,12 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			pctx->enable_rabin_split = 0;
 			break;
 
+#ifndef _MPLV2_LICENSE_
 		    case 'L':
 			pctx->advanced_opts = 1;
 			pctx->lzp_preprocess = 1;
 			break;
+#endif
 
 		    case 'P':
 			pctx->advanced_opts = 1;

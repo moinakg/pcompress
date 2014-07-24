@@ -1,27 +1,27 @@
 /*
  * The rabin polynomial computation is derived from:
  * http://code.google.com/p/rabin-fingerprint-c/
- * 
+ *
  * originally created by Joel Lawrence Tucci on 09-March-2011.
- * 
+ *
  * Rabin polynomial portions Copyright (c) 2011 Joel Lawrence Tucci
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- * 
+ *
  * Redistributions of source code must retain the above copyright notice,
  * this list of conditions and the following disclaimer.
- * 
+ *
  * Redistributions in binary form must reproduce the above copyright
  * notice, this list of conditions and the following disclaimer in the
  * documentation and/or other materials provided with the distribution.
- * 
+ *
  * Neither the name of the project's author nor the names of its
  * contributors may be used to endorse or promote products derived from
  * this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -58,7 +58,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- * 
+ *
  */
 
 #ifndef __STDC_FORMAT_MACROS
@@ -75,6 +75,9 @@
 #include <pthread.h>
 #include <heap.h>
 #include <xxhash.h>
+
+#define	QSORT_LT(a, b)	((*a)<(*b))
+#define	QSORT_TYPE uint64_t
 #include <qsort.h>
 
 #include "rabin_dedup.h"
@@ -445,11 +448,10 @@ isort_uint64(uint64_t *ary, uint32_t nitems)
  * Sort an array of 64-bit unsigned integers. The QSORT macro provides an
  * inline quicksort routine that does not use a callback function.
  */
-#define	int_lt(a,b) ((*a)<(*b))
 static void
 do_qsort(uint64_t *arr, uint32_t len)
 {
-	QSORT(uint64_t, arr, len, int_lt);
+	QSORT(arr, len);
 }
 
 static inline int

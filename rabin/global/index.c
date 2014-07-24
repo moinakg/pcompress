@@ -76,9 +76,12 @@ init_global_db(char *configfile)
 int
 init_on_disk_index(archive_config_t *cfg)
 {
+#if 0
         if (file_exists()) {
 
         }
+#endif
+	return (0);
 }
 
 void

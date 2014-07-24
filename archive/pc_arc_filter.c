@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 /*
@@ -42,23 +42,28 @@
 #include "pc_arc_filter.h"
 #include "pc_archive.h"
 
-#define	PACKJPG_DEF_BUFSIZ	(512 * 1024)
-#define	JPG_SIZE_LIMIT		(8 * 1024 * 1024)
-#define	PJG_APPVERSION1		(25)
-#define	PJG_APPVERSION2		(25)
+#ifndef _MPLV2_LICENSE_
+#	define	PACKJPG_DEF_BUFSIZ	(512 * 1024)
+#	define	JPG_SIZE_LIMIT		(8 * 1024 * 1024)
+#	define	PJG_APPVERSION1		(25)
+#	define	PJG_APPVERSION2		(25)
+#endif
 
 struct scratch_buffer {
 	uchar_t *in_buff;
 	size_t in_bufflen;
 };
 
+#ifndef _MPLV2_LICENSE_
 extern size_t packjpg_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf);
 
 ssize_t packjpg_filter(struct filter_info *fi, void *filter_private);
+#endif
 
 void
 add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 {
+#ifndef _MPLV2_LICENSE_
 	struct scratch_buffer *sdat;
 	int slot;
 
@@ -72,6 +77,7 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 		typetab[slot].filter_func = packjpg_filter;
 		typetab[slot].filter_name = "packJPG";
 	}
+#endif
 }
 
 static void
@@ -138,6 +144,7 @@ write_archive_data(struct archive *aw, uchar_t *out_buf, size_t len, int block_s
 	return (tot);
 }
 
+#ifndef _MPLV2_LICENSE_
 int
 pjg_version_supported(char ver)
 {
@@ -252,4 +259,5 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 	free(out);
 	return (rv);
 }
+#endif
 

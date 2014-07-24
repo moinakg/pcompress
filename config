@@ -20,6 +20,8 @@
 # moinakg@belenix.org, http://moinakg.wordpress.com/
 #
 
+my_license=LGPLv3
+
 usage() {
 	prog=$1
 	cat << _EOF
@@ -40,9 +42,12 @@ ${prog} [<options>]
 			Enable building against an alternate Bzip2 and library installation.
 --with-libarchive=<path to libarchive installation tree> (Default: System)
 			Enable building against an alternate libarchive installation.
+--with-external-libbsc=<path to libbsc source tree>
+			Enable building with exernal libbsc sources. Can be used to link with
+			ASLv2 libbsc when using MPLv2 licensed sources.
 --no-sse-detect		Do NOT attempt to probe the system's SSE capability for build flags. 
 			Implies '--no-avx-detect' below.
---no-avx-detect		Do NOT attempt to probe the system's AVX apability for build flags.
+--no-avx-detect		Do NOT attempt to probe the system's AVX capability for build flags.
 --no-1.3-archive-compat Disable compatibility with compressed archives created with Pcompress
 			version 1.3 (default: retain compatibility). Hash formats changed from
 			version 1.3 to 1.4 so this option is required if files created using
@@ -60,12 +65,16 @@ debug=0
 allocator=1
 debug_stats=0
 prefix=/usr
-libbsc_dir=./bsc
-libbsc_lib=${libbsc_dir}/libbsc.a
-libbsclflags='\$\(LIBBSCLFLAGS\)'
-libbscwrapobj='\$\(LIBBSCWRAPOBJ\)'
-libbscgenopt='\$\(LIBBSCGEN_OPT\)'
-libbsccppflags='\$\(LIBBSCCPPFLAGS\)'
+
+if [ "$my_license" = "LGPLv3" ]
+then
+	libbsc_dir=./bsc
+	libbsc_lib=${libbsc_dir}/libbsc.a
+	libbsclflags='\$\(LIBBSCLFLAGS\)'
+	libbscwrapobj='\$\(LIBBSCWRAPOBJ\)'
+	libbscgenopt='\$\(LIBBSCGEN_OPT\)'
+	libbsccppflags='\$\(LIBBSCCPPFLAGS\)'
+fi
 openssl_prefix=
 openssl_libdir=
 openssl_incdir=
@@ -194,6 +203,14 @@ do
 	;;
 	--with-libarchive=*)
 		libarchive_prefix=`echo ${arg1} | cut -f2 -d"="`
+	;;
+	--with-external-libbsc)
+		libbsc_dir=`echo ${arg1} | cut -f2 -d"="`
+		libbsc_lib=${libbsc_dir}/libbsc.a
+		libbsclflags='\$\(LIBBSCLFLAGS\)'
+		libbscwrapobj='\$\(LIBBSCWRAPOBJ\)'
+		libbscgenopt='\$\(LIBBSCGEN_OPT\)'
+		libbsccppflags='\$\(LIBBSCCPPFLAGS\)'
 	;;
 	--use-key256)
 		keylen='-DDEFAULT_KEYLEN=16'
