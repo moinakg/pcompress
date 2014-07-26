@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 #ifndef	_CRYPTO_UTILS_H
@@ -113,4 +113,4 @@ int hmac_cleanup(mac_ctx_t *mctx);
 }
 #endif
 
-#endif	
+#endif

@@ -33,6 +33,16 @@ Pcompress also supports encryption via AES, Salsa20 and uses Scrypt from
 Tarsnap for Password Based Key generation. A unique key is generated per
 session even if the same password is used and HMAC is used to do authentication.
 
+LICENSING
+=========
+
+Pcompress is dual licensed with LGPLv3 and MPLv2 sources. The main git
+repository is LGPL licensed. A separate tarball of the sources with
+MPLv2 license is made available as a download. This is updated
+periodically. Since Pcompress also integrates a bunch of third-party
+software a few features may be missing in the MPLv2 licensed version
+because of the upstream software being LGPL licensed originally.
+
 Links of Interest
 =================
 
@@ -198,6 +208,12 @@ Compression Algorithms
               However in a few cases this can produce slightly lesser compression
               gain.
 
+    libbsc  - This is a new block-sorting compressor having much better effectiveness
+              and performance over a variety of data types as compared to Bzip2.
+    NOTE:     In the LGPL licensed version libbsc is an integral part of Pcompress.
+              When building MPLv2 licensed sources, the libbsc sources must be
+              downloaded separately and linked in. This is described in the INSTALL file.
+
     PPMD    - Slow. Extreme compression for Text, average compression for binary.
               In addition PPMD decompression time is also high for large chunks.
               This requires lots of RAM similar to LZMA. PPMd requires
@@ -231,6 +247,8 @@ Enabled features based on Compression Level
               LZP Preprocessing
     10 - 14 - Global Dedup block size 2KB, Adaptive Delta Encoding with extra rounds, Dispack,
               LZP Preprocessing, PackJPG filter for Jpegs.
+
+    NOTE:   - LZP Preprocessing and PackJPG are not available in the MPLv2 licensed version.
 
 Encryption
 ==========

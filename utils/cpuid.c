@@ -72,16 +72,16 @@ exec_cpuid(uint32_t *regs)
 		"	push	%%rcx\n"
 		"	push	%%rdx\n"
 		"	push	%%rdi\n"
-		
+
 		"	mov	%0,	%%rdi\n"
-		
+
 		"	mov	(%%rdi),	%%eax\n"
 		"	mov	4(%%rdi),	%%ebx\n"
 		"	mov	8(%%rdi),	%%ecx\n"
 		"	mov	12(%%rdi),	%%edx\n"
-		
+
 		"	cpuid\n"
-		
+
 		"	movl	%%eax,	(%%rdi)\n"
 		"	movl	%%ebx,	4(%%rdi)\n"
 		"	movl	%%ecx,	8(%%rdi)\n"

@@ -48,4 +48,4 @@ int delta2_decode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen)
 }
 #endif
 
-#endif	
+#endif

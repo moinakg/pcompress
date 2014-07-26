@@ -155,7 +155,7 @@ using namespace std;
 #define	NORMAL_HDR	(1 + 2)
 #define	EXTENDED_HDR	(1 + 2 + 2)
 // Dispack min reduction should be 8%, otherwise we abort
-#define	DIS_MIN_REDUCE	(2622) 
+#define	DIS_MIN_REDUCE	(2622)
 
 #define	MAXINSTR 15     // maximum size of a single instruction in bytes (actually, decodeable ones are shorter)
 
@@ -223,7 +223,7 @@ enum Streams
   ST_JUMP32,                // 32-bit jump target
 
   ST_MAX,
-  
+
   // these components of the instruction stream are also identified
   // seperately, but stored together with another stream since there's
   // high correlation between them (or just because one streams provides
@@ -641,7 +641,7 @@ static sU8 *
 DisFilter(DisFilterCtx &ctx, sU8 *src, sU32 size, sU32 origin, sU8 *dst, sU32 &outputSize)
 {
 //  DisFilterCtx ctx(origin,origin+size);
-  
+
   // main loop: handle everything but the last few bytes
   sU32 pos = 0;
   while(pos < size - MAXINSTR)
@@ -713,7 +713,7 @@ DisUnFilter(sU8 *source,sU32 sourceSize,sU8 *dest,sU32 destSize,sU32 memStart)
   sU8 *stream[ST_MAX];
   sU8 *streamEnd[ST_MAX];
   sU32 funcTable[256];
-  
+
   // read header (list of stream sizes)
   if(sourceSize < ST_MAX*4)
     return sFALSE;
@@ -735,7 +735,7 @@ DisUnFilter(sU8 *source,sU32 sourceSize,sU8 *dest,sU32 destSize,sU32 memStart)
     funcTable[i] = 0;
 
   sBool nextIsFunc = sTRUE;
-  
+
   sU8 *destStart = dest;
   sU8 *destEnd = destStart + destSize;
 
@@ -749,7 +749,7 @@ DisUnFilter(sU8 *source,sU32 sourceSize,sU8 *dest,sU32 destSize,sU32 memStart)
     {
       CheckSrc(ST_JUMPTBL_COUNT,1);
       sInt count = Fetch8(stream[ST_JUMPTBL_COUNT]) + 1;
-      
+
       for(sInt i=0;i<count;i++)
       {
         sU32 target;

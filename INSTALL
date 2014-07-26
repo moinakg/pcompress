@@ -110,6 +110,14 @@ is not the usual GNU Autoconf script.
                         support is used. So a local static libarchive build with
                         most features disabled can be used with this option.
 
+--with-external-libbsc=<path to libbsc source tree>
+                        Enable building with exernal libbsc sources. In the LGPL licensed
+			sources a fork of the previous LGPL licensed libbsc source tree is
+			already included in the Pcompress repo. The same is not true for the
+			MPLv2 licensed sources. So libbsc has to be downloaded separately
+			from: http://libbsc.com/ and linked into Pcompress using this option.
+			The current libbsc sources are licensed with ASLv2.
+
 --no-sse-detect         Do not try to detect the CPU's SSE capability. This
                         mode will simply use SSE2 as the fallback default.
                         Using SSE4 and later improves performance significantly.

@@ -40,12 +40,12 @@
  * Helper functions for single-call SHA3 (Keccak) hashing. Both serial
  * and parallel versions are provided. Parallel versions use 2-stage
  * Merkle Tree hashing.
- * 
+ *
  * At the leaf level data is split into BLKSZ blocks and 4 threads
  * compute 4 hashes of interleaved block streams. At 2nd level two
  * new hashes are generated from hashing the 2 pairs of hash values.
  * In the final stage the 2 hash values are hashed to the final digest.
- * 
+ *
  * References:
  * http://eprint.iacr.org/2012/476.pdf
  * http://gva.noekeon.org/papers/bdpv09tree.html

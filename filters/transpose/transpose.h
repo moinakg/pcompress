@@ -45,4 +45,4 @@ void transpose(unsigned char *from, unsigned char *to, uint64_t buflen,
 }
 #endif
 
-#endif	
+#endif

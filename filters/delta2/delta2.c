@@ -47,7 +47,7 @@
  *    64-bit encoded value is of the following format
  *    Most Significant Byte = Stride length
  *    Remaining Bytes       = Number of bytes in the span
- * 
+ *
  * We optimize for little-endian, so values are stored and interpreted
  * in little-endian order.
  */
@@ -142,7 +142,7 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		uint64_t slen, sz, dsz, pending;
 		int rem, lenc, hdr_ovr;
 		DEBUG_STAT_EN(double strt, en);
-	
+
 		srcpos = src;
 		dstpos = dst;
 		dstend = dst + *dstlen;
