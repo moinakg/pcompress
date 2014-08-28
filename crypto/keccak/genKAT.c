@@ -150,6 +150,8 @@ genShortMsg(int hashbitlen)
     }
     else {
         printf("genShortMsg: Couldn't read Principal Submitter\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HEADER_ERROR;
     }
     
@@ -165,6 +167,8 @@ genShortMsg(int hashbitlen)
 
         if ( !ReadHex(fp_in, Msg, msgbytelen, "Msg = ") ) {
             printf("ERROR: unable to read 'Msg' from <ShortMsgKAT.txt>\n");
+            fclose(fp_in);
+            fclose(fp_out);
             return KAT_DATA_ERROR;
         }
         Keccak_Hash(hashbitlen, Msg, msglen, MD);
@@ -219,6 +223,8 @@ genShortMsgSponge(unsigned int rate, unsigned int capacity, int outputLength, co
     }
     if ( FindMarker(fp_in, "# Principal Submitter:") ) {
         rv = fscanf(fp_in, "%[^\n]\n", line);
+        fclose(fp_in);
+        fclose(fp_out);
         fprintf(fp_out, "# Principal Submitter:%s\n", line);
     }
     else {
@@ -238,6 +244,8 @@ genShortMsgSponge(unsigned int rate, unsigned int capacity, int outputLength, co
 
         if ( !ReadHex(fp_in, Msg, msgbytelen, "Msg = ") ) {
             printf("ERROR: unable to read 'Msg' from <ShortMsgKAT.txt>\n");
+            fclose(fp_in);
+            fclose(fp_out);
             return KAT_DATA_ERROR;
         }
         fprintf(fp_out, "\nLen = %d\n", msglen);
@@ -299,6 +307,8 @@ genLongMsg(int hashbitlen)
     }
     else {
         printf("genLongMsg: Couldn't read Principal Submitter\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HEADER_ERROR;
     }
     
@@ -312,6 +322,8 @@ genLongMsg(int hashbitlen)
 
         if ( !ReadHex(fp_in, Msg, msgbytelen, "Msg = ") ) {
             printf("ERROR: unable to read 'Msg' from <LongMsgKAT.txt>\n");
+            fclose(fp_in);
+            fclose(fp_out);
             return KAT_DATA_ERROR;
         }
 #ifdef AllowExtendedFunctions
@@ -386,6 +398,8 @@ genExtremelyLongMsg(int hashbitlen)
     }
     else {
         printf("genExtremelyLongMsg: Couldn't read Principal Submitter\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HEADER_ERROR;
     }
     
@@ -393,6 +407,8 @@ genExtremelyLongMsg(int hashbitlen)
         rv = fscanf(fp_in, "%d", &repeat);
     else {
         printf("ERROR: unable to read 'Repeat' from <ExtremelyLongMsgKAT.txt>\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_DATA_ERROR;
     }
     
@@ -400,6 +416,8 @@ genExtremelyLongMsg(int hashbitlen)
         rv = fscanf(fp_in, "%s", Text);
     else {
         printf("ERROR: unable to read 'Text' from <ExtremelyLongMsgKAT.txt>\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_DATA_ERROR;
     }
     
@@ -407,15 +425,21 @@ genExtremelyLongMsg(int hashbitlen)
     
     if ( (retval = Keccak_Init(&state, hashbitlen)) != KAT_SUCCESS ) {
         printf("Keccak_Init returned <%d> in genExtremelyLongMsg\n", retval);
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HASH_ERROR;
     }
     for ( i=0; i<repeat; i++ )
         if ( (retval = Keccak_Update(&state, Text, 512)) != KAT_SUCCESS ) {
             printf("Keccak_Update returned <%d> in genExtremelyLongMsg\n", retval);
+            fclose(fp_in);
+            fclose(fp_out);
             return KAT_HASH_ERROR;
         }
     if ( (retval = Keccak_Final(&state, MD)) != KAT_SUCCESS ) {
         printf("Keccak_Final returned <%d> in genExtremelyLongMsg\n", retval);
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HASH_ERROR;
     }
 #ifdef AllowExtendedFunctions
@@ -476,11 +500,15 @@ genMonteCarlo(int hashbitlen)
     }
     else {
         printf("genMonteCarlo: Couldn't read Principal Submitter\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HEADER_ERROR;
     }
     
     if ( !ReadHex(fp_in, Seed, 128, "Seed = ") ) {
         printf("ERROR: unable to read 'Seed' from <MonteCarlo.txt>\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_DATA_ERROR;
     }
     
@@ -544,11 +572,15 @@ genMonteCarloSqueezing(int hashbitlen)
     }
     else {
         printf("genMonteCarlo: Couldn't read Principal Submitter\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HEADER_ERROR;
     }
     
     if ( !ReadHex(fp_in, Seed, 128, "Seed = ") ) {
         printf("ERROR: unable to read 'Seed' from <MonteCarlo.txt>\n");
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_DATA_ERROR;
     }
     
@@ -556,14 +588,20 @@ genMonteCarloSqueezing(int hashbitlen)
 
     if ( (retval = Keccak_Init(&state, hashbitlen)) != KAT_SUCCESS ) {
         printf("Keccak_Init returned <%d> in genMonteCarloSqueezing\n", retval);
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HASH_ERROR;
     }
     if ( (retval = Keccak_Update(&state, Seed, 128*8)) != KAT_SUCCESS ) {
         printf("Keccak_Update returned <%d> in genMonteCarloSqueezing\n", retval);
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HASH_ERROR;
     }
     if ( (retval = Keccak_Final(&state, 0)) != KAT_SUCCESS ) {
         printf("Keccak_Final returned <%d> in genMonteCarloSqueezing\n", retval);
+        fclose(fp_in);
+        fclose(fp_out);
         return KAT_HASH_ERROR;
     }
     bytelen = 64;
@@ -571,6 +609,8 @@ genMonteCarloSqueezing(int hashbitlen)
         for ( i=0; i<1000; i++ ) {
             if ( (retval = (HashReturn)Squeeze(&state, MD, bytelen*8)) != KAT_SUCCESS ) {
                 printf("Squeeze returned <%d> in genMonteCarloSqueezing\n", retval);
+                fclose(fp_in);
+                fclose(fp_out);
                 return KAT_HASH_ERROR;
             }
         }

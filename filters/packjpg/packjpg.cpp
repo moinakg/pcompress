@@ -1902,6 +1902,8 @@ INTERN bool compare_output( void )
 	if ( ( buff_ori == NULL ) || ( buff_cmp == NULL ) ) {
 		sprintf( errormessage, MEM_ERRMSG );
 		errorlevel = 2;
+		free(buff_ori);
+		free(buff_cmp);
 		return false;
 	}
 	
@@ -1916,6 +1918,8 @@ INTERN bool compare_output( void )
 			sprintf( errormessage, "error in input stream" );
 		else break;
 		errorlevel = 2;
+		free(buff_ori);
+		free(buff_cmp);
 		return false;
 	}
 	
@@ -1924,6 +1928,8 @@ INTERN bool compare_output( void )
 	if ( str_out->getsize() != dsize ) {
 		sprintf( errormessage, "file sizes do not match" );
 		errorlevel = 2;
+		free(buff_ori);
+		free(buff_cmp);
 		return false;
 	}
 	
@@ -1937,6 +1943,8 @@ INTERN bool compare_output( void )
 		if ( buff_ori[ b ] != buff_cmp[ b ] ) {
 			sprintf( errormessage, "difference found at 0x%X", i );
 			errorlevel = 2;
+			free(buff_ori);
+			free(buff_cmp);
 			return false;
 		}
 	}
@@ -4977,6 +4985,9 @@ INTERN bool pjg_encode_ac_high( aricoder* enc, int cmp )
 	if ( ( absv_store == NULL ) || ( sgn_store == NULL ) || ( zdstls == NULL ) ) {
 		sprintf( errormessage, MEM_ERRMSG );
 		errorlevel = 2;
+		free(absv_store);
+		free(sgn_store);
+		free(zdstls);
 		return false;
 	}
 	
@@ -5638,6 +5649,9 @@ INTERN bool pjg_decode_ac_high( aricoder* dec, int cmp )
 	if ( ( absv_store == NULL ) || ( sgn_store == NULL ) ) {
 		sprintf( errormessage, MEM_ERRMSG );
 		errorlevel = 2;
+        free(absv_store);
+        free(sgn_store);
+        free(zdstls);
 		return false;
 	}
 	
@@ -7182,6 +7196,7 @@ INTERN bool dump_pgm( void )
 		if ( fp == NULL ){
 			sprintf( errormessage, FWR_ERRMSG, fn );
 			errorlevel = 2;
+			free( fn );
 			return false;
 		}
 		free( fn );
@@ -7191,6 +7206,7 @@ INTERN bool dump_pgm( void )
 		if ( imgdata == NULL ) {
 			sprintf( errormessage, MEM_ERRMSG );
 			errorlevel = 2;
+			fclose( fp );
 			return false;
 		}
 		

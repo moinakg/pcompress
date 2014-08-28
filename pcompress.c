@@ -1894,6 +1894,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	thread = 0;
 	wthread = 0;
 	dedupe_flag = RABIN_DEDUPE_SEGMENTED; // Silence the compiler
+	compressed_chunksize = 0;
 
 	if (pctx->encrypt_type) {
 		uchar_t pw[MAX_PW_LEN];
@@ -2141,8 +2142,11 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	 *
 	 * See start_decompress() routine for details of chunk header.
 	 * We also keep extra 8-byte space for the last chunk's size.
+	 * compressed_chunksize might also already be set to accomodate a HMAC
+	 * when encrypting, so we have to add to than here. Otherwise it is set
+	 * to 0.
 	 */
-	compressed_chunksize = chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
+	compressed_chunksize += chunksize + CHUNK_HDR_SZ + zlib_buf_extra(chunksize);
 	if (pctx->_props_func) {
 		pctx->_props_func(&props, level, chunksize);
 		if (chunksize + props.buf_extra > compressed_chunksize) {
