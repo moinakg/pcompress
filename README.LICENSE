@@ -1,0 +1,14 @@
+######### LICENSING NOTE ##########
+Pcompress is dual licensed under GNU Lesser General Public License V3 and
+also under the Mozilla Public License V2.
+
+Normally the default license that applies is the GNU LGPLv3. However it is
+possible to create an alternate source tree that is licensed under the MPLv2
+by running the following at the top of the source tree:
+
+ksh make_mplv2.ksh
+
+NOTE that most of Pcompress is covered under MPLv2. However a couple of
+third party components like LZP and PackJPG use LGPLv2/3 upstream license
+and are omitted in the MPLv2 variant.
+
