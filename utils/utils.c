@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 #include <sys/types.h>
@@ -636,6 +636,44 @@ is_incompressible(int type)
 	ic = (st == TYPE_JPEG) | (st == TYPE_PACKJPG) | (st == TYPE_AUDIO_COMPRESSED);
 	return (ic);
 }
+
+#ifndef _MPLV2_LICENSE_
+/*
+ * Given a buffer this will tell whether the buffer represents PNM/PPM/PGM/PBM
+ * image data. Buffer should be at least 2 bytes.
+ */
+int
+identify_pnm_type(uchar_t *buf, size_t len)
+{
+	int is_pnm;
+
+	if (len < 2) return (0);
+	is_pnm = 0;
+	switch (buf[0]) {
+		case 'S':
+			switch (buf[1]) {
+				case '4': is_pnm = 2; break;
+				case '5': is_pnm = 2; break;
+				case '6': is_pnm = 2; break;
+				case 'M': is_pnm = 2; break;
+			}
+			break;
+		case 'P':
+			switch (buf[1]) {
+				case '4': is_pnm = 1; break;
+				case '5': is_pnm = 1; break;
+				case '6': is_pnm = 1; break;
+			}
+			break;
+		case 'B':
+			if (buf[1] == 'M') {
+				is_pnm = 1;
+			}
+			break;
+	}
+	return (is_pnm);
+}
+#endif
 
 int
 file_exists(char *path)

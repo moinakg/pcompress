@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 #ifndef	_UTILS_H
@@ -306,7 +306,9 @@ typedef enum {
 	TYPE_TIFF = 208,
 	TYPE_PDF = 216,
 	TYPE_ARCHIVE_TAR = 224,
-	TYPE_DICOM = 232
+	TYPE_DICOM = 232,
+	TYPE_PNM = 240,
+	TYPE_PACKPNM = 248
 } data_type_t;
 
 /*
@@ -350,6 +352,10 @@ extern void init_pcompress();
 extern char *get_temp_dir();
 extern int file_exists(char *path);
 
+#ifndef _MPLV2_LICENSE_
+int identify_pnm_type(uchar_t *buf, size_t len);
+#endif
+
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, uint64_t srclen, void *dst,
 	uint64_t *destlen, int level, uchar_t chdr, int btype, void *data);
@@ -379,7 +385,7 @@ typedef enum {
 	LOG_ERR,
 	LOG_WARN,
 	LOG_INFO
-} log_level_t;	
+} log_level_t;
 
 typedef void (*log_callback_ptr)(char *msg);
 
@@ -456,4 +462,4 @@ endswith(char *haystack, char *needle) {
 }
 #endif
 
-#endif	
+#endif

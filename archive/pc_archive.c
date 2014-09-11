@@ -1546,8 +1546,8 @@ out:
 /*
  * Detect a few file types from looking at magic signatures.
  * NOTE: Jpeg files must be detected via '.jpg' or '.jpeg' (case-insensitive)
- *	extensions. Do not add Jpeg header detection here. it will break
- *	context based PackJPG processing. Jpeg files not having proper
+ *	extensions. Do not add Jpeg/PNM header detection here. it will break
+ *	context based PackJPG/PackPNM processing. Jpeg files not having proper
  *	extension must not be processed via PackJPG.
  */
 static int

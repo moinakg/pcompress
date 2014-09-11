@@ -146,6 +146,11 @@ PJPGHDRS = filters/packjpg/aricoder.h filters/packjpg/bitops.h filters/packjpg/d
 	filters/packjpg/packjpglib.h filters/packjpg/pjpgtbl.h
 PJPGOBJS = $(PJPGSRCS:.cpp=.o)
 
+PPNMSRCS = filters/packpnm/packpnm.cpp archive/ppnm_helper.cpp
+PPNMHDRS = filters/packjpg/aricoder.h filters/packjpg/bitops.h filters/packpnm/ppnmbitlen.h \
+	filters/packpnm/packpnmlib.h filters/packpnm/ppnmtbl.h
+PPNMOBJS = $(PPNMSRCS:.cpp=.o)
+
 DISPACKSRCS = filters/dispack/dis.cpp
 DISPACKHDRS = filters/dispack/dis.hpp filters/dispack/types.hpp
 DISPACKOBJS = $(DISPACKSRCS:.cpp=.o)
@@ -222,21 +227,22 @@ BASE_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_P
 	-I./crypto/keccak -I./filters/transpose -I./crypto/blake2 $(EXTRA_CPPFLAGS) \
 	-I./crypto/xsalsa20 -I./archive -pedantic -Wall -I./filters -fno-strict-aliasing \
 	-Wno-unused-but-set-variable -Wno-enum-compare \
-	@COMPAT_CPPFLAGS@ @XSALSA20_DEBUG@ @LIBARCHIVE_INC@ -I./filters/packjpg
+	@COMPAT_CPPFLAGS@ @XSALSA20_DEBUG@ -I@LIBARCHIVE_DIR@/libarchive -I./filters/packjpg \
+	-I./filters/packpnm
 COMMON_CPPFLAGS = $(BASE_CPPFLAGS) -std=gnu99
 COMMON_CPPFLAGS_cpp = $(BASE_CPPFLAGS)
 COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 RPATH=@RPATH@
 DTAGS=@DTAGS@
-LDLIBS = -ldl -L./buildtmp -Wl,$(RPATH)@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,$(RPATH)@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
-	-L./buildtmp -Wl,$(RPATH)@OPENSSL_LIBDIR@ -lcrypto @LRT@ -Wl,$(RPATH)@LIBARCHIVE_DIR@ -larchive $(EXTRA_LDFLAGS) \
+LDLIBS = -ldl -liconv -L./buildtmp -Wl,$(RPATH)@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,$(RPATH)@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
+	-L./buildtmp -Wl,$(RPATH)@OPENSSL_LIBDIR@ -lcrypto @LRT@ -L@LIBARCHIVE_DIR@/.libs -larchive $(EXTRA_LDFLAGS) \
 	-Wl,$(RPATH)/usr/lib$(DTAGS) -Wl,$(RPATH)/usr/lib64$(DTAGS)
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
 $(SKEIN_BLOCK_OBJ) @SHA2ASM_OBJS@ @SHA2_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
 $(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS) $(XXHASH_OBJS) $(BLAKE2_OBJS) \
-@CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS) $(ARCHIVEOBJS) $(PJPGOBJS) $(DISPACKOBJS)
+@CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS) $(ARCHIVEOBJS) $(PJPGOBJS) $(DISPACKOBJS) $(PPNMOBJS)
 
 DEBUG_LINK = $(GPP) -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
 DEBUG_COMPILE = $(GCC) -g -c @EXTRA_OPT_FLAGS@ -fPIC @USE_CLANG_AS@
@@ -314,6 +320,10 @@ $(PJPGOBJS): $(PJPGSRCS) $(PJPGHDRS)
 	$(COMPILE_cpp) $(COMMON_VEC_FLAGS) @SSE_OPT_FLAGS@ @USE_CLANG_AS@ -O2 -fsched-spec-load \
 	$(VEC_FLAGS) -DBUILD_LIB $(COMMON_CPPFLAGS_cpp) $(@:.o=.cpp) -o $@
 
+$(PPNMOBJS): $(PPNMSRCS) $(PPNMHDRS)
+	$(COMPILE_cpp) $(COMMON_VEC_FLAGS) @SSE_OPT_FLAGS@ @USE_CLANG_AS@ -O2 -fsched-spec-load \
+	$(VEC_FLAGS) -DBUILD_LIB $(COMMON_CPPFLAGS_cpp) $(@:.o=.cpp) -o $@
+
 $(DISPACKOBJS): $(DISPACKSRCS) $(DISPACKHDRS)
 	$(COMPILE_cpp) $(COMMON_VEC_FLAGS) @DEBUG_STATS_CPPFLAGS@ @SSE_OPT_FLAGS@ @USE_CLANG_AS@ -O2 -fsched-spec-load \
 	-Wno-variadic-macros $(VEC_FLAGS) $(COMMON_CPPFLAGS_cpp) $(@:.o=.cpp) -o $@
@@ -382,10 +392,13 @@ $(MAINOBJS): $(MAINSRCS) $(MAINHDRS)
 $(PROGOBJS): $(PROGSRCS) $(PROGHDRS)
 	$(COMPILE) $(GEN_OPT) $(LOOP_OPTFLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@
 
+Libarchive:
+	(cd @LIBARCHIVE_DIR@; make)
+
 $(LIBBSCLIB):
 	(cd $(LIBBSCDIR); make CC=$(GPP) OPTFLAGS="-O3 @SSE_OPT_FLAGS@ @USE_CLANG_AS@")
 
-$(LIB): $(OBJS)  $(LIBBSCLIB)
+$(LIB): Libarchive $(OBJS)  $(LIBBSCLIB)
 	$(LINK.LIB) -Wl,-soname$(LIB).$(LIBVER) -o $(LIB).$(LIBVER) $(OBJS) $(LDLIBS)
 	ln -sf $(LIB).$(LIBVER) $(LIB)
 
@@ -393,7 +406,7 @@ $(LIB): $(OBJS)  $(LIBBSCLIB)
 	mkdir -p buildtmp
 	$(LINK.PROG) -o $@ $(PROGOBJS) $(LDLIBS) -L. -l$(LINKLIB)
 
-$(PROG): $(LIB) $(PROGOBJS) ./buildtmp/$(PROG)
+$(PROG): $(LIB) $(PROGOBJS) ./buildtmp/$(PROG) 
 	cat utils/pcompress.sh | sed "s#<PC_PATH>#`pwd`#" > pcompress
 	chmod +x pcompress
 
@@ -404,11 +417,13 @@ clean:
 	$(RM) buildtmp/$(PROG) $(OBJS) $(PROGOBJS) $(BAKFILES) $(LIB) $(LIB).$(LIBVER)
 	$(RM) test.log
 	$(RM_RF) test/datafiles
+	(cd @LIBARCHIVE_DIR@; make clean)
 
 distclean: clean
 	$(RM) Makefile
 	(cd $(LIBBSCDIR); make clean)
 	$(RM_RF) buildtmp
+	(cd @LIBARCHIVE_DIR@; make distclean; rm -rf Makefile.orig tar test test_utils cpio libarchive/test)
 
 install: $(PROG)
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin

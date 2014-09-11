@@ -53,6 +53,7 @@ f=Makefile.in
 cp ${my_path}/lic_header.sh ${target_dir}/${f}
 cat ${f} | sed '
 s@\$(PJPGOBJS)@@
+s@\$(PPNMOBJS)@@
 s@\$(LZPOBJS)@@
 s@BASE_CPPFLAGS =@BASE_CPPFLAGS = -D_MPLV2_LICENSE_@
 s@\-I\./filters/packjpg@@

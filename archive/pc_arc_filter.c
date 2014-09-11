@@ -43,8 +43,8 @@
 #include "pc_archive.h"
 
 #ifndef _MPLV2_LICENSE_
-#	define	PACKJPG_DEF_BUFSIZ	(512 * 1024)
-#	define	JPG_SIZE_LIMIT		(8 * 1024 * 1024)
+#	define	HELPER_DEF_BUFSIZ	(512 * 1024)
+#	define	FILE_SIZE_LIMIT		(8 * 1024 * 1024)
 #	define	PJG_APPVERSION1		(25)
 #	define	PJG_APPVERSION2		(25)
 #endif
@@ -56,8 +56,10 @@ struct scratch_buffer {
 
 #ifndef _MPLV2_LICENSE_
 extern size_t packjpg_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf);
-
 ssize_t packjpg_filter(struct filter_info *fi, void *filter_private);
+
+extern size_t packpnm_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf);
+ssize_t packpnm_filter(struct filter_info *fi, void *filter_private);
 #endif
 
 void
@@ -76,6 +78,16 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 		typetab[slot].filter_private = sdat;
 		typetab[slot].filter_func = packjpg_filter;
 		typetab[slot].filter_name = "packJPG";
+
+		slot = TYPE_BMP >> 3;
+		typetab[slot].filter_private = sdat;
+		typetab[slot].filter_func = packpnm_filter;
+		typetab[slot].filter_name = "packPNM";
+
+		slot = TYPE_PNM >> 3;
+		typetab[slot].filter_private = sdat;
+		typetab[slot].filter_func = packpnm_filter;
+		typetab[slot].filter_name = "packPNM";
 	}
 #endif
 }
@@ -161,7 +173,7 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 
 	len = archive_entry_size(fi->entry);
 	len1 = len;
-	if (len > JPG_SIZE_LIMIT) // Bork on massive JPEGs
+	if (len > FILE_SIZE_LIMIT) // Bork on massive JPEGs
 		return (FILTER_RETURN_SKIP);
 
 	if (fi->compressing) {
@@ -246,6 +258,109 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 	 */
 	out = NULL;
 	if ((len = packjpg_filter_process(mapbuf, in_size, &out)) == 0) {
+		/*
+		 * If filter failed we write out the original data and indicate skip
+		 * to continue the archive extraction.
+		 */
+		free(out);
+		if (write_archive_data(fi->target_arc, mapbuf, len1, fi->block_size) < len1)
+			return (FILTER_RETURN_ERROR);
+		return (FILTER_RETURN_SKIP);
+	}
+	rv = write_archive_data(fi->target_arc, out, len, fi->block_size);
+	free(out);
+	return (rv);
+}
+
+ssize_t
+packpnm_filter(struct filter_info *fi, void *filter_private)
+{
+	struct scratch_buffer *sdat = (struct scratch_buffer *)filter_private;
+	uchar_t *mapbuf, *out;
+	uint64_t len, in_size = 0, len1;
+	ssize_t rv;
+
+	len = archive_entry_size(fi->entry);
+	len1 = len;
+	if (len > FILE_SIZE_LIMIT) // Bork on massive JPEGs
+		return (FILTER_RETURN_SKIP);
+
+	if (fi->compressing) {
+		mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fi->fd, 0);
+		if (mapbuf == NULL) {
+			log_msg(LOG_ERR, 1, "Mmap failed in packPNM filter.");
+			return (FILTER_RETURN_ERROR);
+		}
+
+		/*
+		 * We are trying to compress and this is not a proper PNM. Skip.
+		 */
+		if (identify_pnm_type(mapbuf, len) != 1) {
+			munmap(mapbuf, len);
+			return (FILTER_RETURN_SKIP);
+		}
+	} else {
+		/*
+		 * Allocate input buffer and read archive data stream for the entry
+		 * into this buffer.
+		 */
+		ensure_buffer(sdat, len);
+		if (sdat->in_buff == NULL) {
+			log_msg(LOG_ERR, 1, "Out of memory.");
+			return (FILTER_RETURN_ERROR);
+		}
+
+		in_size = copy_archive_data(fi->source_arc, sdat->in_buff);
+		if (in_size != len) {
+			log_msg(LOG_ERR, 0, "Failed to read archive data.");
+			return (FILTER_RETURN_ERROR);
+		}
+
+		/*
+		 * First 8 bytes in the data is the compressed size of the entry.
+		 * LibArchive always zero-pads entries to their original size so
+		 * we need to separately store the compressed size.
+		 */
+		in_size = LE64(U64_P(sdat->in_buff));
+		mapbuf = sdat->in_buff + 8;
+
+		/*
+		 * We are trying to decompress and this is not a packPNM file.
+		 * Write the raw data and skip.
+		 */
+		if (identify_pnm_type(mapbuf, len - 8) != 2) {
+			return (write_archive_data(fi->target_arc, sdat->in_buff,
+			    len, fi->block_size));
+		}
+	}
+
+	/*
+	 * Compression case.
+	 */
+	if (fi->compressing) {
+		out = NULL;
+		len = packpnm_filter_process(mapbuf, len, &out);
+		if (len == 0 || len >= (len1 - 8)) {
+			munmap(mapbuf, len1);
+			free(out);
+			return (FILTER_RETURN_SKIP);
+		}
+		munmap(mapbuf, len1);
+
+		in_size = LE64(len);
+		rv = archive_write_data(fi->target_arc, &in_size, 8);
+		if (rv != 8)
+			return (rv);
+		rv = archive_write_data(fi->target_arc, out, len);
+		free(out);
+		return (rv);
+	}
+
+	/*
+	 * Decompression case.
+	 */
+	out = NULL;
+	if ((len = packpnm_filter_process(mapbuf, in_size, &out)) == 0) {
 		/*
 		 * If filter failed we write out the original data and indicate skip
 		 * to continue the archive extraction.

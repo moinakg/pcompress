@@ -40,8 +40,6 @@ ${prog} [<options>]
 			Enable building against an alternate Zlib installation.
 --with-bzlib=<path to Bzip2 library installation tree> (Default: System)
 			Enable building against an alternate Bzip2 and library installation.
---with-libarchive=<path to libarchive installation tree> (Default: System)
-			Enable building against an alternate libarchive installation.
 --with-external-libbsc=<path to libbsc source tree>
 			Enable building with exernal libbsc sources. Can be used to link with
 			ASLv2 libbsc when using MPLv2 licensed sources.
@@ -80,7 +78,6 @@ openssl_libdir=
 openssl_incdir=
 libbz2_libdir=
 libz_libdir=
-libarchive_libdir=
 sha256asmobjs=
 sha256objs=
 keylen=
@@ -95,7 +92,6 @@ keccak_srcs_asm=
 extra_opt_flags=
 zlib_prefix=
 bzlib_prefix=
-libarchive_prefix=
 sse_detect=1
 avx_detect=1
 sse_opt_flags="-msse2"
@@ -113,6 +109,7 @@ dtag_val=',--enable-new-dtags'
 lrt="-lrt"
 default_opt="O3"
 max_opt="O3"
+libarchive_dir="archive/libarchive-3.1.2"
 
 if [ -x /bin/echo ]
 then
@@ -200,9 +197,6 @@ do
 	;;
 	--with-bzlib=*)
 		bzlib_prefix=`echo ${arg1} | cut -f2 -d"="`
-	;;
-	--with-libarchive=*)
-		libarchive_prefix=`echo ${arg1} | cut -f2 -d"="`
 	;;
 	--with-external-libbsc)
 		libbsc_dir=`echo ${arg1} | cut -f2 -d"="`
@@ -533,7 +527,7 @@ rm -rf tst*
 openssl_libdir="${openssl_libdir}${dtag_val}"
 
 # Detect other library packages
-for libspec in "libbz2:${bzlib_prefix}" "libz:${zlib_prefix}" "libarchive:${libarchive_prefix}"
+for libspec in "libbz2:${bzlib_prefix}" "libz:${zlib_prefix}"
 do
 	_OIFS="$IFS"
 	IFS=":"
@@ -598,24 +592,10 @@ then
 	exit 1
 fi
 
-if [ "x${libarchive_libdir}" = "x" ]
-then
-	if [ "x$libarchive_prefix" = "x" ]
-	then
-		echo "ERROR: Libarchive not detected."
-		echo "       You may have to install libarchive-devel or libarchive-dev"
-	else
-		echo "ERROR: Libarchive not detected in given prefix."
-	fi
-	exit 1
-fi
-
 libbz2_inc=
 libz_inc=
-libarchive_inc=
 # Detect other library headers
-for hdr in "libbz2_inc:bzlib.h:${bzlib_prefix}" "libz_inc:zlib.h:${zlib_prefix}" \
-	"libarchive_inc:archive.h:${libarchive_prefix}"
+for hdr in "libbz2_inc:bzlib.h:${bzlib_prefix}" "libz_inc:zlib.h:${zlib_prefix}"
 do
 	_OIFS="$IFS"
 	IFS=":"
@@ -635,7 +615,7 @@ do
 	for inc in "${pref}/include" "${pref}/usr/include" \
 		"${pref}/local/include" "${pref}/usr/local/include" \
 		"${use_prefix}/include" "${use_prefix}/usr/include" \
-		"${use_prefix}/libarchive" "${use_prefix}"
+		"${use_prefix}"
 	do
 		if [ -d ${inc} ]
 		then
@@ -653,28 +633,6 @@ do
 		exit 1
 	fi
 done
-
-echo "Checking for Libarchive version ..."
-cat << _EOF > tst.c
-#include <stdlib.h>
-#include <archive.h>
-
-int
-main(void)
-{
-	int flags = ARCHIVE_READDISK_NO_TRAVERSE_MOUNTS;
-
-        return (0);
-}
-_EOF
-
-${GCC} ${extra_opt_flags} ${libarchive_inc} -L${libarchive_libdir} -O0 -g tst.c -o tst -larchive >/dev/null 2>&1
-if [ $? -ne 0 ]
-then
-        echo "Libarchive version 3.0 or newer is required."
-	exit 1
-fi
-rm -rf tst* tst.c
 
 echo "Generating Makefile ..."
 linkvar="LINK"
@@ -709,8 +667,6 @@ libbz2libdirvar="LIBBZ2_DIR"
 libzlibdirvar="LIBZ_DIR"
 libbz2incvar="LIBBZ2_INC"
 libzincvar="LIBZ_INC"
-libarchivedirvar="LIBARCHIVE_DIR"
-libarchiveincvar="LIBARCHIVE_INC"
 
 keccak_srcs_var="KECCAK_SRCS"
 keccak_hdrs_var="KECCAK_HDRS"
@@ -728,6 +684,24 @@ debugstatscppflagsval=
 [ $allocator -eq 0 ] && noslabcppflagsval='\$\(NO_SLAB_CPPFLAGS\)'
 [ $debug_stats -eq 1 ] && debugstatscppflagsval='\$\(DEBUG_STATS_CPPFLAGS\)'
 
+echo "*************** Running configure in libarchive ****************"
+(cd $libarchive_dir
+ CC=${GCC} ./configure --disable-bsdtar --disable-bsdcpio --without-zlib --without-bz2lib --without-lzmadec --without-lzma  --without-lzo2  --without-nettle --without-openssl --without-xml2 --without-expat --disable-silent-rules --enable-shared=no --enable-static=yes --enable-xattr
+ [ $? -ne 0 ] && exit $?
+ cp Makefile Makefile.orig
+ cat Makefile | sed '
+s@$(BUILT_SOURCES)@@
+s@$(libarchive_test_SOURCES)@@
+' > Makefile.new
+ mv Makefile.new Makefile
+)
+if [ $? -ne 0 ]
+then
+	echo "********* Configure in internal libarchive failed!"
+	exit 1
+fi
+echo "*************** Finished configure in libarchive ****************"
+
 cat Makefile.in | sed "
 s#@GCC@#${GCC}#g
 s#@GPP@#${GPP}#g
@@ -737,6 +711,7 @@ s#@SO_SUFFIX@#${so_suffix}#g
 s#@YASM_GAS@#${yasm_params_gas}#g
 s#@RPATH@#${rpath}#g
 s#@LRT@#${lrt}#g
+s#@LIBARCHIVE_DIR@#${libarchive_dir}#g
 s#soname#${soname_opt}#g
 s#${default_opt}#${max_opt}#g
 s#@DTAGS@#${dtag_val}#g
@@ -779,7 +754,5 @@ s#@${crypto_compat_flags_var}@#${crypto_compat_flags}#g
 s#@${salsa20_stream_c_var}@#${salsa20_stream_c}#g
 s#@${salsa20_stream_asm_var}@#${salsa20_stream_asm}#g
 s#@${salsa20_debug_var}@#${salsa20_debug}#g
-s#@${libarchivedirvar}@#${libarchive_libdir}#g
-s#@${libarchiveincvar}@#${libarchive_inc}#g
 " > Makefile
 
