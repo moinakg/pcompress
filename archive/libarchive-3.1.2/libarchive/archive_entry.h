@@ -499,6 +499,15 @@ __LA_DECL void	 archive_entry_xattr_add_entry(struct archive_entry *,
 	    size_t /* size */);
 
 /*
+ * Interfaces to support tagging archive entries with caller-defined xattrs.
+ */
+__LA_DECL void   archive_entry_xattr_delete_entry(struct archive_entry *,
+            const char * /* name */);
+__LA_DECL  int   archive_entry_has_xattr(struct archive_entry *entry,
+            const char * /* name */, const void ** /* value */,
+	    size_t * /* size */)
+
+/*
  * To retrieve the xattr list, first "reset", then repeatedly ask for the
  * "next" entry.
  */

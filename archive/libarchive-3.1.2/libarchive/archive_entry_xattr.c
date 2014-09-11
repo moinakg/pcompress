@@ -109,6 +109,58 @@ archive_entry_xattr_add_entry(struct archive_entry *entry,
 	entry->xattr_head = xp;
 }
 
+/*
+ * Delete the named extended attribute, if present.
+ */
+void
+archive_entry_xattr_delete_entry(struct archive_entry *entry,
+	const char *name)
+{
+	struct ae_xattr *xp, *pxp;
+
+	pxp = NULL;
+	for (xp = entry->xattr_head; xp != NULL; xp = xp->next)
+	{
+		if (strcmp(name, xp->name) == 0) {
+			free(xp->name);
+			if (xp->size > 0)
+				free(xp->value);
+			if (pxp == NULL) {
+				/*
+				 * Free at head.
+				 */
+				entry->xattr_head = xp->next;
+				free(xp);
+			} else {
+				pxp->next = xp->next;
+				free(xp);
+			}
+			break;
+		}
+		pxp = xp;
+	}
+}
+
+/*
+ * Search for the named extended attribute. Return it's value and size
+ * if present.
+ */
+int
+archive_entry_has_xattr(struct archive_entry *entry,
+	const char *name, const void **value, size_t *size)
+{
+	struct ae_xattr *xp;
+
+	for (xp = entry->xattr_head; xp != NULL; xp = xp->next)
+	{
+		if (strcmp(name, xp->name) == 0) {
+			*value = xp->value;
+			*size = xp->size;
+			return (1);
+		}
+	}
+	return (0);
+}
 
 /*
  * returns number of the extended attribute entries
