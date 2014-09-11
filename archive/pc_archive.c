@@ -887,6 +887,25 @@ process_by_filter(int fd, int *typ, struct archive *target_arc,
 	return (wrtn);
 }
 
+static int
+write_header(struct archive *arc, struct archive_entry *entry)
+{
+	int rv;
+
+	rv = archive_write_header(arc, entry);
+	if (rv != ARCHIVE_OK) {
+		if (rv == ARCHIVE_FATAL || rv == ARCHIVE_FAILED) {
+			log_msg(LOG_ERR, 0, "%s: %s",
+			    archive_entry_sourcepath(entry), archive_error_string(arc));
+			return (-1);
+		} else {
+			log_msg(LOG_WARN, 0, "%s: %s",
+			    archive_entry_sourcepath(entry), archive_error_string(arc));
+		}
+	}
+	return (0);
+}
+
 /*
  * Routines to archive members and write the file data to the callback. Portions of
  * the following code is adapted from some of the Libarchive bsdtar code.
@@ -914,7 +933,14 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 	if (typ != TYPE_UNKNOWN) {
 		if (typetab[(typ >> 3)].filter_func != NULL) {
 			int64_t rv;
+			char *fname = typetab[(typ >> 3)].filter_name;
 
+			archive_entry_xattr_add_entry(entry, FILTER_XATTR_ENTRY,
+			    fname, strlen(fname));
+			if (write_header(arc, entry) == -1) {
+				close(fd);
+				return (-1);
+			}
 			pctx->ctype = typ;
 			rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry, 1); 
 			if (rv == FILTER_RETURN_ERROR) {
@@ -923,6 +949,11 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 			} else if (rv != FILTER_RETURN_SKIP) {
 				close(fd);
 				return (ARCHIVE_OK);
+			}
+		} else {
+			if (write_header(arc, entry) == -1) {
+				close(fd);
+				return (-1);
 			}
 		}
 	}
@@ -958,9 +989,17 @@ do_map:
 			if (typ != TYPE_UNKNOWN) {
 				if (typetab[(typ >> 3)].filter_func != NULL) {
 					int64_t rv;
-					munmap(mapbuf, len);
+					char *fname = typetab[(typ >> 3)].filter_name;
 
-					rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry, 1); 
+					archive_entry_xattr_add_entry(entry, FILTER_XATTR_ENTRY,
+					    fname, strlen(fname));
+					if (write_header(arc, entry) == -1) {
+						close(fd);
+						return (-1);
+					}
+
+					munmap(mapbuf, len);
+					rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry, 1);
 					if (rv == FILTER_RETURN_ERROR) {
 						return (-1);
 					} else if (rv == FILTER_RETURN_SKIP) {
@@ -971,6 +1010,11 @@ do_map:
 					} else {
 						return (ARCHIVE_OK);
 					}
+				}
+			} else {
+				if (write_header(arc, entry) == -1) {
+					close(fd);
+					return (-1);
 				}
 			}
 		}
@@ -998,22 +1042,15 @@ do_map:
 static int
 write_entry(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry, int typ)
 {
-	int rv;
-
-	rv = archive_write_header(arc, entry);
-	if (rv != ARCHIVE_OK) {
-		if (rv == ARCHIVE_FATAL || rv == ARCHIVE_FAILED) {
-			log_msg(LOG_ERR, 0, "%s: %s",
-			    archive_entry_sourcepath(entry), archive_error_string(arc));
-			return (-1);
-		} else {
-			log_msg(LOG_WARN, 0, "%s: %s",
-			    archive_entry_sourcepath(entry), archive_error_string(arc));
-		}
-	}
-
+	/*
+	 * If entry has data we postpone writing the header till we have
+	 * determined whether the entry type has an associated filter.
+	 */
 	if (archive_entry_size(entry) > 0) {
 		return (copy_file_data(pctx, arc, entry, typ));
+	} else {
+		if (write_header(arc, entry) == -1)
+			return (-1);
 	}
 
 	return (0);
@@ -1213,7 +1250,19 @@ archive_extract_entry(struct archive *a, struct archive_entry *entry,
     struct archive *ad, int typ)
 {
 	int r, r2;
+	char *filter_name;
+	size_t name_size;
 
+	/*
+	 * If the entry is tagged with our custom xattr we get the filter which
+	 * processed it and set the proper type tag.
+	 */
+	if (archive_entry_has_xattr(entry, FILTER_XATTR_ENTRY,
+	    (const void **)&filter_name, &name_size))
+	{
+		typ = type_tag_from_filter_name(typetab, filter_name, name_size);
+		archive_entry_xattr_delete_entry(entry, FILTER_XATTR_ENTRY);
+	}
 	r = archive_write_header(ad, entry);
 	if (r < ARCHIVE_WARN)
 		r = ARCHIVE_WARN;
@@ -1545,10 +1594,6 @@ out:
 
 /*
  * Detect a few file types from looking at magic signatures.
- * NOTE: Jpeg files must be detected via '.jpg' or '.jpeg' (case-insensitive)
- *	extensions. Do not add Jpeg/PNM header detection here. it will break
- *	context based PackJPG/PackPNM processing. Jpeg files not having proper
- *	extension must not be processed via PackJPG.
  */
 static int
 detect_type_by_data(uchar_t *buf, size_t len)
@@ -1575,6 +1620,14 @@ detect_type_by_data(uchar_t *buf, size_t len)
 			if (buf[i] == 'I')
 				if (memcmp(&buf[i], "ISO_IR ", 7) == 0)
 					return (TYPE_BINARY|TYPE_DICOM);
+		}
+	}
+
+	// Jpegs
+	if (len > 9 && buf[0] == 0xFF && buf[1] == 0xD8) {
+		if (strncmp((char *)&buf[6], "Exif", 4) == 0 ||
+		    strncmp((char *)&buf[6], "JFIF", 4) == 0) {
+			return (TYPE_BINARY|TYPE_JPEG);
 		}
 	}
 
@@ -1634,7 +1687,12 @@ detect_type_by_data(uchar_t *buf, size_t len)
 	if (U32_P(buf) == WVPK || U32_P(buf) == TTA1)
 		return (TYPE_BINARY|TYPE_COMPRESSED|TYPE_AUDIO_COMPRESSED);
 
-	// MSDOS COM types, two byte and one byte magic numbers are checked 
+	// PNM files
+	if (identify_pnm_type(buf, len)) {
+		return (TYPE_TEXT|TYPE_PNM);
+	}
+
+	// MSDOS COM types, two byte and one byte magic numbers are checked
         // after all other multi-byte magic number checks.
 	if (buf[0] == 0xe9 || buf[0] == 0xeb) {
 		if (LE16(U16_P(buf + 0x1fe)) == 0xaa55)

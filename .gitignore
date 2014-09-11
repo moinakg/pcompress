@@ -13,3 +13,14 @@ core.*
 *.kate-swp
 bsc/bsc
 *.a
+*.lo
+config.h
+config.log
+config.status
+*.la
+libtool
+.deps
+.dirstamp
+stamp-h1
+.libs
+buildtmp

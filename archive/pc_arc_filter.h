@@ -39,6 +39,7 @@ extern "C" {
 
 #define	FILTER_RETURN_SKIP	(1)
 #define	FILTER_RETURN_ERROR	(-1)
+#define FILTER_XATTR_ENTRY  "_._pc_filter_xattr"
 
 struct filter_info {
 	struct archive *source_arc;
@@ -62,6 +63,8 @@ struct type_data {
 };
 
 void add_filters_by_type(struct type_data *typetab, struct filter_flags *ff);
+int  type_tag_from_filter_name(struct type_data *typetab, const char *fname,
+    size_t len);
 
 #ifdef	__cplusplus
 }

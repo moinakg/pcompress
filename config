@@ -692,6 +692,7 @@ echo "*************** Running configure in libarchive ****************"
  cat Makefile | sed '
 s@$(BUILT_SOURCES)@@
 s@$(libarchive_test_SOURCES)@@
+s@$(libarchive_man_MANS)@@
 ' > Makefile.new
  mv Makefile.new Makefile
 )

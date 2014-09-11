@@ -92,6 +92,21 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 #endif
 }
 
+int
+type_tag_from_filter_name(struct type_data *typetab, const char *fname, size_t len)
+{
+    size_t i;
+
+    for (i = 0; i < NUM_SUB_TYPES; i++)
+    {
+        if (typetab[i].filter_name &&
+            strncmp(fname, typetab[i].filter_name, len) == 0)
+        {
+            return (i << 3);
+        }
+    }
+    return (TYPE_UNKNOWN);
+}
 static void
 ensure_buffer(struct scratch_buffer *sdat, uint64_t len)
 {
