@@ -1689,7 +1689,7 @@ detect_type_by_data(uchar_t *buf, size_t len)
 
 	// PNM files
 	if (identify_pnm_type(buf, len)) {
-		return (TYPE_TEXT|TYPE_PNM);
+		return (TYPE_BINARY|TYPE_PNM);
 	}
 
 	// MSDOS COM types, two byte and one byte magic numbers are checked
