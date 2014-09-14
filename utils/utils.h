@@ -277,7 +277,7 @@ typedef enum {
 	/*
 	 * Sub-types.
 	 */
-#define	NUM_SUB_TYPES	31
+#define	NUM_SUB_TYPES	32
 	TYPE_EXE32 = 8,
 	TYPE_JPEG = 16,
 	TYPE_MARKUP = 24,
@@ -308,7 +308,8 @@ typedef enum {
 	TYPE_ARCHIVE_TAR = 224,
 	TYPE_DICOM = 232,
 	TYPE_PNM = 240,
-	TYPE_PACKPNM = 248
+	TYPE_PACKPNM = 248,
+	TYPE_WAV = 256
 } data_type_t;
 
 /*
@@ -355,6 +356,7 @@ extern int file_exists(char *path);
 #ifndef _MPLV2_LICENSE_
 int identify_pnm_type(uchar_t *buf, size_t len);
 #endif
+int identify_wav_type(uchar_t *buf, size_t len);
 
 /* Pointer type for compress and decompress functions. */
 typedef int (*compress_func_ptr)(void *src, uint64_t srclen, void *dst,

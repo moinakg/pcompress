@@ -1601,6 +1601,10 @@ detect_type_by_data(uchar_t *buf, size_t len)
 	// At least a few bytes.
 	if (len < 512) return (TYPE_UNKNOWN);
 
+	// WAV files.
+	if (identify_wav_type(buf, len))
+		return (TYPE_BINARY|TYPE_WAV);
+
 	if (memcmp(buf, "!<arch>\n", 8) == 0)
 		return (TYPE_BINARY|TYPE_ARCHIVE_AR);
 	if (memcmp(&buf[257], "ustar\0", 6) == 0 || memcmp(&buf[257], "ustar\040\040\0", 8) == 0)

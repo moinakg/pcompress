@@ -44,7 +44,7 @@
 
 #ifndef _MPLV2_LICENSE_
 #	define	HELPER_DEF_BUFSIZ	(512 * 1024)
-#	define	FILE_SIZE_LIMIT		(8 * 1024 * 1024)
+#	define	FILE_SIZE_LIMIT		(32 * 1024 * 1024)
 #	define	PJG_APPVERSION1		(25)
 #	define	PJG_APPVERSION2		(25)
 #endif
@@ -60,6 +60,11 @@ ssize_t packjpg_filter(struct filter_info *fi, void *filter_private);
 
 extern size_t packpnm_filter_process(uchar_t *in_buf, size_t len, uchar_t **out_buf);
 ssize_t packpnm_filter(struct filter_info *fi, void *filter_private);
+#endif
+
+#ifdef _ENABLE_WAVPACK_
+extern size_t wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf);
+ssize_t wavpack_filter(struct filter_info *fi, void *filter_private);
 #endif
 
 void
@@ -389,5 +394,113 @@ packpnm_filter(struct filter_info *fi, void *filter_private)
 	free(out);
 	return (rv);
 }
-#endif
+#endif /* _MPLV2_LICENSE_ */
+
+#ifdef _ENABLE_WAVPACK_
+ssize_t
+wavpack_filter(struct filter_info *fi, void *filter_private)
+{
+	struct scratch_buffer *sdat = (struct scratch_buffer *)filter_private;
+	uchar_t *mapbuf, *out;
+	uint64_t len, in_size = 0, len1;
+	ssize_t rv;
+
+	len = archive_entry_size(fi->entry);
+	len1 = len;
+	if (len > FILE_SIZE_LIMIT) // Bork on massive JPEGs
+		return (FILTER_RETURN_SKIP);
+
+	if (fi->compressing) {
+		mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fi->fd, 0);
+		if (mapbuf == NULL) {
+			log_msg(LOG_ERR, 1, "Mmap failed in packPNM filter.");
+			return (FILTER_RETURN_ERROR);
+		}
+
+		/*
+		 * We are trying to compress and this is not a proper WAV. Skip.
+		 */
+		if (identify_wav_type(mapbuf, len) != 1) {
+			munmap(mapbuf, len);
+			return (FILTER_RETURN_SKIP);
+		}
+	} else {
+		char *wpkstr;
+
+		/*
+		 * Allocate input buffer and read archive data stream for the entry
+		 * into this buffer.
+		 */
+		ensure_buffer(sdat, len);
+		if (sdat->in_buff == NULL) {
+			log_msg(LOG_ERR, 1, "Out of memory.");
+			return (FILTER_RETURN_ERROR);
+		}
+
+		in_size = copy_archive_data(fi->source_arc, sdat->in_buff);
+		if (in_size != len) {
+			log_msg(LOG_ERR, 0, "Failed to read archive data.");
+			return (FILTER_RETURN_ERROR);
+		}
+
+		/*
+		 * First 8 bytes in the data is the compressed size of the entry.
+		 * LibArchive always zero-pads entries to their original size so
+		 * we need to separately store the compressed size.
+		 */
+		in_size = LE64(U64_P(sdat->in_buff));
+		mapbuf = sdat->in_buff + 8;
+
+		/*
+		 * We are trying to decompress and this is not a Wavpack file.
+		 * Write the raw data and skip.
+		 */
+		wpkstr = (char *)mapbuf;
+		if (strncmp(wpkstr, "wvpk", 4) == 0) {
+			return (write_archive_data(fi->target_arc, sdat->in_buff,
+			    len, fi->block_size));
+		}
+	}
+
+	/*
+	 * Compression case.
+	 */
+	if (fi->compressing) {
+		out = NULL;
+		len = wavpack_filter_encode(mapbuf, len, &out);
+		if (len == 0 || len >= (len1 - 8)) {
+			munmap(mapbuf, len1);
+			free(out);
+			return (FILTER_RETURN_SKIP);
+		}
+		munmap(mapbuf, len1);
+
+		in_size = LE64(len);
+		rv = archive_write_data(fi->target_arc, &in_size, 8);
+		if (rv != 8)
+			return (rv);
+		rv = archive_write_data(fi->target_arc, out, len);
+		free(out);
+		return (rv);
+	}
+
+	/*
+	 * Decompression case.
+	 */
+	out = NULL;
+	if ((len = wavpack_filter_encode(mapbuf, in_size, &out)) == 0) {
+		/*
+		 * If filter failed we write out the original data and indicate skip
+		 * to continue the archive extraction.
+		 */
+		free(out);
+		if (write_archive_data(fi->target_arc, mapbuf, len1, fi->block_size) < len1)
+			return (FILTER_RETURN_ERROR);
+		return (FILTER_RETURN_SKIP);
+	}
+	rv = write_archive_data(fi->target_arc, out, len, fi->block_size);
+	free(out);
+	return (rv);
+}
+#endif /* _ENABLE_WAVPACK_ */
 

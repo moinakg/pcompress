@@ -43,7 +43,11 @@ ${prog} [<options>]
 --with-external-libbsc=<path to libbsc source tree>
 			Enable building with exernal libbsc sources. Can be used to link with
 			ASLv2 libbsc when using MPLv2 licensed sources.
---no-sse-detect		Do NOT attempt to probe the system's SSE capability for build flags. 
+--wavpack-dir=<path to WavPack source tree>
+			Points to the directory containing the WavPack sources. This option
+			must be specified if --disable-wavpack is not provided.
+--disable-wavpack	Disables the WavPack filter.
+--no-sse-detect		Do NOT attempt to probe the system's SSE capability for build flags.
 			Implies '--no-avx-detect' below.
 --no-avx-detect		Do NOT attempt to probe the system's AVX capability for build flags.
 --no-1.3-archive-compat Disable compatibility with compressed archives created with Pcompress
@@ -109,7 +113,9 @@ dtag_val=',--enable-new-dtags'
 lrt="-lrt"
 default_opt="O3"
 max_opt="O3"
-libarchive_dir="archive/libarchive-3.1.2"
+libarchive_dir="archive/libarchive"
+enable_wavpack="-D_ENABLE_WAVPACK_"
+wavpack_libspec=""
 
 if [ -x /bin/echo ]
 then
@@ -127,6 +133,11 @@ fi
 if [ "x$GPP" = "x" ]
 then
 	GPP=g++
+fi
+
+if [ "x$GXX" != "x" ]
+then
+	GPP="${GXX}"
 fi
 
 rm -rf ./buildtmp
@@ -198,13 +209,21 @@ do
 	--with-bzlib=*)
 		bzlib_prefix=`echo ${arg1} | cut -f2 -d"="`
 	;;
-	--with-external-libbsc)
+	--with-external-libbsc=*)
 		libbsc_dir=`echo ${arg1} | cut -f2 -d"="`
 		libbsc_lib=${libbsc_dir}/libbsc.a
 		libbsclflags='\$\(LIBBSCLFLAGS\)'
 		libbscwrapobj='\$\(LIBBSCWRAPOBJ\)'
 		libbscgenopt='\$\(LIBBSCGEN_OPT\)'
 		libbsccppflags='\$\(LIBBSCCPPFLAGS\)'
+	;;
+	--wavpack-dir=*)
+		wavpack_dir=`echo ${arg1} | cut -f2 -d"="`
+		wavpack_libspec="-L${wavpack_dir}/src/.libs -lwavpack"
+	;;
+	--disable-wavpack)
+		enable_wavpack=""
+		wavpack_libspec=""
 	;;
 	--use-key256)
 		keylen='-DDEFAULT_KEYLEN=16'
@@ -229,6 +248,13 @@ do
 	shift
 	arg1=$1
 done
+
+if [ "x${enable_wavpack}" != "x" -a "x${wavpack_dir}" = "x" ]
+then
+	echo "--wavpack-dir not specified. Please specify path of wavpack source tree,"
+	echo "or use --disable-wavpack to disable the wavpack filter."
+	exit 1
+fi
 
 if [ $debug -eq 1 ]
 then
@@ -703,6 +729,24 @@ then
 fi
 echo "*************** Finished configure in libarchive ****************"
 
+if [ "x${wavpack_dir}" != "x" ]
+then
+	echo "*************** Running configure in WavPack ****************"
+	(cd $wavpack_dir
+	 CC=${GCC} ./configure --enable-static=yes --enable-shared=no
+	 if [ $? -ne 0 ]
+	 then
+		exit 1
+	 fi
+	)
+	if [ $? -ne 0 ]
+	then
+		echo "********* Configure in WavPack dir failed!"
+		exit 1
+	fi
+	echo "*************** Finished configure in WacPack ****************"
+fi
+
 cat Makefile.in | sed "
 s#@GCC@#${GCC}#g
 s#@GPP@#${GPP}#g
@@ -755,5 +799,8 @@ s#@${crypto_compat_flags_var}@#${crypto_compat_flags}#g
 s#@${salsa20_stream_c_var}@#${salsa20_stream_c}#g
 s#@${salsa20_stream_asm_var}@#${salsa20_stream_asm}#g
 s#@${salsa20_debug_var}@#${salsa20_debug}#g
+s#@ENABLE_WAVPACK@#${enable_wavpack}#g
+s#@WAVPACK_LIBSPEC@#${wavpack_libspec}#g
+s#@WAVPACK_DIR@#${wavpack_dir}#g
 " > Makefile
 

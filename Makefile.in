@@ -151,6 +151,9 @@ PPNMHDRS = filters/packjpg/aricoder.h filters/packjpg/bitops.h filters/packpnm/p
 	filters/packpnm/packpnmlib.h filters/packpnm/ppnmtbl.h
 PPNMOBJS = $(PPNMSRCS:.cpp=.o)
 
+WAVPKSRCS = archive/wavpack_helper.c
+WAVPKOBJS = $(WAVPKSRCS:.c=.o)
+
 DISPACKSRCS = filters/dispack/dis.cpp
 DISPACKHDRS = filters/dispack/dis.hpp filters/dispack/types.hpp
 DISPACKOBJS = $(DISPACKSRCS:.cpp=.o)
@@ -228,7 +231,7 @@ BASE_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_P
 	-I./crypto/xsalsa20 -I./archive -pedantic -Wall -I./filters -fno-strict-aliasing \
 	-Wno-unused-but-set-variable -Wno-enum-compare \
 	@COMPAT_CPPFLAGS@ @XSALSA20_DEBUG@ -I@LIBARCHIVE_DIR@/libarchive -I./filters/packjpg \
-	-I./filters/packpnm
+	-I./filters/packpnm @ENABLE_WAVPACK@
 COMMON_CPPFLAGS = $(BASE_CPPFLAGS) -std=gnu99
 COMMON_CPPFLAGS_cpp = $(BASE_CPPFLAGS)
 COMMON_VEC_FLAGS = -ftree-vectorize
@@ -237,21 +240,22 @@ RPATH=@RPATH@
 DTAGS=@DTAGS@
 LDLIBS = -ldl -liconv -L./buildtmp -Wl,$(RPATH)@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,$(RPATH)@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
 	-L./buildtmp -Wl,$(RPATH)@OPENSSL_LIBDIR@ -lcrypto @LRT@ -L@LIBARCHIVE_DIR@/.libs -larchive $(EXTRA_LDFLAGS) \
-	-Wl,$(RPATH)/usr/lib$(DTAGS) -Wl,$(RPATH)/usr/lib64$(DTAGS)
+	-Wl,$(RPATH)/usr/lib$(DTAGS) -Wl,$(RPATH)/usr/lib64$(DTAGS) @WAVPACK_LIBSPEC@
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
 $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS) \
 $(SKEIN_BLOCK_OBJ) @SHA2ASM_OBJS@ @SHA2_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
 $(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS) $(XXHASH_OBJS) $(BLAKE2_OBJS) \
-@CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS) $(ARCHIVEOBJS) $(PJPGOBJS) $(DISPACKOBJS) $(PPNMOBJS)
+@CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS) $(ARCHIVEOBJS) $(PJPGOBJS) $(DISPACKOBJS) $(PPNMOBJS) \
+$(WAVPKOBJS)
 
 DEBUG_LINK = $(GPP) -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
 DEBUG_COMPILE = $(GCC) -g -c @EXTRA_OPT_FLAGS@ -fPIC @USE_CLANG_AS@
 DEBUG_COMPILE_cpp = $(GPP) -g -c @EXTRA_OPT_FLAGS@ -fPIC @USE_CLANG_AS@
-DEBUG_VEC_FLAGS = 
-DEBUG_LOOP_OPTFLAGS = 
+DEBUG_VEC_FLAGS =
+DEBUG_LOOP_OPTFLAGS =
 DEBUG_GEN_OPT = -O -fno-omit-frame-pointer @LIBBSCGEN_OPT@ -fopenmp
 DEBUG_CPPFLAGS = $(COMMON_CPPFLAGS)
-DEBUG_FPTR_FLAG = 
+DEBUG_FPTR_FLAG =
 
 RELEASE_LINK = $(GPP) -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
 RELEASE_COMPILE = $(GCC) -c @EXTRA_OPT_FLAGS@ -fPIC -fvisibility=hidden @USE_CLANG_AS@
@@ -323,6 +327,14 @@ $(PJPGOBJS): $(PJPGSRCS) $(PJPGHDRS)
 $(PPNMOBJS): $(PPNMSRCS) $(PPNMHDRS)
 	$(COMPILE_cpp) $(COMMON_VEC_FLAGS) @SSE_OPT_FLAGS@ @USE_CLANG_AS@ -O2 -fsched-spec-load \
 	$(VEC_FLAGS) -DBUILD_LIB $(COMMON_CPPFLAGS_cpp) $(@:.o=.cpp) -o $@
+
+$(WAVPKOBJS): $(WAVPKSRCS)
+	[ "x@ENABLE_WAVPACK@" != "x" ] && (cd @WAVPACK_DIR@; make)
+	if [ "x@ENABLE_WAVPACK@" != "x" ]; then \
+	    $(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) -I@WAVPACK_DIR@/include $(@:.o=.c) -o $@; \
+	else \
+	    $(COMPILE) $(GEN_OPT) $(VEC_FLAGS) $(CPPFLAGS) $(@:.o=.c) -o $@; \
+	fi
 
 $(DISPACKOBJS): $(DISPACKSRCS) $(DISPACKHDRS)
 	$(COMPILE_cpp) $(COMMON_VEC_FLAGS) @DEBUG_STATS_CPPFLAGS@ @SSE_OPT_FLAGS@ @USE_CLANG_AS@ -O2 -fsched-spec-load \
@@ -418,12 +430,16 @@ clean:
 	$(RM) test.log
 	$(RM_RF) test/datafiles
 	(cd @LIBARCHIVE_DIR@; make clean)
+	[ "x@ENABLE_WAVPACK@" != "x" ] && (cd @WAVPACK_DIR@; make clean)
+	exit 0
 
 distclean: clean
 	$(RM) Makefile
 	(cd $(LIBBSCDIR); make clean)
 	$(RM_RF) buildtmp
 	(cd @LIBARCHIVE_DIR@; make distclean; rm -rf Makefile.orig tar test test_utils cpio libarchive/test)
+	[ "x@ENABLE_WAVPACK@" != "x" ] && (cd @WAVPACK_DIR@; make distclean)
+	exit 0
 
 install: $(PROG)
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin

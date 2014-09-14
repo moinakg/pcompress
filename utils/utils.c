@@ -66,6 +66,12 @@ static log_dest_t ldest = {LOG_OUTPUT, LOG_INFO, NULL};
 static char *f_name_list[512];
 static int f_count = 512, f_inited = 0;
 
+struct RiffHdr {
+    char ckID [4];
+    uint32_t ckSize;
+    char formType [4];
+};
+
 void
 init_pcompress() {
 	cpuid_basic_identify(&proc_info);
@@ -674,6 +680,22 @@ identify_pnm_type(uchar_t *buf, size_t len)
 	return (is_pnm);
 }
 #endif
+
+int
+identify_wav_type(uchar_t *buf, size_t len)
+{
+	struct RiffHdr *hdr;
+
+	if (len < sizeof (struct RiffHdr))
+		return (0);
+
+	hdr = (struct RiffHdr *)buf;
+	if (strncmp(hdr->ckID, "RIFF", 4) != 0 ||
+            strncmp(hdr->formType, "WAVE", 4) != 0)
+		return (0);
+
+	return (1);
+}
 
 int
 file_exists(char *path)

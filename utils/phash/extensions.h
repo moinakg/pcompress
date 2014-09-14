@@ -138,7 +138,7 @@ struct ext_entry {
 	{"mo"	, TYPE_BINARY,        2},
 	{"pyo"	, TYPE_BINARY,        3},
 	{"pyc"	, TYPE_BINARY,        3},
-	{"wav"	, TYPE_BINARY,        3},
+	{"wav"	, TYPE_BINARY|TYPE_WAV,        3},
 	{"tta"	, TYPE_BINARY|TYPE_COMPRESSED|TYPE_AUDIO_COMPRESSED,        3},
 	{"wv"	, TYPE_BINARY|TYPE_COMPRESSED,        2},
 	{"swf"	, TYPE_BINARY,        3},
