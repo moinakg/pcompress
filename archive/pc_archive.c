@@ -1156,9 +1156,8 @@ archiver_thread_func(void *dat) {
 		} else {
 			archive_entry_set_size(entry, archive_entry_size(entry));
 		}
-		if (pctx->verbose)
-			log_msg(LOG_INFO, 0, "%5d/%5d %8" PRIu64 " %s", ctr, pctx->archive_members_count,
-			    archive_entry_size(entry), name);
+		log_msg(LOG_VERBOSE, 0, "%5d/%5d %8" PRIu64 " %s", ctr, pctx->archive_members_count,
+		    archive_entry_size(entry), name);
 
 		archive_entry_linkify(resolver, &entry, &spare_entry);
 		ent = entry;
@@ -1194,14 +1193,14 @@ start_archiver(pc_ctx_t *pctx) {
 /*
  * The next two functions are from libArchive source/example:
  * https://github.com/libarchive/libarchive/wiki/Examples#wiki-A_Complete_Extractor
- * 
+ *
  * We have to use low-level APIs to extract entries to disk. Normally one would use
  * archive_read_extract2() but LibArchive has no option to set user-defined filter
  * routines, so we have to handle here.
  */
 static int
 copy_data_out(struct archive *ar, struct archive *aw, struct archive_entry *entry,
-    int typ)
+    int typ, pc_ctx_t *pctx)
 {
 	int64_t offset;
 	const void *buff;
@@ -1219,7 +1218,18 @@ copy_data_out(struct archive *ar, struct archive *aw, struct archive_entry *entr
 				return (ARCHIVE_FATAL);
 
 			} else if (rv == FILTER_RETURN_SKIP) {
-				log_msg(LOG_WARN, 0, "Filter function failed for entry.");
+				log_msg(LOG_WARN, 0, "Filter function skipped.");
+				return (ARCHIVE_WARN);
+
+			} else if (rv == FILTER_RETURN_SOFT_ERROR) {
+				log_msg(LOG_WARN, 0, "Filter function failed for entry: %s.",
+				    archive_entry_pathname(entry));
+				pctx->errored_count++;
+				if (pctx->err_paths_fd) {
+					fprintf(pctx->err_paths_fd, "%s,%s",
+					    archive_entry_pathname(entry),
+					    typetab[(typ >> 3)].filter_name);
+				}
 				return (ARCHIVE_WARN);
 			} else {
 				return (ARCHIVE_OK);
@@ -1247,7 +1257,7 @@ copy_data_out(struct archive *ar, struct archive *aw, struct archive_entry *entr
 
 static int
 archive_extract_entry(struct archive *a, struct archive_entry *entry,
-    struct archive *ad, int typ)
+    struct archive *ad, int typ, pc_ctx_t *pctx)
 {
 	int r, r2;
 	char *filter_name;
@@ -1271,7 +1281,7 @@ archive_extract_entry(struct archive *a, struct archive_entry *entry,
 		archive_copy_error(a, ad);
 	} else if (!archive_entry_size_is_set(entry) || archive_entry_size(entry) > 0) {
 		/* Otherwise, pour data into the entry. */
-		r = copy_data_out(a, ad, entry, typ);
+		r = copy_data_out(a, ad, entry, typ, pctx);
 	}
 	r2 = archive_write_finish_entry(ad);
 	if (r2 < ARCHIVE_WARN)
@@ -1375,6 +1385,11 @@ extractor_thread_func(void *dat) {
 			log_msg(LOG_ERR, 1, "Cannot change to dir: %s", pctx->to_filename);
 			goto done;
 		}
+
+		/*
+		 * Open list file for pathnames that had filter errors (if any).
+		 */
+		pctx->err_paths_fd = fopen("filter_failures.txt", "w");
 	}
 
 	/*
@@ -1431,7 +1446,7 @@ extractor_thread_func(void *dat) {
 #endif
 
 		if (!pctx->list_mode) {
-			rv = archive_extract_entry(arc, entry, awd, typ);
+			rv = archive_extract_entry(arc, entry, awd, typ, pctx);
 		} else {
 			rv = archive_list_entry(arc, entry, typ);
 		}
@@ -1439,8 +1454,8 @@ extractor_thread_func(void *dat) {
 			log_msg(LOG_WARN, 0, "%s: %s", archive_entry_pathname(entry),
 			    archive_error_string(arc));
 
-		} else if (pctx->verbose) {
-			log_msg(LOG_INFO, 0, "%5d %8" PRIu64 " %s", ctr, archive_entry_size(entry),
+		} else {
+			log_msg(LOG_VERBOSE, 0, "%5d %8" PRIu64 " %s", ctr, archive_entry_size(entry),
 			    archive_entry_pathname(entry));
 		}
 
@@ -1452,12 +1467,26 @@ extractor_thread_func(void *dat) {
 	}
 
 	if (!pctx->list_mode) {
+		if (pctx->errored_count > 0) {
+			log_msg(LOG_WARN, 0, "WARN: %d pathnames failed filter decoding.");
+			if (pctx->err_paths_fd) {
+				fclose(pctx->err_paths_fd);
+				log_msg(LOG_WARN, 0, "Please see file filter_failures.txt.");
+			}
+		} else {
+			if (pctx->err_paths_fd) {
+				fclose(pctx->err_paths_fd);
+				(void) unlink("filter_failures.txt");
+			}
+		}
+
 		if (got_cwd) {
 			rv = chdir(cwd);
 		}
 	}
 	archive_read_free(arc);
 	archive_write_free(awd);
+
 done:
 	return (NULL);
 }

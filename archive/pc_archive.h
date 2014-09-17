@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 #ifndef	_PC_ARCHIVE_H
@@ -60,4 +60,4 @@ void init_filters(struct filter_flags *ff);
 }
 #endif
 
-#endif	
+#endif

@@ -277,7 +277,7 @@ typedef enum {
 	/*
 	 * Sub-types.
 	 */
-#define	NUM_SUB_TYPES	32
+#define	NUM_SUB_TYPES	33
 	TYPE_EXE32 = 8,
 	TYPE_JPEG = 16,
 	TYPE_MARKUP = 24,
@@ -386,7 +386,8 @@ typedef enum {
 typedef enum {
 	LOG_ERR,
 	LOG_WARN,
-	LOG_INFO
+	LOG_INFO,
+	LOG_VERBOSE
 } log_level_t;
 
 typedef void (*log_callback_ptr)(char *msg);

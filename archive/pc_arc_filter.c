@@ -64,15 +64,17 @@ ssize_t packpnm_filter(struct filter_info *fi, void *filter_private);
 
 #ifdef _ENABLE_WAVPACK_
 extern size_t wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf);
+extern size_t wavpack_filter_decode(uchar_t *in_buf, size_t len, uchar_t **out_buf,
+    ssize_t out_len);
 ssize_t wavpack_filter(struct filter_info *fi, void *filter_private);
 #endif
 
 void
 add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 {
-#ifndef _MPLV2_LICENSE_
-	struct scratch_buffer *sdat;
+	struct scratch_buffer *sdat = NULL;
 	int slot;
+#ifndef _MPLV2_LICENSE_
 
 	if (ff->enable_packjpg) {
 		sdat = (struct scratch_buffer *)malloc(sizeof (struct scratch_buffer));
@@ -93,6 +95,21 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 		typetab[slot].filter_private = sdat;
 		typetab[slot].filter_func = packpnm_filter;
 		typetab[slot].filter_name = "packPNM";
+	}
+#endif
+
+#ifdef _ENABLE_WAVPACK_
+	if (ff->enable_wavpack) {
+		if (!sdat) {
+			sdat = (struct scratch_buffer *)malloc(sizeof (struct scratch_buffer));
+			sdat->in_buff = NULL;
+			sdat->in_bufflen = 0;
+		}
+
+		slot = TYPE_WAV >> 3;
+		typetab[slot].filter_private = sdat;
+		typetab[slot].filter_func = wavpack_filter;
+		typetab[slot].filter_name = "WavPack";
 	}
 #endif
 }
@@ -279,13 +296,13 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 	out = NULL;
 	if ((len = packjpg_filter_process(mapbuf, in_size, &out)) == 0) {
 		/*
-		 * If filter failed we write out the original data and indicate skip
-		 * to continue the archive extraction.
+		 * If filter failed we write out the original data and indicate a
+		 * soft error to continue the archive extraction.
 		 */
 		free(out);
 		if (write_archive_data(fi->target_arc, mapbuf, len1, fi->block_size) < len1)
 			return (FILTER_RETURN_ERROR);
-		return (FILTER_RETURN_SKIP);
+		return (FILTER_RETURN_SOFT_ERROR);
 	}
 	rv = write_archive_data(fi->target_arc, out, len, fi->block_size);
 	free(out);
@@ -382,13 +399,13 @@ packpnm_filter(struct filter_info *fi, void *filter_private)
 	out = NULL;
 	if ((len = packpnm_filter_process(mapbuf, in_size, &out)) == 0) {
 		/*
-		 * If filter failed we write out the original data and indicate skip
-		 * to continue the archive extraction.
+		 * If filter failed we write out the original data and indicate a
+		 * soft error to continue the archive extraction.
 		 */
 		free(out);
 		if (write_archive_data(fi->target_arc, mapbuf, len1, fi->block_size) < len1)
 			return (FILTER_RETURN_ERROR);
-		return (FILTER_RETURN_SKIP);
+		return (FILTER_RETURN_SOFT_ERROR);
 	}
 	rv = write_archive_data(fi->target_arc, out, len, fi->block_size);
 	free(out);
@@ -413,7 +430,7 @@ wavpack_filter(struct filter_info *fi, void *filter_private)
 	if (fi->compressing) {
 		mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fi->fd, 0);
 		if (mapbuf == NULL) {
-			log_msg(LOG_ERR, 1, "Mmap failed in packPNM filter.");
+			log_msg(LOG_ERR, 1, "Mmap failed in WavPack filter.");
 			return (FILTER_RETURN_ERROR);
 		}
 
@@ -475,7 +492,7 @@ wavpack_filter(struct filter_info *fi, void *filter_private)
 		}
 		munmap(mapbuf, len1);
 
-		in_size = LE64(len);
+		in_size = LE64(len1);
 		rv = archive_write_data(fi->target_arc, &in_size, 8);
 		if (rv != 8)
 			return (rv);
@@ -488,15 +505,15 @@ wavpack_filter(struct filter_info *fi, void *filter_private)
 	 * Decompression case.
 	 */
 	out = NULL;
-	if ((len = wavpack_filter_encode(mapbuf, in_size, &out)) == 0) {
+	if ((len = wavpack_filter_decode(mapbuf, len, &out, in_size)) == 0) {
 		/*
-		 * If filter failed we write out the original data and indicate skip
-		 * to continue the archive extraction.
+		 * If filter failed we write out the original data and indicate a
+		 * soft error to continue the archive extraction.
 		 */
 		free(out);
 		if (write_archive_data(fi->target_arc, mapbuf, len1, fi->block_size) < len1)
 			return (FILTER_RETURN_ERROR);
-		return (FILTER_RETURN_SKIP);
+		return (FILTER_RETURN_SOFT_ERROR);
 	}
 	rv = write_archive_data(fi->target_arc, out, len, fi->block_size);
 	free(out);

@@ -39,6 +39,7 @@ extern "C" {
 
 #define	FILTER_RETURN_SKIP	(1)
 #define	FILTER_RETURN_ERROR	(-1)
+#define	FILTER_RETURN_SOFT_ERROR	(-2)
 #define FILTER_XATTR_ENTRY  "_._pc_filter_xattr"
 
 struct filter_info {
@@ -52,6 +53,7 @@ struct filter_info {
 
 struct filter_flags {
 	int enable_packjpg;
+	int enable_wavpack;
 };
 
 typedef ssize_t (*filter_func_ptr)(struct filter_info *fi, void *filter_private);

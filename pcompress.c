@@ -2854,6 +2854,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	strcpy(pctx->exec_name, pos);
 	pctx->advanced_opts = 0;
 	ff.enable_packjpg = 0;
+	ff.enable_wavpack = 0;
 
 	pthread_mutex_lock(&opt_parse);
 	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avmKjxi")) != -1) {
@@ -3010,7 +3011,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			break;
 
 		    case 'v':
-			pctx->verbose = 1;
+			set_log_level(LOG_VERBOSE);
 			break;
 
 		    case 'm':
@@ -3024,6 +3025,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		    case 'j':
 			pctx->advanced_opts = 1;
 			ff.enable_packjpg = 1;
+			ff.enable_wavpack = 1;
 			break;
 
 		    case 'x':
@@ -3142,9 +3144,10 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	}
 
 	/*
-	 * Dispack and PackJPG are only valid when archiving files.
+	 * Dispack, PackJPG and WavPack are only valid when archiving files.
 	 */
-	if ((pctx->dispack_preprocess || ff.enable_packjpg) && !pctx->archive_mode) {
+	if ((pctx->dispack_preprocess || ff.enable_packjpg || ff.enable_wavpack)
+	    && !pctx->archive_mode) {
 		log_msg(LOG_ERR, 0, "Dispack Executable Preprocessor and PackJPG are only valid when archiving.");
 		return (1);
 	}
@@ -3305,9 +3308,13 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			 * Selectively enable filters while archiving, depending on compression level.
 			 */
 			if (pctx->archive_mode) {
-				if (pctx->level > 10) ff.enable_packjpg = 1;
+				if (pctx->level > 10) {
+					ff.enable_packjpg = 1;
+					ff.enable_wavpack = 1;
+				}
 				init_filters(&ff);
 				pctx->enable_packjpg = ff.enable_packjpg;
+				pctx->enable_wavpack = ff.enable_wavpack;
 				if (pctx->level > 8) pctx->dispack_preprocess = 1;
 			}
 
@@ -3345,7 +3352,9 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		 * Enable all filters while decompressing. Obviously!
 		 */
 		ff.enable_packjpg = 1;
+		ff.enable_wavpack = 1;
 		pctx->enable_packjpg = 1;
+		pctx->enable_wavpack = 1;
 		init_filters(&ff);
 	}
 	pctx->inited = 1;

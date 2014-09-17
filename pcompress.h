@@ -217,7 +217,6 @@ typedef struct pc_ctx {
 	int dispack_preprocess;
 	int encrypt_type;
 	int archive_mode;
-	int verbose;
 	int enable_archive_sort;
 	int pagesize;
 	int force_archive_perms;
@@ -246,7 +245,10 @@ typedef struct pc_ctx {
 	int btype, ctype;
 	int min_chunk;
 	int enable_packjpg;
+	int enable_wavpack;
 	int list_mode;
+	FILE *err_paths_fd;
+	uint32_t errored_count;
 
 	unsigned int chunk_num;
 	uint64_t largest_chunk, smallest_chunk, avg_chunk;

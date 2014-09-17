@@ -93,11 +93,11 @@ read_block(read_data *rdat, uchar_t *tgt, uint32_t len, uint32_t *numread)
 		numcopy = rdat->bufsize - rdat->bytes_read;
 
 	if (numcopy == 0)
-		return (1);
+		return (FALSE);
 	memcpy(tgt, rdat->buf + rdat->bytes_read, numcopy);
 	rdat->bytes_read += numcopy;
 	*numread = numcopy;
-	return (0);
+	return (TRUE);
 }
 
 /*
@@ -116,12 +116,105 @@ read_block_ref(read_data *rdat, uchar_t **ref, uint32_t len, uint32_t *numread)
 		numcopy = rdat->bufsize - rdat->bytes_read;
 
 	if (numcopy == 0)
-		return (1);
+		return (FALSE);
 	*ref = rdat->buf + rdat->bytes_read;
 	rdat->bytes_read += numcopy;
 	*numread = numcopy;
+	return (TRUE);
+}
+
+/*
+ * Memory buffer I/O functions mirroring semantics of stdio, for Wavpack
+ * I/O ops structure.
+ */
+static int32_t
+read_bytes(void *id, void *data, int32_t bcount)
+{
+	read_data *rdat = (read_data *)id;
+	uint32_t numread;
+
+	if (!read_block(rdat, (uchar_t *)data, bcount, &numread)) {
+		return (0);
+	}
+	return (numread);
+}
+
+static uint32_t
+get_pos(void *id)
+{
+	read_data *rdat = (read_data *)id;
+	return (rdat->bytes_read);
+}
+
+static int
+set_pos_abs(void *id, uint32_t pos)
+{
+	read_data *rdat = (read_data *)id;
+
+	if (pos > rdat->bufsize)
+		pos = rdat->bufsize;
+	rdat->bytes_read = pos;
 	return (0);
 }
+
+static int
+set_pos_rel(void *id, int32_t delta, int mode)
+{
+	read_data *rdat = (read_data *)id;
+	int64_t br;
+
+	br = rdat->bytes_read;
+	if (mode == SEEK_SET) {
+		br = delta;
+	} else if (mode == SEEK_CUR) {
+		br += delta;
+	} else if (mode == SEEK_END) {
+		br = rdat->bufsize - delta;
+	} else {
+		errno = EINVAL;
+		return (-1);
+	}
+	if (br < 0) {
+		errno = EINVAL;
+		return (-1);
+	}
+	if (br > rdat->bufsize)
+		br = rdat->bufsize;
+	rdat->bytes_read = br;
+	return (0);
+}
+
+static int
+push_back_byte(void *id, int c)
+{
+	read_data *rdat = (read_data *)id;
+
+	if (rdat->bytes_read > 0) {
+		rdat->bytes_read--;
+		rdat->buf[rdat->bytes_read] = c;
+		return (c);
+	} else {
+		return (EOF);
+	}
+}
+
+static uint32_t
+get_length(void *id)
+{
+	read_data *rdat = (read_data *)id;
+	return (rdat->bufsize);
+}
+
+static int
+can_seek(void *id)
+{
+	return (TRUE);
+}
+
+static WavpackStreamReader memreader = {
+	read_bytes, get_pos, set_pos_abs, set_pos_rel, push_back_byte,
+	get_length, can_seek, write_block
+};
 
 #define INPUT_SAMPLES 65536
 
@@ -140,7 +233,6 @@ pack_audio(WavpackContext *wpc, read_data *rdat)
 
 	WavpackPackInit(wpc);
 	bytes_per_sample = WavpackGetBytesPerSample (wpc) * WavpackGetNumChannels (wpc);
-	//input_buffer = malloc(input_samples * bytes_per_sample);
 	sample_buffer = malloc(input_samples * sizeof (int32_t) * WavpackGetNumChannels (wpc));
 	samples_remaining = WavpackGetNumSamples (wpc);
 
@@ -212,7 +304,7 @@ pack_audio(WavpackContext *wpc, read_data *rdat)
 
 /*
  * Helper routine for wavpack. Higher level encoding interface adapted from
- * pack_file() in cli/wavpack.c
+ * pack_file() in cli/wavpack.c and unpack_file() in cli/wvunpack.c
  */
 size_t
 wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf)
@@ -233,27 +325,29 @@ wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf)
 	memset(&loc_config, 0, sizeof (loc_config));
 	adobe_mode = 0;
 
-	/*
-	 * Default WavPack config.
-	 */
-	loc_config.flags |= CONFIG_FAST_FLAG;
-
 	*out_buf = (uchar_t *)malloc(len);
-	if (*out_buf == NULL)
+	if (*out_buf == NULL) {
+		log_msg(LOG_ERR, 1, "malloc failed.");
 		return (0);
+	}
 
 	wv_dat.buf = *out_buf;
 	wv_dat.bufsize = len;
-	wpc = WavpackOpenFileOutput (write_block, &wv_dat, NULL);
+	wpc = WavpackOpenFileOutput(write_block, &wv_dat, NULL);
 
 	rd_dat.buf = in_buf;
 	rd_dat.bufsize = len;
 
-	// read (and copy to output) initial RIFF form header
-	if (read_block(&rd_dat, (uchar_t *)&riff_chunk_header, sizeof (RiffChunkHeader), &bcount) ||
-	    bcount != sizeof (RiffChunkHeader) || strncmp (riff_chunk_header.ckID, "RIFF", 4) ||
-	    strncmp (riff_chunk_header.formType, "WAVE", 4)) {
-		WavpackCloseFile (wpc);
+	// Read (and copy to output) initial RIFF form header
+	if (!read_block(&rd_dat, (uchar_t *)&riff_chunk_header, sizeof (RiffChunkHeader), &bcount) ||
+	    bcount != sizeof (RiffChunkHeader) || strncmp(riff_chunk_header.ckID, "RIFF", 4) ||
+	    strncmp(riff_chunk_header.formType, "WAVE", 4)) {
+		WavpackCloseFile(wpc);
+		return (0);
+	}
+
+	if (!WavpackAddWrapper(wpc, &riff_chunk_header, sizeof (RiffChunkHeader))) {
+		WavpackCloseFile(wpc);
 		return (0);
 	}
 
@@ -261,9 +355,14 @@ wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf)
 	// (until the data chunk) and copy them to the output
 	//
 	while (1) {
-		if (read_block(&rd_dat, (uchar_t *)&chunk_header, sizeof (ChunkHeader), &bcount) ||
+		if (!read_block(&rd_dat, (uchar_t *)&chunk_header, sizeof (ChunkHeader), &bcount) ||
 		    bcount != sizeof (ChunkHeader)) {
-			WavpackCloseFile (wpc);
+			WavpackCloseFile(wpc);
+			return (0);
+		}
+
+		if (!WavpackAddWrapper(wpc, &chunk_header, sizeof (ChunkHeader))) {
+			WavpackCloseFile(wpc);
 			return (0);
 		}
 
@@ -278,9 +377,14 @@ wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf)
 			if (chunk_header.ckSize < 16 || chunk_header.ckSize > sizeof (WaveHeader) ||
 			    !read_block(&rd_dat, (uchar_t *)&WaveHeader, chunk_header.ckSize, &bcount) ||
 			    bcount != chunk_header.ckSize) {
-				WavpackCloseFile (wpc);
+				WavpackCloseFile(wpc);
 				return (0);
 			}
+			if (!WavpackAddWrapper(wpc, &WaveHeader, chunk_header.ckSize)) {
+				WavpackCloseFile(wpc);
+				return (0);
+			}
+
 			WavpackLittleEndianToNative (&WaveHeader, WaveHeaderFormat);
 
 			if (chunk_header.ckSize > 16 && WaveHeader.cbSize == 2)
@@ -306,7 +410,7 @@ wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf)
 				supported = FALSE;
 
 			if (!supported) {
-				WavpackCloseFile (wpc);
+				WavpackCloseFile(wpc);
 				return (0);
 			}
 
@@ -367,7 +471,7 @@ wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf)
 	}
 
 	if (!WavpackSetConfiguration(wpc, &loc_config, total_samples)) {
-		WavpackCloseFile (wpc);
+		WavpackCloseFile(wpc);
 		return (0);
 	}
 
@@ -401,6 +505,167 @@ wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf)
 	return (wv_dat.bytes_written);
 }
 
+/*
+ * Reformat samples from longs in processor's native endian mode to
+ * little-endian data with (possibly) less than 4 bytes / sample.
+ */
+static unsigned char *
+format_samples(int bps, unsigned char *dst, int32_t *src, uint32_t samcnt)
+{
+	int32_t temp;
+
+	switch (bps) {
+
+	    case 1:
+		while (samcnt--)
+			*dst++ = *src++ + 128;
+
+		break;
+
+	    case 2:
+		while (samcnt--) {
+			*dst++ = (unsigned char) (temp = *src++);
+			*dst++ = (unsigned char) (temp >> 8);
+		}
+
+		break;
+
+	    case 3:
+		while (samcnt--) {
+			*dst++ = (unsigned char) (temp = *src++);
+			*dst++ = (unsigned char) (temp >> 8);
+			*dst++ = (unsigned char) (temp >> 16);
+		}
+
+		break;
+
+	    case 4:
+		while (samcnt--) {
+			*dst++ = (unsigned char) (temp = *src++);
+			*dst++ = (unsigned char) (temp >> 8);
+			*dst++ = (unsigned char) (temp >> 16);
+			*dst++ = (unsigned char) (temp >> 24);
+		}
+
+		break;
+    }
+
+    return dst;
+}
+
+size_t
+wavpack_filter_decode(uchar_t *in_buf, size_t len, uchar_t **out_buf, ssize_t out_len)
+{
+	write_data wr_dat;
+	read_data  rd_dat;
+	WavpackContext *wpc;
+	int bytes_per_sample, num_channels, bps, result;
+	int32_t *temp_buffer;
+	uchar_t *output_ptr = NULL, *output_buffer = NULL;
+	uint32_t total_unpacked_samples = 0, output_buffer_size = 0;
+	char error[80];
+
+	rd_dat.buf = in_buf;
+	rd_dat.bufsize = len;
+	rd_dat.bytes_read = 0;
+	wpc = WavpackOpenFileInputEx(&memreader, &rd_dat, NULL, error, OPEN_WRAPPER, 0);
+	if (!wpc) {
+		log_msg(LOG_ERR, 0, error);
+		return (0);
+	}
+
+	num_channels = WavpackGetNumChannels(wpc);
+	bps = WavpackGetBytesPerSample(wpc);
+	bytes_per_sample = num_channels * bps;
+
+	*out_buf = (uchar_t *)malloc(out_len);
+	if (*out_buf == NULL) {
+		log_msg(LOG_ERR, 1, "malloc failed.");
+		return (0);
+	}
+
+	/*
+	 * Must start with a wrapper.
+	 */
+	wr_dat.buf = *out_buf;
+	wr_dat.bufsize = len;
+	wr_dat.bytes_written = 0;
+	wr_dat.first_block_size = 0;
+	wr_dat.error = 0;
+	if (WavpackGetWrapperBytes(wpc)) {
+		if (!write_block(&wr_dat, WavpackGetWrapperData(wpc),
+		    WavpackGetWrapperBytes(wpc))) {
+			WavpackFreeWrapper(wpc);
+			WavpackCloseFile(wpc);
+			log_msg(LOG_ERR, 0, "Wavpack: Header  write failed.");
+			return (0);
+		}
+		WavpackFreeWrapper(wpc);
+	} else {
+		log_msg(LOG_ERR, 0, "Wavpack: RIFF wrapper size if zero. File corrupt?");
+		WavpackCloseFile(wpc);
+		return (0);
+	}
+
+	result = TRUE;
+	temp_buffer = malloc (4096L * num_channels * 4);
+	output_buffer_size = 1024 * 256;
+	output_buffer = malloc(output_buffer_size);
+	output_ptr = output_buffer;
+
+	while (result) {
+		uint32_t samples_to_unpack, samples_unpacked;
+
+		samples_to_unpack = (output_buffer_size -
+		    (uint32_t)(output_ptr - output_buffer)) / bytes_per_sample;
+		if (samples_to_unpack > 4096)
+			samples_to_unpack = 4096;
+
+		samples_unpacked = WavpackUnpackSamples(wpc, temp_buffer, samples_to_unpack);
+		total_unpacked_samples += samples_unpacked;
+
+		if (samples_unpacked) {
+			output_ptr = format_samples(bps, output_ptr, temp_buffer,
+			    samples_unpacked * num_channels);
+		}
+		if (!samples_unpacked || (output_buffer_size -
+		    (output_ptr - output_buffer)) < (uint32_t)bytes_per_sample) {
+			if (!write_block(&wr_dat, output_buffer,
+			    (uint32_t)(output_ptr - output_buffer))) {
+				if (temp_buffer)
+					free(temp_buffer);
+				WavpackCloseFile(wpc);
+				log_msg(LOG_ERR, 0, "Wavpack: Writing samples failed.");
+				return (0);
+			}
+			output_ptr = output_buffer;
+		}
+
+		if (!samples_unpacked)
+			break;
+	}
+
+	if (output_buffer)
+		free(output_buffer);
+
+	while (WavpackGetWrapperBytes(wpc)) {
+		if (!write_block(&wr_dat, WavpackGetWrapperData(wpc),
+		    WavpackGetWrapperBytes(wpc))) {
+			if (temp_buffer)
+				free(temp_buffer);
+			WavpackCloseFile(wpc);
+			log_msg(LOG_ERR, 0, "Wavpack: Writing trailing data failed.");
+			return (0);
+		}
+		WavpackFreeWrapper(wpc);
+		WavpackUnpackSamples(wpc, temp_buffer, 1); // perhaps there's more RIFF info...
+	}
+
+	free(temp_buffer);
+	WavpackCloseFile(wpc);
+
+	return (wr_dat.bytes_written);
+}
 #ifdef	__cplusplus
 }
 #endif
