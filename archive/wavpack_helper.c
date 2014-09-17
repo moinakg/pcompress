@@ -307,7 +307,7 @@ pack_audio(WavpackContext *wpc, read_data *rdat)
  * pack_file() in cli/wavpack.c and unpack_file() in cli/wvunpack.c
  */
 size_t
-wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf)
+wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf, int cmp_level)
 {
 	uint32_t total_samples = 0, bcount;
 	WavpackConfig loc_config;
@@ -324,6 +324,12 @@ wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf)
 	memset(&rd_dat, 0, sizeof (rd_dat));
 	memset(&loc_config, 0, sizeof (loc_config));
 	adobe_mode = 0;
+
+	if (cmp_level < 6) {
+		loc_config.flags |= CONFIG_FAST_FLAG;
+	} else if (cmp_level > 8) {
+		loc_config.flags |= CONFIG_HIGH_FLAG;
+	}
 
 	*out_buf = (uchar_t *)malloc(len);
 	if (*out_buf == NULL) {

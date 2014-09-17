@@ -49,6 +49,7 @@ struct filter_info {
 	int fd;
 	int compressing, block_size;
 	int *type_ptr;
+	int cmp_level;
 };
 
 struct filter_flags {

@@ -867,7 +867,8 @@ setup_extractor(pc_ctx_t *pctx)
 
 static ssize_t
 process_by_filter(int fd, int *typ, struct archive *target_arc,
-    struct archive *source_arc, struct archive_entry *entry, int cmp)
+    struct archive *source_arc, struct archive_entry *entry, int cmp,
+    int level)
 {
 	struct filter_info fi;
 	int64_t wrtn;
@@ -879,6 +880,7 @@ process_by_filter(int fd, int *typ, struct archive *target_arc,
 	fi.compressing = cmp;
 	fi.block_size = AW_BLOCK_SIZE;
 	fi.type_ptr = typ;
+	fi.cmp_level = level;
 	wrtn = (*(typetab[(*typ >> 3)].filter_func))(&fi, typetab[(*typ >> 3)].filter_private);
 	if (wrtn == FILTER_RETURN_ERROR) {
 		log_msg(LOG_ERR, 0, "Error invoking filter module: %s",
@@ -942,7 +944,8 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 				return (-1);
 			}
 			pctx->ctype = typ;
-			rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry, 1); 
+			rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry,
+			    1, pctx->level);
 			if (rv == FILTER_RETURN_ERROR) {
 				close(fd);
 				return (-1);
@@ -999,7 +1002,8 @@ do_map:
 					}
 
 					munmap(mapbuf, len);
-					rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry, 1);
+					rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry,
+					    1, pctx->level);
 					if (rv == FILTER_RETURN_ERROR) {
 						return (-1);
 					} else if (rv == FILTER_RETURN_SKIP) {
@@ -1211,7 +1215,7 @@ copy_data_out(struct archive *ar, struct archive *aw, struct archive_entry *entr
 		if (typetab[(typ >> 3)].filter_func != NULL) {
 			int64_t rv;
 
-			rv = process_by_filter(-1, &typ, aw, ar, entry, 0); 
+			rv = process_by_filter(-1, &typ, aw, ar, entry, 0, 0);
 			if (rv == FILTER_RETURN_ERROR) {
 				archive_set_error(ar, archive_errno(aw),
 				    "%s", archive_error_string(aw));

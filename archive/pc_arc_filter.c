@@ -63,7 +63,8 @@ ssize_t packpnm_filter(struct filter_info *fi, void *filter_private);
 #endif
 
 #ifdef _ENABLE_WAVPACK_
-extern size_t wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf);
+extern size_t wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf,
+    int cmp_level);
 extern size_t wavpack_filter_decode(uchar_t *in_buf, size_t len, uchar_t **out_buf,
     ssize_t out_len);
 ssize_t wavpack_filter(struct filter_info *fi, void *filter_private);
@@ -484,7 +485,7 @@ wavpack_filter(struct filter_info *fi, void *filter_private)
 	 */
 	if (fi->compressing) {
 		out = NULL;
-		len = wavpack_filter_encode(mapbuf, len, &out);
+		len = wavpack_filter_encode(mapbuf, len, &out, fi->cmp_level);
 		if (len == 0 || len >= (len1 - 8)) {
 			munmap(mapbuf, len1);
 			free(out);
