@@ -158,6 +158,10 @@ DISPACKSRCS = filters/dispack/dis.cpp
 DISPACKHDRS = filters/dispack/dis.hpp filters/dispack/types.hpp
 DISPACKOBJS = $(DISPACKSRCS:.cpp=.o)
 
+DICTSRCS = filters/dict/DictFilter.cpp
+DICTHDRS = filters/dict/DictFilter.h filters/dict/Common.h
+DICTOBJS = $(DICTSRCS:.cpp=.o)
+
 SKEIN_BLOCK_C = crypto/skein/skein_block.c
 SKEIN_BLOCK_ASM = crypto/skein/skein_block_x64.s
 SKEIN_BLOCK_SRC = @SKEIN_BLOCK@
@@ -246,7 +250,7 @@ $(RABINOBJS) $(BSDIFFOBJS) $(LZPOBJS) $(DELTA2OBJS) @LIBBSCWRAPOBJ@ $(SKEINOBJS)
 $(SKEIN_BLOCK_OBJ) @SHA2ASM_OBJS@ @SHA2_OBJS@ $(KECCAK_OBJS) $(KECCAK_OBJS_ASM) \
 $(TRANSP_OBJS) $(CRYPTO_OBJS) $(ZLIB_OBJS) $(BZLIB_OBJS) $(XXHASH_OBJS) $(BLAKE2_OBJS) \
 @CRYPTO_COMPAT_OBJS@ $(CRYPTO_ASM_OBJS) $(ARCHIVEOBJS) $(PJPGOBJS) $(DISPACKOBJS) $(PPNMOBJS) \
-$(WAVPKOBJS)
+$(WAVPKOBJS) $(DICTOBJS)
 
 DEBUG_LINK = $(GPP) -pthread @LIBBSCGEN_OPT@ @EXTRA_OPT_FLAGS@ -fopenmp -fPIC
 DEBUG_COMPILE = $(GCC) -g -c @EXTRA_OPT_FLAGS@ -fPIC @USE_CLANG_AS@
@@ -337,6 +341,10 @@ $(WAVPKOBJS): $(WAVPKSRCS)
 	fi
 
 $(DISPACKOBJS): $(DISPACKSRCS) $(DISPACKHDRS)
+	$(COMPILE_cpp) $(COMMON_VEC_FLAGS) @DEBUG_STATS_CPPFLAGS@ @SSE_OPT_FLAGS@ @USE_CLANG_AS@ -O2 -fsched-spec-load \
+	-Wno-variadic-macros $(VEC_FLAGS) $(COMMON_CPPFLAGS_cpp) $(@:.o=.cpp) -o $@
+
+$(DICTOBJS): $(DICTSRCS) $(DICTHDRS)
 	$(COMPILE_cpp) $(COMMON_VEC_FLAGS) @DEBUG_STATS_CPPFLAGS@ @SSE_OPT_FLAGS@ @USE_CLANG_AS@ -O2 -fsched-spec-load \
 	-Wno-variadic-macros $(VEC_FLAGS) $(COMMON_CPPFLAGS_cpp) $(@:.o=.cpp) -o $@
 

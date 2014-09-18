@@ -191,7 +191,6 @@ show_compression_stats(pc_ctx_t *pctx)
 
 /*
  * Wrapper functions to pre-process the buffer and then call the main compression routine.
- * At present only LZP pre-compression is used below. Some extra metadata is added:
  *
  * Byte 0: A flag to indicate which pre-processor was used.
  * Byte 1 - Byte 8: Size of buffer after pre-processing
