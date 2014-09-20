@@ -251,7 +251,7 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 	int stype = PC_SUBTYPE(btype);
 
 	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR) {
-		uint64_t i, tot8b, tag1, tag2, tag3;
+		uint64_t i, tot8b, tag1, tag2, tag3, lbytes;
 		double tagcnt, pct_tag;
 		uchar_t cur_byte, prev_byte;
 		/*
@@ -261,10 +261,12 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 		tag1 = 0;
 		tag2 = 0;
 		tag3 = 0;
+		lbytes = 0;
 		prev_byte = cur_byte = 0;
 		for (i = 0; i < srclen; i++) {
 			cur_byte = src1[i];
 			tot8b += (cur_byte & 0x80); // This way for possible auto-vectorization
+			lbytes += (cur_byte < 32);
 			tag1 += (cur_byte == '<');
 			tag2 += (cur_byte == '>');
 			tag3 += ((prev_byte == '<') & (cur_byte == '/'));
@@ -276,7 +278,7 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 		/*
 		 * Heuristics for detecting BINARY vs generic TEXT vs XML data.
 		 */
-		tot8b /= 0x80;
+		tot8b = tot8b / 0x80 + lbytes;
 		tagcnt = tag1 + tag2 + tag3;
 		pct_tag = tagcnt / (double)srclen;
 		if (adat->adapt_mode == 2 && tot8b > FORTY_PCT(srclen)) {

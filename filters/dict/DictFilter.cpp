@@ -31,8 +31,14 @@
 #include <string.h>
 #include <strings.h>
 #include <stdint.h>
+#include <stdio.h>
 #include "DictFilter.h"
 #include "Common.h"
+#include "utils.h"
+
+extern "C" {
+extern int analyze_buffer(void *src, uint64_t srclen);
+}
 
 class DictFilter
 {
@@ -264,17 +270,27 @@ dict_encode(void *dict_ctx, uchar_t *from, uint64_t fromlen, uchar_t *to, uint64
 	DictFilter *df = static_cast<DictFilter *>(dict_ctx);
 	u32 fl = fromlen;
 	u32 dl = *dstlen;
-	u8 *dst;
+	int atype;
+	uchar_t *dst;
+	DEBUG_STAT_EN(double strt, en);
 
-	if (fromlen > UINT32_MAX)
-		return (-1);
-	U32_P(to) = LE32(fromlen);
-	dst = to + 4;
-	dl -= 4;
-	if (df->Forward_Dict(from, fl, dst, &dl)) {
-		*dstlen = dl + 4;
-		return (0);
+	DEBUG_STAT_EN(strt = get_wtime_millis());
+	atype = analyze_buffer(from, fromlen);
+	if (PC_TYPE(atype) == TYPE_TEXT) {
+		U32_P(to) = LE32(fl);
+		dst = to + 4;
+		dl -= 4;
+		if (df->Forward_Dict(from, fl, dst, &dl)) {
+			*dstlen = dl + 8;
+			DEBUG_STAT_EN(en = get_wtime_millis());
+			DEBUG_STAT_EN(fprintf(stderr, "DICT: fromlen: %" PRIu64 ", dstlen: %" PRIu64 "\n",
+			    fromlen, *dstlen));
+			DEBUG_STAT_EN(fprintf(stderr, "DICT: Processed at %.3f MB/s\n",
+			    get_mb_s(fromlen, strt, en)));
+			return (1);
+		}
 	}
+	DEBUG_STAT_EN(fprintf(stderr, "No DICT\n"));
 	return (-1);
 }
 
@@ -285,10 +301,13 @@ dict_decode(void *dict_ctx, uchar_t *from, uint64_t fromlen, uchar_t *to, uint64
 	u32 fl = fromlen;
 	u32 dl;
 	u8 *src;
+	DEBUG_STAT_EN(double strt, en);
 
+	DEBUG_STAT_EN(strt = get_wtime_millis());
 	dl = U32_P(from);
 	if (dl > *dstlen) {
-		log_msg(LOG_ERR, 0, "Destination overflow in dict_decode.");
+		log_msg(LOG_ERR, 0, "Destination overflow in dict_decode. Need: %" PRIu64 ", Got: %" PRIu64 "\n",
+		    dl, *dstlen);
 		return (-1);
 	}
 	*dstlen = dl;
@@ -296,8 +315,16 @@ dict_decode(void *dict_ctx, uchar_t *from, uint64_t fromlen, uchar_t *to, uint64
 	fl -= 4;
 
 	df->Inverse_Dict(src, fl, to, &dl);
-	if (dl < *dstlen)
+	if (dl < *dstlen) {
+		log_msg(LOG_ERR, 0, "dict_decode: Expected: %" PRIu64 ", Got: %" PRIu64 "\n",
+		    *dstlen, dl);
 		return (-1);
+	}
+	DEBUG_STAT_EN(en = get_wtime_millis());
+	DEBUG_STAT_EN(fprintf(stderr, "DICT: fromlen: %" PRIu64 ", dstlen: %" PRIu64 "\n",
+	    fromlen, *dstlen));
+	DEBUG_STAT_EN(fprintf(stderr, "DICT: Processed at %.3f MB/s\n",
+	    get_mb_s(fromlen, strt, en)));
 	return (0);
 }
 

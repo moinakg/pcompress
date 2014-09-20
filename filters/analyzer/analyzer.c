@@ -25,44 +25,30 @@
 #include "utils.h"
 
 int
-analyze_buffer(void *src, uint64_t srclen, int btype, int adapt_mode)
+analyze_buffer(void *src, uint64_t srclen)
 {
 	uchar_t *src1 = (uchar_t *)src;
-	int stype = PC_SUBTYPE(btype);
+	uint64_t i, tot8b, lbytes;
+	uchar_t cur_byte;
+	int btype = TYPE_UNKNOWN;
 
-	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR) {
-		uint32_t freq[256], freq0x80[2] = {0};
-		uint64_t i, alphabetNum = 0, tot8b = 0;
-		uchar_t cur_byte;
+	/*
+	 * Count number of 8-bit binary bytes in source
+	 */
+	tot8b = 0;
+	lbytes = 0;
+	for (i = 0; i < srclen; i++) {
+		cur_byte = src1[i];
+		tot8b += (cur_byte & 0x80); // This way for possible auto-vectorization
+		lbytes += (cur_byte < 32);
+	}
 
-                /*
-                 * Count number of 8-bit binary bytes and XML tags in source.
-                 */
-                tot8b = 0;
-		for (i = 0; i < srclen; i++) {
-                        cur_byte = src1[i];
-                        tot8b += (cur_byte & 0x80); // This way for possible auto-vectorization
-			freq[cur_byte]++;
-		}
-
-		for (i = 0; i < 256; i++)
-			freq0x80[i>>7]+=freq[i];
-
-		for(i = 'a'; i <= 'z'; i++)
-			alphabetNum+=freq[i];
-
-                /*
-                 * Heuristics for detecting BINARY vs generic TEXT
-                 */
-                tot8b /= 0x80;
-		if (tot8b < (srclen>>2 + srclen>>3)) {
-                        btype = TYPE_TEXT;
-			if (freq0x80[1]<(srclen>>3) && (freq[' ']>(srclen>>7)) 
-			    && (freq['a']+freq['e']+freq['t']>(srclen>>4))
-			    && alphabetNum>(srclen>>2)) {
-				btype |= TYPE_ENGLISH;
-			}
-		}
+	/*
+	 * Heuristics for detecting BINARY vs generic TEXT
+	 */
+	tot8b /= 0x80;
+	if (tot8b == 0 && lbytes < ((srclen>>1) + (srclen>>2) + (srclen>>3))) {
+		btype = TYPE_TEXT;
 	}
 
 	return (btype);

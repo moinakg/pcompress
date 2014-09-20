@@ -173,6 +173,8 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 		if (pctx->btype != pctx->ctype) {
 			if (pctx->btype == TYPE_UNKNOWN || pctx->arc_buf_pos == 0) {
 				pctx->btype = pctx->ctype;
+				if (pctx->arc_buf_pos != 0)
+					pctx->interesting = 1;
 			} else {
 				if (pctx->arc_buf_pos < pctx->min_chunk) {
 					int diff = pctx->min_chunk - (int)(pctx->arc_buf_pos);
@@ -180,6 +182,7 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 						pctx->btype = pctx->ctype;
 					else
 						pctx->ctype = pctx->btype;
+					pctx->interesting = 1;
 				} else {
 					pctx->arc_writing = 0;
 					Sem_Post(&(pctx->read_sem));

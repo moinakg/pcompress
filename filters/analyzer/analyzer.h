@@ -25,6 +25,14 @@
 #ifndef	_ANALYZER_H
 #define	_ANALYZER_H
 
-int analyze_buffer(void *src, uint64_t srclen, int btype, int adapt_mode);
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
+extern int analyze_buffer(void *src, uint64_t srclen);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

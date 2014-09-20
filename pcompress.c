@@ -56,7 +56,6 @@
 #include <errno.h>
 #include <pc_archive.h>
 #include <filters/dispack/dis.hpp>
-#include "analyzer.h"
 #include "filters/dict/DictFilter.h"
 
 /*
@@ -204,13 +203,13 @@ show_compression_stats(pc_ctx_t *pctx)
 static int
 preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t srclen,
     void *dst, uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data,
-    algo_props_t *props)
+    algo_props_t *props, int interesting)
 {
-	uchar_t *dest = (uchar_t *)dst, type = 0, atype;
+	uchar_t *dest = (uchar_t *)dst, type = 0;
 	int64_t result;
 	uint64_t _dstlen, fromlen;
 	uchar_t *from, *to;
-	int stype;
+	int stype, dict;
 	DEBUG_STAT_EN(double strt, en);
 
 	_dstlen = *dstlen;
@@ -219,6 +218,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	fromlen = srclen;
 	result = 0;
 	stype = PC_SUBTYPE(btype);
+	dict = 0;
 
 	/*
 	 * If Dispack is enabled it has to be done first since Dispack analyses the
@@ -241,24 +241,11 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	}
 
 	/*
-	 * The analyzer is run below only for non-archive mode. When archiving the
-	 * archiver thread runs analyzer on incremental blocks and sets the type
-	 * accordingly.
-	 */
-	atype = btype;
-	/*
-	 * Run an analyzer on the data. At present the analyzer only tries
-	 * to detect if this is text for running the dict filter.
-	 */
-	if (pctx->enable_analyzer) {
-		atype = analyze_buffer(src, srclen, btype, pctx->adapt_mode);
-	}
-
-	/*
 	 * Enabling LZP also enables the DICT filter since we are dealing with text
 	 * in any case.
 	 */
-	if (pctx->lzp_preprocess && PC_TYPE(atype) == TYPE_TEXT) {
+	if (pctx->lzp_preprocess && (PC_TYPE(btype) == TYPE_UNKNOWN ||
+	    PC_TYPE(btype) == TYPE_TEXT || interesting)) {
 		void *dct = new_dict_context();
 		_dstlen = fromlen;
 		result = dict_encode(dct, from, fromlen, to, &_dstlen);
@@ -270,8 +257,10 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 			to = tmp;
 			fromlen = _dstlen;
 			type |= PREPROC_TYPE_DICT;
+			dict = result;
 		}
 	}
+
 #ifndef _MPLV2_LICENSE_
 	if (pctx->lzp_preprocess && stype != TYPE_BMP && stype != TYPE_TIFF) {
 		int hashsize;
@@ -321,7 +310,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	U64_P(dest + 1) = htonll(srclen);
 	_dstlen = srclen;
 	DEBUG_STAT_EN(strt = get_wtime_millis());
-	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr, btype, data);
+	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr, (dict?TYPE_TEXT:btype), data);
 	DEBUG_STAT_EN(en = get_wtime_millis());
 
 	if (result > -1 && _dstlen < srclen) {
@@ -1690,7 +1679,7 @@ plain_index:
 			rv = preproc_compress(pctx, tdat->compress,
 			    tdat->uncompressed_chunk + dedupe_index_sz, _chunksize,
 			    compressed_chunk + index_size_cmp, &_chunksize, tdat->level, 0,
-			    tdat->btype, tdat->data, tdat->props);
+			    tdat->btype, tdat->data, tdat->props, tdat->interesting);
 		} else {
 			DEBUG_STAT_EN(double strt, en);
 
@@ -1718,7 +1707,7 @@ plain_index:
 		if (pctx->preprocess_mode) {
 			rv = preproc_compress(pctx, tdat->compress, tdat->uncompressed_chunk,
 			    tdat->rbytes, compressed_chunk, &_chunksize, tdat->level, 0,
-			    tdat->btype, tdat->data, tdat->props);
+			    tdat->btype, tdat->data, tdat->props, tdat->interesting);
 		} else {
 			DEBUG_STAT_EN(double strt, en);
 
@@ -2449,6 +2438,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	 * Read the first chunk into a spare buffer (a simple double-buffering).
 	 */
 	file_offset = 0;
+	pctx->interesting = 0;
 	if (pctx->enable_rabin_split) {
 		rctx = create_dedupe_context(chunksize, 0, pctx->rab_blk_size, pctx->algo, &props,
 		    pctx->enable_delta_encode, pctx->enable_fixed_scan, VERSION, COMPRESS, 0, NULL,
@@ -2520,6 +2510,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			 */
 			tdat->id = pctx->chunk_num;
 			tdat->rbytes = rbytes;
+			tdat->interesting = pctx->interesting;
 			tdat->btype = pctx->btype; // Have to copy btype for this buffer as pctx->btype will change
 			if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan || pctx->enable_rabin_global)) {
 				tmp = tdat->cmp_seg;
@@ -2568,6 +2559,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			 * Read the next buffer we want to process while previous
 			 * buffer is in progress.
 			 */
+			pctx->interesting = 0;
 			if (pctx->enable_rabin_split) {
 				if (pctx->archive_mode)
 					rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize,

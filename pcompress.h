@@ -245,6 +245,7 @@ typedef struct pc_ctx {
 	uint64_t arc_buf_size, arc_buf_pos;
 	int arc_closed, arc_writing;
 	int btype, ctype;
+	int interesting;
 	int min_chunk;
 	int enable_packjpg;
 	int enable_wavpack;
@@ -286,6 +287,7 @@ struct cmp_data {
 	compress_func_ptr compress;
 	compress_func_ptr decompress;
 	int cancel;
+	int interesting;
 	Sem_t start_sem;
 	Sem_t cmp_done_sem;
 	Sem_t write_done_sem;
