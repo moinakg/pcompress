@@ -714,7 +714,6 @@ echo "*************** Running configure in libarchive ****************"
 (cd $libarchive_dir
  CC=${GCC} ./configure --disable-bsdtar --disable-bsdcpio --without-zlib --without-bz2lib --without-lzmadec --without-lzma  --without-lzo2  --without-nettle --without-openssl --without-xml2 --without-expat --disable-silent-rules --enable-shared=no --enable-static=yes --enable-xattr
  [ $? -ne 0 ] && exit $?
- cp Makefile Makefile.orig
  cat Makefile | sed '
 s@$(BUILT_SOURCES)@@
 s@$(libarchive_test_SOURCES)@@

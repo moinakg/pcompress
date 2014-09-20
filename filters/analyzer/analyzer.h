@@ -2,7 +2,7 @@
  * This file is a part of Pcompress, a chunked parallel multi-
  * algorithm lossless compression and decompression program.
  *
- * Copyright (C) 2012-2013 Moinak Ghosh. All rights reserved.
+ * Copyright (C) 2012-2014 Moinak Ghosh. All rights reserved.
  * Use is subject to license terms.
  *
  * This program is free software; you can redistribute it and/or
@@ -19,34 +19,12 @@
  * License along with this program.
  * If not, see <http://www.gnu.org/licenses/>.
  *
- * moinakg@gmail.com, http://moinakg.wordpress.com/
+ * moinakg@belenix.org, http://moinakg.wordpress.com/
  */
 
-/*
- * Dict filter for text files. Adapted from Public Domain sources
- * of Fu Siyuan's CSC 3.2 archiver.
- */
+#ifndef	_ANALYZER_H
+#define	_ANALYZER_H
 
-#ifndef _FILTERS_H
-#define _FILTERS_H
-
-#include <utils.h>
-
-#include "Common.h"
-#define MAX_WORDTREE_NODE_NUM 300 //Enough now!
-
-#ifdef  __cplusplus
-extern "C" {
-#endif
-
-void *new_dict_context();
-void delete_dict_context(void *dict_ctx);
-
-int dict_encode(void *dict_ctx, uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen);
-int dict_decode(void *dict_ctx, uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen);
-
-#ifdef  __cplusplus
-}
-#endif
+int analyze_buffer(void *src, uint64_t srclen, int btype, int adapt_mode);
 
 #endif

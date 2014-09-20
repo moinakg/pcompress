@@ -34,6 +34,34 @@
 #include "DictFilter.h"
 #include "Common.h"
 
+class DictFilter
+{
+public:
+	~DictFilter();
+	DictFilter();
+
+	u32 Forward_Dict(u8 *src, u32 size, u8 *dst, u32 *dstsize);
+	void Inverse_Dict(u8 *src, u32 size, u8 *dst, u32 *dstsize);
+
+private:
+	typedef struct
+	{
+		u32 next[26];
+		u8 symbol;
+	} CTreeNode;
+	CTreeNode wordTree[MAX_WORDTREE_NODE_NUM];
+	u32 nodeMum;
+	u8 maxSymbol;
+	//Used for DICT transformer. Words are stored in trees.
+
+	u32 wordIndex[256];
+	//Used for DICT untransformer.choose words by symbols.
+	void MakeWordTree();  //Init the DICT transformer
+
+	u32 x0,x1;
+	u32 i,k;
+};
+
 const u32 wordNum = 123;
 
 u8 wordList[wordNum][8] =

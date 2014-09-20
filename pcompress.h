@@ -60,13 +60,14 @@ extern "C" {
 #define	CHSIZE_MASK	0x80
 #define	BZIP2_A_NUM	16
 #define	LZMA_A_NUM	32
-#define	CHUNK_FLAG_DEDUP		2
+#define	CHUNK_FLAG_DEDUP	2
 #define	CHUNK_FLAG_PREPROC	4
 #define	COMP_EXTN	".pz"
 
-#define	PREPROC_TYPE_LZP		1
+#define	PREPROC_TYPE_LZP	1
 #define	PREPROC_TYPE_DELTA2	2
 #define	PREPROC_TYPE_DISPACK	4
+#define	PREPROC_TYPE_DICT	8
 #define	PREPROC_COMPRESSED	128
 
 /*
@@ -212,6 +213,7 @@ typedef struct pc_ctx {
 	int delta2_nstrides;
 	int enable_rabin_split;
 	int enable_fixed_scan;
+	int enable_analyzer;
 	int preprocess_mode;
 	int lzp_preprocess;
 	int dispack_preprocess;
@@ -275,7 +277,7 @@ struct cmp_data {
 	uchar_t *compressed_chunk;
 	uchar_t *uncompressed_chunk;
 	dedupe_context_t *rctx;
-	uint64_t rbytes;
+	int64_t rbytes;
 	uint64_t chunksize;
 	uint64_t len_cmp, len_cmp_be;
 	uchar_t checksum[CKSUM_MAX_BYTES];

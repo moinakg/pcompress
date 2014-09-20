@@ -56,6 +56,8 @@
 #include <errno.h>
 #include <pc_archive.h>
 #include <filters/dispack/dis.hpp>
+#include "analyzer.h"
+#include "filters/dict/DictFilter.h"
 
 /*
  * We use 8MB chunks by default.
@@ -204,7 +206,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
     void *dst, uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data,
     algo_props_t *props)
 {
-	uchar_t *dest = (uchar_t *)dst, type = 0;
+	uchar_t *dest = (uchar_t *)dst, type = 0, atype;
 	int64_t result;
 	uint64_t _dstlen, fromlen;
 	uchar_t *from, *to;
@@ -238,13 +240,45 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		}
 	}
 
+	/*
+	 * The analyzer is run below only for non-archive mode. When archiving the
+	 * archiver thread runs analyzer on incremental blocks and sets the type
+	 * accordingly.
+	 */
+	atype = btype;
+	/*
+	 * Run an analyzer on the data. At present the analyzer only tries
+	 * to detect if this is text for running the dict filter.
+	 */
+	if (pctx->enable_analyzer) {
+		atype = analyze_buffer(src, srclen, btype, pctx->adapt_mode);
+	}
+
+	/*
+	 * Enabling LZP also enables the DICT filter since we are dealing with text
+	 * in any case.
+	 */
+	if (pctx->lzp_preprocess && PC_TYPE(atype) == TYPE_TEXT) {
+		void *dct = new_dict_context();
+		_dstlen = fromlen;
+		result = dict_encode(dct, from, fromlen, to, &_dstlen);
+		delete_dict_context(dct);
+		if (result != -1) {
+			uchar_t *tmp;
+			tmp = from;
+			from = to;
+			to = tmp;
+			fromlen = _dstlen;
+			type |= PREPROC_TYPE_DICT;
+		}
+	}
 #ifndef _MPLV2_LICENSE_
 	if (pctx->lzp_preprocess && stype != TYPE_BMP && stype != TYPE_TIFF) {
 		int hashsize;
 
 		hashsize = lzp_hash_size(level);
 		result = lzp_compress((const uchar_t *)from, to, fromlen,
-				      hashsize, LZP_DEFAULT_LZPMINLEN, 0);
+					      hashsize, LZP_DEFAULT_LZPMINLEN, 0);
 		if (result >= 0 && result < srclen) {
 			uchar_t *tmp;
 			tmp = from;
@@ -373,6 +407,20 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 		log_msg(LOG_ERR, 0, "LZP feature not available in this build (MPLv2). Aborting.");
 		return (-1);
 #endif
+	}
+
+	if (type & PREPROC_TYPE_DICT) {
+		void *dct = new_dict_context();
+		result = dict_decode(dct, src, srclen, dst, &_dstlen);
+		delete_dict_context(dct);
+		if (result != -1) {
+			memcpy(src, dst, _dstlen);
+			srclen = _dstlen;
+			*dstlen = _dstlen;
+		} else {
+			log_msg(LOG_ERR, 0, "DICT decoding failed.");
+			return (result);
+		}
 	}
 
 	if (type & PREPROC_TYPE_DISPACK) {
@@ -689,13 +737,13 @@ cont:
  * Compressed length: 8 bytes.
  * Checksum:          Upto 64 bytes.
  * Chunk flags:       1 byte.
- * 
+ *
  * Chunk Flags, 8 bits:
  * I  I  I  I  I  I  I  I
  * |  |     |     |  |  |
  * |  '-----'     |  |  `- 0 - Uncompressed
  * |     |        |  |     1 - Compressed
- * |     |        |  |   
+ * |     |        |  |
  * |     |        |  `---- 1 - Chunk was Deduped
  * |     |        `------- 1 - Chunk was pre-compressed
  * |     |
@@ -1070,7 +1118,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 			memset(zero, 0, MAX_PW_LEN);
 			fd = open(pctx->pwd_file, O_RDWR);
 			if (fd != -1) {
-				pw_len = lseek(fd, 0, SEEK_END);
+				pw_len = (int)lseek(fd, 0, SEEK_END);
 				if (pw_len != -1) {
 					if (pw_len > MAX_PW_LEN) pw_len = MAX_PW_LEN-1;
 					lseek(fd, 0, SEEK_SET);
@@ -1552,9 +1600,11 @@ redo:
 	dedupe_index_sz = 0;
 	type = COMPRESSED;
 
+
 	/* Perform Dedup if enabled. */
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan)) {
 		dedupe_context_t *rctx;
+		uint64_t rb = tdat->rbytes;
 
 		/*
 		 * Compute checksum of original uncompressed chunk. When doing dedup
@@ -1569,8 +1619,9 @@ redo:
 		rctx = tdat->rctx;
 		reset_dedupe_context(tdat->rctx);
 		rctx->cbuf = tdat->uncompressed_chunk;
-		dedupe_index_sz = dedupe_compress(tdat->rctx, tdat->cmp_seg, &(tdat->rbytes), 0,
+		dedupe_index_sz = dedupe_compress(tdat->rctx, tdat->cmp_seg, &rb, 0,
 						  NULL, tdat->cksum_mt);
+		tdat->rbytes = rb;
 		if (!rctx->valid) {
 			memcpy(tdat->uncompressed_chunk, tdat->cmp_seg, rbytes);
 			tdat->rbytes = rbytes;
@@ -1744,6 +1795,10 @@ plain_index:
 	tdat->len_cmp += (pctx->cksum_bytes + pctx->mac_bytes);
 	rbytes = tdat->len_cmp - len_cmp; // HDR size for HMAC
 
+	/*
+	 * In adaptive mode return value from compression function function indicates
+	 * which algorithm was used on the chunk. We have to store that.
+	 */
 	if (pctx->adapt_mode)
 		type |= (rv << 4);
 
@@ -2750,7 +2805,8 @@ init_algo(pc_ctx_t *pctx, const char *algo, int bail)
 		pctx->_deinit_func = adapt_deinit;
 		pctx->_stats_func = adapt_stats;
 		pctx->_props_func = adapt_props;
-		pctx->adapt_mode = 1;
+		pctx->adapt_mode = 2;
+		pctx->enable_analyzer = 1;
 		rv = 0;
 
 	} else if (memcmp(algorithm, "adapt", 5) == 0) {
@@ -2761,6 +2817,7 @@ init_algo(pc_ctx_t *pctx, const char *algo, int bail)
 		pctx->_stats_func = adapt_stats;
 		pctx->_props_func = adapt_props;
 		pctx->adapt_mode = 1;
+		pctx->enable_analyzer = 1;
 		rv = 0;
 #ifdef ENABLE_PC_LIBBSC
 	} else if (memcmp(algorithm, "libbsc", 6) == 0) {
@@ -2770,7 +2827,6 @@ init_algo(pc_ctx_t *pctx, const char *algo, int bail)
 		pctx->_deinit_func = libbsc_deinit;
 		pctx->_stats_func = libbsc_stats;
 		pctx->_props_func = libbsc_props;
-		pctx->adapt_mode = 1;
 		rv = 0;
 #endif
 	}
@@ -3337,6 +3393,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		}
 		if (pctx->lzp_preprocess || pctx->enable_delta2_encode || pctx->dispack_preprocess) {
 			pctx->preprocess_mode = 1;
+			pctx->enable_analyzer = 1;
 		}
 		if (pctx->chunksize == 0) {
 			if (pctx->level < 9) {

@@ -383,14 +383,18 @@ get_total_ram()
 }
 
 #ifdef __APPLE__
+#define	NANO_SEC (1000000000ULL)
 int
 clock_gettime(int clk_id, struct timespec *ts)
 {
 	if (clk_id == CLOCK_MONOTONIC) {
-		uint64_t abstime = mach_absolute_time();
-		return (abstime * sTimebaseInfo.numer / sTimebaseInfo.denom);
+		uint64_t nanotime = mach_absolute_time() *
+		    sTimebaseInfo.numer / sTimebaseInfo.denom;
+		ts->tv_sec = nanotime / NANO_SEC;
+		ts->tv_nsec = nanotime % NANO_SEC;
+		return (0);
 	}
-	return (0);
+	return (EINVAL);
 }
 #endif
 
@@ -543,8 +547,7 @@ log_msg(log_level_t log_level, int show_errno, const char *format, ...)
 		fputs(msg, stderr);
 
 	} else if (ldest.type == LOG_FILE) {
-		int rv;
-		rv = write(ldest.fd, msg, strlen(msg));
+		(void) write(ldest.fd, msg, strlen(msg));
 	} else {
 		ldest.cb(msg);
 	}

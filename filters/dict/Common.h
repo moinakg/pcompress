@@ -13,14 +13,14 @@ typedef int64_t i64;
 
 const u32 KB=1024;
 const u32 MB=1048576;
-const u32 MinBlockSize=8*KB;
+const u32 MinBlockSize=8*1024;
 
 
 const u32 MaxChunkBits=21;
-const u32 MaxChunkSize=(1<<(MaxChunkBits-1));
-const u32 MaxDictSize=512*MB;//Don't change
-const u32 DefaultOutStreamBlockSize=128*KB;
-const u32 DefaultInBufferSize=MaxChunkSize;  //Should >=MaxChunkSize
+const u32 MaxChunkSize=(1<<(21-1));
+const u32 MaxDictSize=512*1048576;//Don't change
+const u32 DefaultOutStreamBlockSize=128*1024;
+const u32 DefaultInBufferSize=21;  //Should >=MaxChunkSize
 #define DLT_CHANNEL_MAX 5
 const u32 DltIndex[DLT_CHANNEL_MAX]={1,2,3,4,8};
 

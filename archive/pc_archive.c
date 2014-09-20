@@ -175,7 +175,7 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 				pctx->btype = pctx->ctype;
 			} else {
 				if (pctx->arc_buf_pos < pctx->min_chunk) {
-					uint32_t diff = pctx->min_chunk - pctx->arc_buf_pos;
+					int diff = pctx->min_chunk - (int)(pctx->arc_buf_pos);
 					if (len > diff)
 						pctx->btype = pctx->ctype;
 					else
@@ -918,9 +918,10 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 	size_t sz, offset, len;
 	ssize_t bytes_to_write;
 	uchar_t *mapbuf;
-	int rv, fd;
+	int rv, fd, typ1;
 	const char *fpath;
 
+	typ1 = typ;
 	offset = 0;
 	rv = 0;
 	sz = archive_entry_size(entry);
@@ -1014,6 +1015,11 @@ do_map:
 					} else {
 						return (ARCHIVE_OK);
 					}
+				} else {
+					if (write_header(arc, entry) == -1) {
+						close(fd);
+						return (-1);
+					}
 				}
 			} else {
 				if (write_header(arc, entry) == -1) {
@@ -1029,7 +1035,7 @@ do_map:
 		 * stage there is no need for blocking.
 		 */
 		wrtn = archive_write_data(arc, src, wlen);
-		if (wrtn < wlen) {
+		if (wrtn < (ssize_t)wlen) {
 			/* Write failed; this is bad */
 			log_msg(LOG_ERR, 0, "Data write error: %s", archive_error_string(arc));
 			rv = -1;

@@ -432,7 +432,7 @@ delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen
 		val = gtot1 + (srclen - (pos - src));
 	}
 	*dstlen = pos2 - dst;
-	return (val);
+	return ((int)val);
 }
 
 int

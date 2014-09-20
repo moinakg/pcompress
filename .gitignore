@@ -24,3 +24,4 @@ libtool
 stamp-h1
 .libs
 buildtmp
+*.dSYM
