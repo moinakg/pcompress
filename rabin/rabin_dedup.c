@@ -1256,7 +1256,7 @@ next_ent:
 				DEBUG_STAT_EN(en = get_wtime_millis());
 				DEBUG_STAT_EN(fprintf(stderr, "Chunking speed %.3f MB/s, Overall Dedupe speed %.3f MB/s\n", 
 					get_mb_s(*size, strt, en_1), get_mb_s(*size, strt, en - (w2 - w1))));
-				DEBUG_STAT_EN(fprintf(stderr, "No Dedupe possible."));
+				DEBUG_STAT_EN(fprintf(stderr, "No Dedupe possible.\n"));
 				ctx->valid = 0;
 				return (0);
 			}
