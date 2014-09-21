@@ -426,7 +426,7 @@ then
 	soname_opt="install_name,"
 	rpath="-rpath,"
 	dtag_val=""
-	lrt=""
+	lrt="-liconv"
 	max_opt="O2"
 fi
 
@@ -712,7 +712,7 @@ debugstatscppflagsval=
 
 echo "*************** Running configure in libarchive ****************"
 (cd $libarchive_dir
- CC=${GCC} ./configure --disable-bsdtar --disable-bsdcpio --without-zlib --without-bz2lib --without-lzmadec --without-lzma  --without-lzo2  --without-nettle --without-openssl --without-xml2 --without-expat --disable-silent-rules --enable-shared=no --enable-static=yes --enable-xattr
+ CC=${GCC} ./configure --disable-bsdtar --disable-bsdcpio --without-zlib --without-bz2lib --without-lzmadec --without-lzma  --without-lzo2  --without-nettle --without-openssl --without-xml2 --without-expat --disable-silent-rules --enable-shared=no --enable-static=yes --enable-xattr --with-pic
  [ $? -ne 0 ] && exit $?
  cat Makefile | sed '
 s@$(BUILT_SOURCES)@@
@@ -732,7 +732,7 @@ if [ "x${wavpack_dir}" != "x" ]
 then
 	echo "*************** Running configure in WavPack ****************"
 	(cd $wavpack_dir
-	 CC=${GCC} ./configure --enable-static=yes --enable-shared=no
+	 CC=${GCC} ./configure --enable-static=yes --enable-shared=no --with-pic
 	 if [ $? -ne 0 ]
 	 then
 		exit 1
