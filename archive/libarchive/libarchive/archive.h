@@ -510,6 +510,14 @@ __LA_DECL int archive_read_set_option(struct archive *_a,
 __LA_DECL int archive_read_set_options(struct archive *_a,
 			    const char *opts);
 
+/*
+ * This call has meaning inside a read or write client callback.
+ * It returns the metadata flag, which indicates whether the current
+ * request is for a metadata read/write. This allows clients filters
+ * to separately handle/store data and metadata.
+ */
+__LA_DECL int archive_request_is_metadata(struct archive *a);
+
 /*-
  * Convenience function to recreate the current entry (whose header
  * has just been read) on disk.

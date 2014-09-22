@@ -119,6 +119,14 @@ struct archive {
 	unsigned current_codepage; /* Current ACP(ANSI CodePage). */
 	unsigned current_oemcp; /* Current OEMCP(OEM CodePage). */
 	struct archive_string_conv *sconv;
+
+	/*
+	 * This flag is only used when invoking read/write callbacks. It
+	 * tells the callback routine whether a metadata read or write is
+	 * being requested. This lets higher-level processing routines to
+	 * separately store/handle metadata and data.
+	 */
+	int cb_is_metadata;
 };
 
 /* Check magic value and state; return(ARCHIVE_FATAL) if it isn't valid. */

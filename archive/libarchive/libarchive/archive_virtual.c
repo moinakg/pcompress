@@ -110,8 +110,13 @@ archive_read_finish(struct archive *a)
 int
 archive_write_header(struct archive *a, struct archive_entry *entry)
 {
+	int rv;
+
 	++a->file_count;
-	return ((a->vtable->archive_write_header)(a, entry));
+	a->cb_is_metadata = 1;
+	rv = (a->vtable->archive_write_header)(a, entry);
+	a->cb_is_metadata = 0;
+	return (rv);
 }
 
 int
@@ -141,13 +146,23 @@ archive_write_data_block(struct archive *a, const void *buff, size_t s, int64_t 
 int
 archive_read_next_header(struct archive *a, struct archive_entry **entry)
 {
-	return ((a->vtable->archive_read_next_header)(a, entry));
+	int rv;
+
+	a->cb_is_metadata = 1;
+	rv = (a->vtable->archive_read_next_header)(a, entry);
+	a->cb_is_metadata = 0;
+	return (rv);
 }
 
 int
 archive_read_next_header2(struct archive *a, struct archive_entry *entry)
 {
-	return ((a->vtable->archive_read_next_header2)(a, entry));
+	int rv;
+
+	a->cb_is_metadata = 1;
+	rv = (a->vtable->archive_read_next_header2)(a, entry);
+	a->cb_is_metadata = 0;
+	return (rv);
 }
 
 int
@@ -155,4 +170,10 @@ archive_read_data_block(struct archive *a,
     const void **buff, size_t *s, int64_t *o)
 {
 	return ((a->vtable->archive_read_data_block)(a, buff, s, o));
+}
+
+int
+archive_request_is_metadata(struct archive *a)
+{
+	return (a->cb_is_metadata);
 }
