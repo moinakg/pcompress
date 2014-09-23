@@ -905,33 +905,26 @@ DisUnFilter(sU8 *source,sU32 sourceSize,sU8 *dest,sU32 destSize,sU32 memStart)
 /*
  * Try to estimate if the given data block contains 32-bit x86 instructions
  * especially of the call and jmp variety.
- * TODO: This is a very rough estimation and can probably be improved.
+ * Estimator is adapted from CSC 3.2 Analyzer (Fu Siyuan).
  */
 static int
 is_x86_code(uchar_t *buf, int len)
 {
-	int e8e9 = 0, ff = 0;
-	uchar_t *pos, *last;
+	uint32_t avgFreq, freq[256] = {0};
+	uint32_t freq0x80[2] = {0};
+	uint32_t ln = len;
+	int i;
 
-	pos = buf;
-	last = buf + len - 4;
-	while (pos < last) {
-		if (*pos == 0xe8 || *pos == 0xe9) {
-			if (pos[3] == 0xff && pos[4] == 0xff) {
-				e8e9++;
-				ff++;
-				pos += 4;
-			} else if (pos[3] == 0 && pos[4] == 0) {
-				e8e9++;
-				pos += 4;
-			} else {
-				pos++;
-			}
-		} else {
-			pos++;
-		}
+	for (i = 0; i < len; i++) {
+		freq[buf[i]]++;
 	}
-	return ((double)e8e9/len >= 0.003 && (double)ff/e8e9 >= 0.1);
+
+	for (i = 0; i< 256; i++) {
+		freq0x80[i>>7] += freq[i];
+	}
+
+	avgFreq = ln>>8;
+	return (freq[0x8b] > avgFreq && freq[0x00] > avgFreq * 2 && freq[0xE8] > 6);
 }
 
 #ifdef	__cplusplus
