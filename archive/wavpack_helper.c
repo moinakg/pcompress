@@ -228,13 +228,13 @@ pack_audio(WavpackContext *wpc, read_data *rdat)
 
 	// don't use an absurd amount of memory just because we have an absurd number of channels
 
-	while (input_samples * sizeof (int32_t) * WavpackGetNumChannels (wpc) > 2048*1024)
+	while (input_samples * sizeof (int32_t) * WavpackGetNumChannels(wpc) > 2048*1024)
 		input_samples >>= 1;
 
 	WavpackPackInit(wpc);
-	bytes_per_sample = WavpackGetBytesPerSample (wpc) * WavpackGetNumChannels (wpc);
-	sample_buffer = malloc(input_samples * sizeof (int32_t) * WavpackGetNumChannels (wpc));
-	samples_remaining = WavpackGetNumSamples (wpc);
+	bytes_per_sample = WavpackGetBytesPerSample(wpc) * WavpackGetNumChannels(wpc);
+	sample_buffer = malloc(input_samples * sizeof (int32_t) * WavpackGetNumChannels(wpc));
+	samples_remaining = WavpackGetNumSamples(wpc);
 
 	while (1) {
 		uint32_t bytes_to_read, bytes_read = 0;
@@ -256,7 +256,7 @@ pack_audio(WavpackContext *wpc, read_data *rdat)
 			unsigned char *sptr = input_buffer;
 			int32_t *dptr = sample_buffer;
 
-			switch (WavpackGetBytesPerSample (wpc)) {
+			switch (WavpackGetBytesPerSample(wpc)) {
 			    case 1:
 				while (cnt--)
 					*dptr++ = *sptr++ - 128;
@@ -264,24 +264,24 @@ pack_audio(WavpackContext *wpc, read_data *rdat)
 
 			    case 2:
 				while (cnt--) {
-					*dptr++ = sptr [0] | ((int32_t)(signed char) sptr [1] << 8);
+					*dptr++ = sptr[0] | ((int32_t)(signed char) sptr[1] << 8);
 					sptr += 2;
 				}
 				break;
 
 			    case 3:
 				while (cnt--) {
-					*dptr++ = sptr [0] | ((int32_t) sptr [1] << 8) |
-					    ((int32_t)(signed char) sptr [2] << 16);
+					*dptr++ = sptr[0] | ((int32_t) sptr[1] << 8) |
+					    ((int32_t)(signed char) sptr[2] << 16);
 					sptr += 3;
 				}
 				break;
 
 			    case 4:
 				while (cnt--) {
-					*dptr++ = sptr [0] | ((int32_t) sptr [1] << 8) |
-					    ((int32_t) sptr [2] << 16) |
-					    ((int32_t)(signed char) sptr [3] << 24);
+					*dptr++ = sptr[0] | ((int32_t) sptr[1] << 8) |
+					    ((int32_t) sptr[2] << 16) |
+					    ((int32_t)(signed char) sptr[3] << 24);
 					sptr += 4;
 				}
 				break;
@@ -295,7 +295,7 @@ pack_audio(WavpackContext *wpc, read_data *rdat)
 	}
 
 	free(sample_buffer);
-	if (!WavpackFlushSamples (wpc)) {
+	if (!WavpackFlushSamples(wpc)) {
 		return (0);
 	}
 

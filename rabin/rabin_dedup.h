@@ -193,7 +193,8 @@ typedef struct {
 
 extern dedupe_context_t *create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, 
 	int rab_blk_sz, const char *algo, const algo_props_t *props, int delta_flag, int dedupe_flag,
-	int file_version, compress_op_t op, uint64_t file_size, char *tmppath, int pipe_mode, int nthreads);
+	int file_version, compress_op_t op, uint64_t file_size, char *tmppath, int pipe_mode,
+	int nthreads, size_t freeram);
 extern void destroy_dedupe_context(dedupe_context_t *ctx);
 extern unsigned int dedupe_compress(dedupe_context_t *ctx, unsigned char *buf, 
 	uint64_t *size, uint64_t offset, uint64_t *rabin_pos, int mt);

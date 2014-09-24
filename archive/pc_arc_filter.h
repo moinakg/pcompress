@@ -42,6 +42,21 @@ extern "C" {
 #define	FILTER_RETURN_SOFT_ERROR	(-2)
 #define FILTER_XATTR_ENTRY  "_._pc_filter_xattr"
 
+#define HELPER_DEF_BUFSIZ       (512 * 1024)
+#define WVPK_FILE_SIZE_LIMIT    (18 * 1024 * 1024)
+
+/*
+ * The biggest scratch buffer reqd by filter routines.
+ * Currently this is the WavPack filter buffer.
+ */
+#define	FILTER_SCRATCH_SIZE_MAX	WVPK_FILE_SIZE_LIMIT
+
+#ifndef _MPLV2_LICENSE_
+#	define  PJG_FILE_SIZE_LIMIT     (8 * 1024 * 1024)
+#	define  PJG_APPVERSION1         (25)
+#	define  PJG_APPVERSION2         (25)
+#endif
+
 struct filter_info {
 	struct archive *source_arc;
 	struct archive *target_arc;
@@ -50,6 +65,8 @@ struct filter_info {
 	int compressing, block_size;
 	int *type_ptr;
 	int cmp_level;
+	uchar_t scratch_buffer;
+	size_t scratch_buffer_size;
 };
 
 struct filter_flags {

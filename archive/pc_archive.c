@@ -1561,6 +1561,23 @@ init_filters(struct filter_flags *ff)
 	pthread_mutex_unlock(&init_mutex);
 }
 
+void
+disable_all_filters()
+{
+	struct filter_flags ff;
+
+	pthread_mutex_lock(&init_mutex);
+	if (!filters_inited) {
+		ff.enable_packjpg = 0;
+		ff.enable_wavpack = 0;
+		add_filters_by_type(typetab, &ff);
+		filters_inited = 1;
+	} else {
+		memset(typetab, 0, sizeof (typetab));
+	}
+	pthread_mutex_unlock(&init_mutex);
+}
+
 /*
  * Identify file type based on extension. Lookup is fast as we have a perfect hash function.
  * If the given extension maps to a slot which has a different extension or maps to a slot

@@ -55,6 +55,8 @@ int archiver_close(void *ctx);
 int init_archive_mod();
 int insert_filter_data(filter_func_ptr func, void *filter_private, const char *ext);
 void init_filters(struct filter_flags *ff);
+void disable_all_filters();
+
 
 #ifdef	__cplusplus
 }

@@ -37,17 +37,8 @@
 #include <utils.h>
 #include <sys/mman.h>
 #include <ctype.h>
-#include <archive.h>
-#include <archive_entry.h>
 #include "pc_arc_filter.h"
 #include "pc_archive.h"
-
-#ifndef _MPLV2_LICENSE_
-#	define	HELPER_DEF_BUFSIZ	(512 * 1024)
-#	define	FILE_SIZE_LIMIT		(32 * 1024 * 1024)
-#	define	PJG_APPVERSION1		(25)
-#	define	PJG_APPVERSION2		(25)
-#endif
 
 struct scratch_buffer {
 	uchar_t *in_buff;
@@ -164,36 +155,6 @@ copy_archive_data(struct archive *ar, uchar_t *out_buf)
 	return (tot);
 }
 
-/*
- * Copy the given buffer into the archive stream.
- */
-static ssize_t
-write_archive_data(struct archive *aw, uchar_t *out_buf, size_t len, int block_size)
-{
-	int64_t offset;
-	uchar_t *buff;
-	int r;
-	size_t tot;
-
-	buff = out_buf;
-	offset = 0;
-	tot = len;
-	while (len > 0) {
-		if (len < block_size)
-			block_size = len;
-		r = (int)archive_write_data_block(aw, buff, block_size, offset);
-		if (r < ARCHIVE_WARN)
-			r = ARCHIVE_WARN;
-		if (r != ARCHIVE_OK) {
-			return (r);
-		}
-		offset += block_size;
-		len -= block_size;
-		buff += block_size;
-	}
-	return (tot);
-}
-
 #ifndef _MPLV2_LICENSE_
 int
 pjg_version_supported(char ver)
@@ -211,7 +172,7 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 
 	len = archive_entry_size(fi->entry);
 	len1 = len;
-	if (len > FILE_SIZE_LIMIT) // Bork on massive JPEGs
+	if (len > PJG_FILE_SIZE_LIMIT) // Bork on massive JPEGs
 		return (FILTER_RETURN_SKIP);
 
 	if (fi->compressing) {
@@ -264,8 +225,7 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		 * version number. We also check if it is supported.
 		 */
 		if (mapbuf[0] != 'J' || mapbuf[1] != 'S' || !pjg_version_supported(mapbuf[2])) {
-			return (write_archive_data(fi->target_arc, sdat->in_buff,
-			    len, fi->block_size));
+			return (archive_write_data(fi->target_arc, sdat->in_buff, len));
 		}
 	}
 
@@ -301,11 +261,11 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		 * soft error to continue the archive extraction.
 		 */
 		free(out);
-		if (write_archive_data(fi->target_arc, mapbuf, len1, fi->block_size) < len1)
+		if (archive_write_data(fi->target_arc, mapbuf, len1) < len1)
 			return (FILTER_RETURN_ERROR);
 		return (FILTER_RETURN_SOFT_ERROR);
 	}
-	rv = write_archive_data(fi->target_arc, out, len, fi->block_size);
+	rv = archive_write_data(fi->target_arc, out, len);
 	free(out);
 	return (rv);
 }
@@ -320,7 +280,7 @@ packpnm_filter(struct filter_info *fi, void *filter_private)
 
 	len = archive_entry_size(fi->entry);
 	len1 = len;
-	if (len > FILE_SIZE_LIMIT) // Bork on massive JPEGs
+	if (len > PJG_FILE_SIZE_LIMIT) // Bork on massive JPEGs
 		return (FILTER_RETURN_SKIP);
 
 	if (fi->compressing) {
@@ -367,8 +327,7 @@ packpnm_filter(struct filter_info *fi, void *filter_private)
 		 * Write the raw data and skip.
 		 */
 		if (identify_pnm_type(mapbuf, len - 8) != 2) {
-			return (write_archive_data(fi->target_arc, sdat->in_buff,
-			    len, fi->block_size));
+			return (archive_write_data(fi->target_arc, sdat->in_buff, len));
 		}
 	}
 
@@ -404,11 +363,11 @@ packpnm_filter(struct filter_info *fi, void *filter_private)
 		 * soft error to continue the archive extraction.
 		 */
 		free(out);
-		if (write_archive_data(fi->target_arc, mapbuf, len1, fi->block_size) < len1)
+		if (archive_write_data(fi->target_arc, mapbuf, len1) < len1)
 			return (FILTER_RETURN_ERROR);
 		return (FILTER_RETURN_SOFT_ERROR);
 	}
-	rv = write_archive_data(fi->target_arc, out, len, fi->block_size);
+	rv = archive_write_data(fi->target_arc, out, len);
 	free(out);
 	return (rv);
 }
@@ -425,7 +384,7 @@ wavpack_filter(struct filter_info *fi, void *filter_private)
 
 	len = archive_entry_size(fi->entry);
 	len1 = len;
-	if (len > FILE_SIZE_LIMIT) // Bork on massive JPEGs
+	if (len > WVPK_FILE_SIZE_LIMIT)
 		return (FILTER_RETURN_SKIP);
 
 	if (fi->compressing) {
@@ -474,9 +433,8 @@ wavpack_filter(struct filter_info *fi, void *filter_private)
 		 * Write the raw data and skip.
 		 */
 		wpkstr = (char *)mapbuf;
-		if (strncmp(wpkstr, "wvpk", 4) == 0) {
-			return (write_archive_data(fi->target_arc, sdat->in_buff,
-			    len, fi->block_size));
+		if (strncmp(wpkstr, "wvpk", 4) != 0) {
+			return (archive_write_data(fi->target_arc, sdat->in_buff, len));
 		}
 	}
 
@@ -512,11 +470,11 @@ wavpack_filter(struct filter_info *fi, void *filter_private)
 		 * soft error to continue the archive extraction.
 		 */
 		free(out);
-		if (write_archive_data(fi->target_arc, mapbuf, len1, fi->block_size) < len1)
+		if (archive_write_data(fi->target_arc, mapbuf, len1) < len1)
 			return (FILTER_RETURN_ERROR);
 		return (FILTER_RETURN_SOFT_ERROR);
 	}
-	rv = write_archive_data(fi->target_arc, out, len, fi->block_size);
+	rv = archive_write_data(fi->target_arc, out, len);
 	free(out);
 	return (rv);
 }

@@ -165,7 +165,7 @@ dedupe_context_t *
 create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_sz,
     const char *algo, const algo_props_t *props, int delta_flag, int dedupe_flag,
     int file_version, compress_op_t op, uint64_t file_size, char *tmppath,
-    int pipe_mode, int nthreads) {
+    int pipe_mode, int nthreads, size_t freeram) {
 	dedupe_context_t *ctx;
 	uint32_t i;
 
@@ -213,14 +213,9 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 		 * chunk matching.
 		 */
 		if (dedupe_flag == RABIN_DEDUPE_FILE_GLOBAL && op == COMPRESS && rab_blk_sz >= 0) {
-			my_sysinfo msys_info;
 			int pct_interval, chunk_cksum, cksum_bytes, mac_bytes;
 			char *ck;
 
-			/*
-			 * Get amount of memory to use. The freeram got here is adjusted amount.
-			 */
-			get_sys_limits(&msys_info);
 			pct_interval = 0;
 			if (pipe_mode)
 				pct_interval = DEFAULT_PCT_INTERVAL;
@@ -245,7 +240,7 @@ create_dedupe_context(uint64_t chunksize, uint64_t real_chunksize, int rab_blk_s
 			}
 			arc = init_global_db_s(NULL, tmppath, rab_blk_sz, chunksize, pct_interval,
 					      algo, chunk_cksum, GLOBAL_SIM_CKSUM, file_size,
-					      msys_info.freeram, nthreads);
+					      freeram, nthreads);
 			if (arc == NULL) {
 				pthread_mutex_unlock(&init_lock);
 				return (NULL);

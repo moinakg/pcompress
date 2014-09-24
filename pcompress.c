@@ -1328,10 +1328,14 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 				UNCOMP_BAIL;
 			}
 		}
+
+		/*
+		 * The last parameter is freeram. It is not needed during decompression.
+		 */
 		if (pctx->enable_rabin_scan || pctx->enable_fixed_scan || pctx->enable_rabin_global) {
 			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, pctx->rab_blk_size,
 			    pctx->algo, &props, pctx->enable_delta_encode, dedupe_flag, version, DECOMPRESS, 0,
-			    NULL, pctx->pipe_mode, nprocs);
+			    NULL, pctx->pipe_mode, nprocs, 0);
 			if (tdat->rctx == NULL) {
 				UNCOMP_BAIL;
 			}
@@ -1842,7 +1846,7 @@ plain_index:
 			    ORIGINAL_CHUNKSZ, crc);
 		U32_P(mac_ptr) = htonl(crc);
 	}
-	
+
 	Sem_Post(&tdat->cmp_done_sem);
 	goto redo;
 }
@@ -1925,6 +1929,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	uchar_t *cread_buf, *pos;
 	dedupe_context_t *rctx;
 	algo_props_t props;
+	my_sysinfo msys_info;
 
 	init_algo_props(&props);
 	props.cksum = pctx->cksum;
@@ -2007,7 +2012,15 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	single_chunk = 0;
 	rctx = NULL;
 
+	/*
+	 * Get number of lCPUs. When archiving with advanced filters, we use one less
+	 * lCPU to reduce threads due to increased memory requirements.
+	 */
 	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+	if (pctx->archive_mode && (pctx->enable_packjpg || pctx->enable_wavpack)) {
+		nprocs = nprocs > 1 ? nprocs-1:nprocs;
+	}
+
 	if (pctx->nthreads > 0 && pctx->nthreads < nprocs)
 		nprocs = pctx->nthreads;
 	else
@@ -2254,6 +2267,26 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		tdat->compress = pctx->_compress_func;
 		tdat->decompress = pctx->_decompress_func;
 		tdat->uncompressed_chunk = (uchar_t *)1;
+		if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan)) {
+			if (single_chunk)
+				tdat->cmp_seg = (uchar_t *)1;
+			else
+				tdat->cmp_seg = (uchar_t *)slab_alloc(NULL, compressed_chunksize);
+			tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
+				compressed_chunksize);
+		} else {
+			if (single_chunk)
+				tdat->uncompressed_chunk = (uchar_t *)1;
+			else
+				tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL, chunksize);
+			tdat->cmp_seg = (uchar_t *)slab_alloc(NULL, compressed_chunksize);
+		}
+		tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ +
+		    pctx->cksum_bytes + pctx->mac_bytes;
+		if (!tdat->cmp_seg || !tdat->uncompressed_chunk) {
+			log_msg(LOG_ERR, 0, "5: Out of memory");
+			COMP_BAIL;
+		}
 		tdat->cancel = 0;
 		tdat->decompressing = 0;
 		if (single_chunk)
@@ -2270,8 +2303,8 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		Sem_Init(&(tdat->index_sem), 0, 0);
 
 		if (pctx->_init_func) {
-			if (pctx->_init_func(&(tdat->data), &(tdat->level), props.nthreads, chunksize,
-			    VERSION, COMPRESS) != 0) {
+			if (pctx->_init_func(&(tdat->data), &(tdat->level), props.nthreads,
+			    chunksize, VERSION, COMPRESS) != 0) {
 				COMP_BAIL;
 			}
 		}
@@ -2291,15 +2324,29 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	thread = 1;
 
 	/*
-	 * initialize Dedupe Context here after all other allocations so that index size can be correctly
-	 * computed based on free memory.
+	 * initialize Dedupe Context here after all other allocations so that index size can be
+	 * correctly computed based on free memory. The freeram got here is adjusted amount.
+	 * When archiving, filter scratch buffer is taken into account.
 	 */
+	get_sys_limits(&msys_info);
+
+	if (pctx->enable_packjpg || pctx->enable_wavpack) {
+		if (FILTER_SCRATCH_SIZE_MAX >= msys_info.freeram ||
+		    msys_info.freeram - FILTER_SCRATCH_SIZE_MAX < FILTER_SCRATCH_SIZE_MAX) {
+			log_msg(LOG_WARN, 0, "Not enough memory. Disabling advanced filters.");
+			disable_all_filters();
+		} else {
+			msys_info.freeram -= FILTER_SCRATCH_SIZE_MAX;
+		}
+	}
+
 	if (pctx->enable_rabin_scan || pctx->enable_fixed_scan || pctx->enable_rabin_global) {
 		for (i = 0; i < nprocs; i++) {
 			tdat = dary[i];
-			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, pctx->rab_blk_size,
-			    pctx->algo, &props, pctx->enable_delta_encode, dedupe_flag, VERSION, COMPRESS, sbuf.st_size,
-			    tmpdir, pctx->pipe_mode, nprocs);
+			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize,
+			    pctx->rab_blk_size, pctx->algo, &props, pctx->enable_delta_encode,
+			    dedupe_flag, VERSION, COMPRESS, sbuf.st_size, tmpdir,
+			    pctx->pipe_mode, nprocs, msys_info.freeram);
 			if (tdat->rctx == NULL) {
 				COMP_BAIL;
 			}
@@ -2442,7 +2489,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	if (pctx->enable_rabin_split) {
 		rctx = create_dedupe_context(chunksize, 0, pctx->rab_blk_size, pctx->algo, &props,
 		    pctx->enable_delta_encode, pctx->enable_fixed_scan, VERSION, COMPRESS, 0, NULL,
-		    pctx->pipe_mode, nprocs);
+		    pctx->pipe_mode, nprocs, msys_info.freeram);
 		if (pctx->archive_mode)
 			rbytes = Read_Adjusted(uncompfd, cread_buf, chunksize, &rabin_count, rctx, pctx);
 		else
@@ -2469,34 +2516,6 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			if (rbytes == 0) { /* EOF */
 				bail = 1;
 				break;
-			}
-			/*
-			 * Delayed allocation. Allocate chunks if not already done.
-			 */
-			if (!tdat->cmp_seg) {
-				if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan)) {
-					if (single_chunk)
-						tdat->cmp_seg = (uchar_t *)1;
-					else
-						tdat->cmp_seg = (uchar_t *)slab_alloc(NULL,
-							compressed_chunksize);
-					tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
-						compressed_chunksize);
-				} else {
-					if (single_chunk)
-						tdat->uncompressed_chunk = (uchar_t *)1;
-					else
-						tdat->uncompressed_chunk =
-						    (uchar_t *)slab_alloc(NULL, chunksize);
-					tdat->cmp_seg = (uchar_t *)slab_alloc(NULL,
-						compressed_chunksize);
-				}
-				tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ +
-				    pctx->cksum_bytes + pctx->mac_bytes;
-				if (!tdat->cmp_seg || !tdat->uncompressed_chunk) {
-					log_msg(LOG_ERR, 0, "5: Out of memory");
-					COMP_BAIL;
-				}
 			}
 
 			/*

@@ -43,7 +43,8 @@
 #include <rabin_dedup.h>
 #include <cpuid.h>
 #include <xxhash.h>
-#include <pc_archive.h>
+#include "archive/pc_archive.h"
+#include "archive/pc_arc_filter.h"
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
