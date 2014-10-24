@@ -608,7 +608,7 @@ wavpack_filter_decode(uchar_t *in_buf, size_t len, uchar_t **out_buf, ssize_t ou
 		}
 		WavpackFreeWrapper(wpc);
 	} else {
-		log_msg(LOG_ERR, 0, "Wavpack: RIFF wrapper size if zero. File corrupt?");
+		log_msg(LOG_ERR, 0, "Wavpack: RIFF wrapper size is zero. File corrupt?");
 		WavpackCloseFile(wpc);
 		return (0);
 	}

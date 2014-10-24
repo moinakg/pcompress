@@ -114,6 +114,12 @@ struct archive_read_filter {
 	char		 end_of_file;
 	char		 closed;
 	char		 fatal;
+
+	/*
+	 * Shadow structure for keeping track of metadata requests if
+	 * metadata streaming is enabled.
+	 */
+	struct archive_read_filter *shadow;
 };
 
 /*

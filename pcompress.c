@@ -109,6 +109,7 @@ usage(pc_ctx_t *pctx)
 "       -v       Enables verbose mode.\n\n"
 "       -t <number>\n"
 "                Sets the number of compression threads. Default: core count.\n"
+"       -T       Disable separate metadata stream.\n"
 "       -S <chunk checksum>\n"
 "                The chunk verification checksum. Default: BLAKE256. Others are: CRC64, SHA256,\n"
 "                SHA512, KECCAK256, KECCAK512, BLAKE256, BLAKE512.\n"
@@ -206,7 +207,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
     algo_props_t *props, int interesting)
 {
 	uchar_t *dest = (uchar_t *)dst, type = 0;
-	int64_t result;
+	int result;
 	uint64_t _dstlen, fromlen;
 	uchar_t *from, *to;
 	int stype, dict;
@@ -264,6 +265,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 #ifndef _MPLV2_LICENSE_
 	if (pctx->lzp_preprocess && stype != TYPE_BMP && stype != TYPE_TIFF) {
 		int hashsize;
+		int64_t result;
 
 		hashsize = lzp_hash_size(level);
 		result = lzp_compress((const uchar_t *)from, to, fromlen,
@@ -310,7 +312,8 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	U64_P(dest + 1) = htonll(srclen);
 	_dstlen = srclen;
 	DEBUG_STAT_EN(strt = get_wtime_millis());
-	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr, (dict?TYPE_TEXT:btype), data);
+	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr,
+	    (dict?TYPE_TEXT:btype), data);
 	DEBUG_STAT_EN(en = get_wtime_millis());
 
 	if (result > -1 && _dstlen < srclen) {
@@ -341,7 +344,7 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
     algo_props_t *props)
 {
 	uchar_t *sorc = (uchar_t *)src, type;
-	int64_t result;
+	int result;
 	uint64_t _dstlen = *dstlen, _dstlen1 = *dstlen;
 	DEBUG_STAT_EN(double strt, en);
 
@@ -380,6 +383,8 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 	if (type & PREPROC_TYPE_LZP) {
 #ifndef _MPLV2_LICENSE_
 		int hashsize;
+		int64_t result;
+
 		hashsize = lzp_hash_size(level);
 		result = lzp_decompress((const uchar_t *)src, (uchar_t *)dst, srclen,
 					hashsize, LZP_DEFAULT_LZPMINLEN, 0);
@@ -390,10 +395,11 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 			_dstlen = result;
 		} else {
 			log_msg(LOG_ERR, 0, "LZP decompression failed.");
-			return (result);
+			return ((int)result);
 		}
 #else
-		log_msg(LOG_ERR, 0, "LZP feature not available in this build (MPLv2). Aborting.");
+		log_msg(LOG_ERR, 0, "LZP feature not available in this build"
+		    " (MPLv2). Aborting.");
 		return (-1);
 #endif
 	}
@@ -422,7 +428,8 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 		}
 	}
 
-	if (!(type & (PREPROC_COMPRESSED|PREPROC_TYPE_DELTA2|PREPROC_TYPE_LZP|PREPROC_TYPE_DISPACK))
+	if (!(type & (PREPROC_COMPRESSED|PREPROC_TYPE_DELTA2|PREPROC_TYPE_LZP|
+		      PREPROC_TYPE_DISPACK|PREPROC_TYPE_DICT))
 	    && type > 0) {
 		log_msg(LOG_ERR, 0, "Invalid preprocessing flags: %d", type);
 		return (-1);
@@ -526,6 +533,7 @@ redo:
 			/*
 			 * Decryption failure is fatal.
 			 */
+			log_msg(LOG_ERR, 0, "Chunk %d, Decryption failed", tdat->id);
 			pctx->main_cancel = 1;
 			tdat->len_cmp = 0;
 			Sem_Post(&tdat->cmp_done_sem);
@@ -589,8 +597,9 @@ redo:
 		ubuf = tdat->uncompressed_chunk + RABIN_HDR_SIZE + dedupe_index_sz;
 		if (HDR & COMPRESSED) {
 			if (HDR & CHUNK_FLAG_PREPROC) {
-				rv = preproc_decompress(pctx, tdat->decompress, cmpbuf, dedupe_data_sz_cmp,
-				    ubuf, &_chunksize, tdat->level, HDR, pctx->btype, tdat->data, tdat->props);
+				rv = preproc_decompress(pctx, tdat->decompress, cmpbuf,
+				    dedupe_data_sz_cmp,	ubuf, &_chunksize, tdat->level,
+				    HDR, pctx->btype, tdat->data, tdat->props);
 			} else {
 				DEBUG_STAT_EN(double strt, en);
 
@@ -753,10 +762,10 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 	char algorithm[ALGO_SZ];
 	struct stat sbuf;
 	struct wdata w;
-	int compfd = -1, p, dedupe_flag;
+	int compfd = -1, compfd2 = -1, p, dedupe_flag;
 	int uncompfd = -1, err, np, bail;
-	int nprocs = 1, thread = 0, level;
-	unsigned int i;
+	int thread = 0, level;
+	uint32_t nprocs = 1, i;
 	unsigned short version, flags;
 	int64_t chunksize, compressed_chunksize;
 	struct cmp_data **dary, *tdat;
@@ -774,6 +783,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 	 */
 	if (!pctx->pipe_mode) {
 		if (filename == NULL) {
+			pctx->pipe_mode = 1;
 			compfd = fileno(stdin);
 			if (compfd == -1) {
 				log_msg(LOG_ERR, 1, "fileno ");
@@ -849,7 +859,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		err = 1;
 		goto uncomp_done;
 	}
-	if (version < VERSION-3) {
+	if (version < VERSION-4) {
 		log_msg(LOG_ERR, 0, "Unsupported version: %d", version);
 		err = 1;
 		goto uncomp_done;
@@ -859,6 +869,17 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 	 * First check for archive mode. In that case the to_filename must be a directory.
 	 */
 	if (flags & FLAG_ARCHIVE) {
+		if (flags & FLAG_META_STREAM && version > 9)
+			pctx->meta_stream = 1;
+
+		/*
+		 * Archives with metadata streams cannot be decoded in pipe mode.
+		 */
+		if (pctx->pipe_mode && pctx->meta_stream) {
+			log_msg(LOG_ERR, 0,
+			    "Cannot extract archive with metadata stream in pipe mode.");
+		}
+
 		/*
 		 * If to_filename is not set, we just use the current directory.
 		 */
@@ -873,13 +894,16 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 				err = 1;
 				goto uncomp_done;
 			}
-			if (mkdir(to_filename, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) == -1) {
-				log_msg(LOG_ERR, 1, "Unable to create target directory %s.", to_filename);
+			if (mkdir(to_filename,
+			    S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) == -1) {
+				log_msg(LOG_ERR, 1, "Unable to create target directory %s.",
+				    to_filename);
 				err = 1;
 				goto uncomp_done;
 			}
 			if (stat(to_filename, &sbuf) == -1) {
-				log_msg(LOG_ERR, 1, "Unable to correctly create target directory %s.", to_filename);
+				log_msg(LOG_ERR, 1, "Unable to correctly create target directory %s.",
+				    to_filename);
 				err = 1;
 				goto uncomp_done;
 			}
@@ -889,11 +913,24 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 			err = 1;
 			goto uncomp_done;
 		}
+
+		/*
+		 * Open another fd to the compressed archive. This is used by the metadata
+		 * thread.
+		 */
+		if (pctx->meta_stream) {
+			if ((compfd2 = open(filename, O_RDONLY, 0)) == -1) {
+				log_msg(LOG_ERR, 1, "Cannot open: %s", filename);
+				err = 1;
+				goto uncomp_done;
+			}
+		}
 	} else {
 		const char *origf;
 
 		if (pctx->list_mode) {
-			log_msg(LOG_ERR, 0, "Nothing to list. The compressed file is not an archive.");
+			log_msg(LOG_ERR, 0, "Nothing to list. The compressed file "
+			    "is not an archive.");
 			err = 1;
 			goto uncomp_done;
 		}
@@ -908,7 +945,8 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 			pctx->to_filename = pctx->archive_members_file;
 			pos = strrchr(filename, '.');
 			if (pos != NULL) {
-				if ((pos[0] == 'p' || pos[0] == 'P') && (pos[1] == 'z' || pos[1] == 'Z')) {
+				if ((pos[0] == 'p' || pos[0] == 'P') &&
+				    (pos[1] == 'z' || pos[1] == 'Z')) {
 					memcpy(to_filename, filename, pos - filename);
 				} else {
 					pos = NULL;
@@ -987,8 +1025,10 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		if (pctx->cksum == CKSUM_BLAKE256) pctx->cksum = CKSUM_SKEIN256;
 		if (pctx->cksum == CKSUM_BLAKE512) pctx->cksum = CKSUM_SKEIN512;
 	}
-	if (get_checksum_props(NULL, &(pctx->cksum), &(pctx->cksum_bytes), &(pctx->mac_bytes), 1) == -1) {
-		log_msg(LOG_ERR, 0, "Invalid checksum algorithm code: %d. File corrupt ?", pctx->cksum);
+	if (get_checksum_props(NULL, &(pctx->cksum), &(pctx->cksum_bytes),
+	    &(pctx->mac_bytes), 1) == -1) {
+		log_msg(LOG_ERR, 0, "Invalid checksum algorithm code: %d. "
+		    "File corrupt ?", pctx->cksum);
 		UNCOMP_BAIL;
 	}
 
@@ -1111,7 +1151,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 				if (pw_len != -1) {
 					if (pw_len > MAX_PW_LEN) pw_len = MAX_PW_LEN-1;
 					lseek(fd, 0, SEEK_SET);
-					len = Read(fd, pw, pw_len);
+					len = (int)Read(fd, pw, pw_len);
 					if (len != -1 && len == pw_len) {
 						pw[pw_len] = '\0';
 						if (isspace(pw[pw_len - 1]))
@@ -1139,7 +1179,8 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 
 		if (pctx->user_pw) {
 			if (init_crypto(&(pctx->crypto_ctx), pctx->user_pw, pctx->user_pw_len,
-			    pctx->encrypt_type, salt2, saltlen, pctx->keylen, nonce, DECRYPT_FLAG) == -1) {
+			    pctx->encrypt_type, salt2, saltlen, pctx->keylen, nonce,
+			    DECRYPT_FLAG) == -1) {
 				memset(salt2, 0, saltlen);
 				free(salt2);
 				memset(salt1, 0, saltlen);
@@ -1246,6 +1287,32 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 			}
 			add_fname(pctx->archive_temp_file);
 		}
+
+		/*
+		 * If we are having a metadata stream, get the current position of the main
+		 * fd. The secondary fd must be set to the same position so that metadata
+		 * thread can start scanning for chunks after the header and any info chunks.
+		 *
+		 * NOTE: This is done here to allow setup_extractor() call later to work.
+		 */
+		if (pctx->meta_stream) {
+			off_t cpos = lseek(compfd, 0, SEEK_CUR);
+			cpos = lseek(compfd2, cpos, SEEK_SET);
+			if (cpos == -1) {
+				log_msg(LOG_ERR, 1, "Can't seek in metadata fd: ");
+				UNCOMP_BAIL;
+			}
+			
+			/*
+			 * Finally create the metadata context.
+			 */
+			pctx->meta_ctx = meta_ctx_create(pctx, VERSION, compfd2);
+			if (pctx->meta_ctx == NULL) {
+				close(compfd2);
+				UNCOMP_BAIL;
+			}
+		}
+		
 		uncompfd = -1;
 		if (setup_extractor(pctx) == -1) {
 			log_msg(LOG_ERR, 0, "Setup of extraction context failed.");
@@ -1272,7 +1339,16 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		}
 	}
 
-	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+	/*
+	 * WARNING: NO Further file header/info chunk processing beyond this point.
+	 *          Doing so will BREAK Separate Metadata stream processing.
+	 */
+
+	nprocs = (uint32_t)sysconf(_SC_NPROCESSORS_ONLN);
+	if (pctx->archive_mode) {
+		nprocs = nprocs > 1 ? nprocs-1:nprocs;
+	}
+	
 	if (pctx->nthreads > 0 && pctx->nthreads < nprocs)
 		nprocs = pctx->nthreads;
 	else
@@ -1333,9 +1409,9 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		 * The last parameter is freeram. It is not needed during decompression.
 		 */
 		if (pctx->enable_rabin_scan || pctx->enable_fixed_scan || pctx->enable_rabin_global) {
-			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize, pctx->rab_blk_size,
-			    pctx->algo, &props, pctx->enable_delta_encode, dedupe_flag, version, DECOMPRESS, 0,
-			    NULL, pctx->pipe_mode, nprocs, 0);
+			tdat->rctx = create_dedupe_context(chunksize, compressed_chunksize,
+			    pctx->rab_blk_size, pctx->algo, &props, pctx->enable_delta_encode,
+			    dedupe_flag, version, DECOMPRESS, 0, NULL, pctx->pipe_mode, nprocs, 0);
 			if (tdat->rctx == NULL) {
 				UNCOMP_BAIL;
 			}
@@ -1348,7 +1424,8 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 						UNCOMP_BAIL;
 					}
 				} else {
-					if ((tdat->rctx->out_fd = open(to_filename, O_RDONLY, 0)) == -1) {
+					if ((tdat->rctx->out_fd = open(to_filename, O_RDONLY, 0))
+					    == -1) {
 						log_msg(LOG_ERR, 1, "Unable to get new read handle"
 						    " to output file");
 						UNCOMP_BAIL;
@@ -1397,6 +1474,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 		log_msg(LOG_ERR, 1, "Error in thread creation: ");
 		UNCOMP_BAIL;
 	}
+	thread = 2;
 
 	/*
 	 * Now read from the compressed file in variable compressed chunk size.
@@ -1419,6 +1497,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 			tdat->id = pctx->chunk_num;
 			if (tdat->rctx) tdat->rctx->id = tdat->id;
 
+redo:
 			/*
 			 * First read length of compressed chunk.
 			 */
@@ -1448,6 +1527,30 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 			if (tdat->len_cmp == 0) {
 				bail = 1;
 				break;
+
+			} else if (tdat->len_cmp == METADATA_INDICATOR) {
+				if (!pctx->meta_stream) {
+					log_msg(LOG_ERR, 0, "Invalid chunk %d length: %" PRIu64 "\n",
+						pctx->chunk_num, tdat->len_cmp);
+					UNCOMP_BAIL;
+				}
+				/*
+				 * If compressed length indicates a metadata chunk. Read it's length
+				 * and skip the chunk.
+				 */
+				rb = Read(compfd, &tdat->len_cmp_be, sizeof (tdat->len_cmp_be));
+				if (rb != sizeof (tdat->len_cmp_be)) {
+					if (rb < 0) log_msg(LOG_ERR, 1, "Read: ");
+					else
+						log_msg(LOG_ERR, 0, "Incomplete chunk %d header,"
+							"file corrupt", pctx->chunk_num);
+					UNCOMP_BAIL;
+				}
+
+				/*
+				 * We will be reading and skipping this chunk next.
+				 */
+				tdat->len_cmp_be = LE64(tdat->len_cmp_be);
 			}
 
 			/*
@@ -1457,7 +1560,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 			 * decompression allows to avoid allocating per-thread chunks which will
 			 * never be used. This can happen if chunk count < thread count.
 			 */
-			if (!tdat->compressed_chunk) {
+			if (!tdat->compressed_chunk && tdat->len_cmp != METADATA_INDICATOR) {
 				tdat->compressed_chunk = (uchar_t *)slab_alloc(NULL,
 				    compressed_chunksize);
 				if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan))
@@ -1473,19 +1576,30 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 				tdat->cmp_seg = tdat->uncompressed_chunk;
 			}
 
-			if (tdat->len_cmp > pctx->largest_chunk)
-				pctx->largest_chunk = tdat->len_cmp;
-			if (tdat->len_cmp < pctx->smallest_chunk)
-				pctx->smallest_chunk = tdat->len_cmp;
-			pctx->avg_chunk += tdat->len_cmp;
+			if (tdat->len_cmp != METADATA_INDICATOR) {
+				if (tdat->len_cmp > pctx->largest_chunk)
+					pctx->largest_chunk = tdat->len_cmp;
+				if (tdat->len_cmp < pctx->smallest_chunk)
+					pctx->smallest_chunk = tdat->len_cmp;
+				pctx->avg_chunk += tdat->len_cmp;
 
-			/*
-			 * Now read compressed chunk including the checksum.
-			 */
-			tdat->rbytes = Read(compfd, tdat->compressed_chunk,
-			    tdat->len_cmp + pctx->cksum_bytes + pctx->mac_bytes + CHUNK_FLAG_SZ);
+				/*
+				 * Now read compressed chunk including the checksum.
+				 */
+				rb = tdat->len_cmp + pctx->cksum_bytes + pctx->mac_bytes +
+				    CHUNK_FLAG_SZ;
+				tdat->rbytes = Read(compfd, tdat->compressed_chunk, rb);
+			} else {
+				int64_t cpos = lseek(compfd, 0, SEEK_CUR);
+
+				 /* Two values already read */
+				rb = tdat->len_cmp_be + METADATA_HDR_SZ - 16;
+				tdat->rbytes = lseek(compfd, rb, SEEK_CUR);
+				if (tdat->rbytes > 0)
+					tdat->rbytes = tdat->rbytes - cpos;
+			}
 			if (pctx->main_cancel) break;
-			if (tdat->rbytes < tdat->len_cmp + pctx->cksum_bytes + pctx->mac_bytes + CHUNK_FLAG_SZ) {
+			if (tdat->rbytes < rb) {
 				if (tdat->rbytes < 0) {
 					log_msg(LOG_ERR, 1, "Read: ");
 					UNCOMP_BAIL;
@@ -1494,6 +1608,13 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 					    pctx->chunk_num);
 					UNCOMP_BAIL;
 				}
+			}
+
+			/*
+			 * If we just skipped a metadata chunk, redo the read to go to the next one.
+			 */
+			if (tdat->len_cmp == METADATA_INDICATOR) {
+				goto redo;
 			}
 			Sem_Post(&tdat->start_sem);
 			++(pctx->chunk_num);
@@ -1519,7 +1640,8 @@ uncomp_done:
 			Sem_Post(&tdat->cmp_done_sem);
 			pthread_join(tdat->thr, NULL);
 		}
-		pthread_join(writer_thr, NULL);
+		if (thread == 2)
+			pthread_join(writer_thr, NULL);
 	}
 
 	/*
@@ -1556,6 +1678,8 @@ uncomp_done:
 		if (uncompfd != -1) close(uncompfd);
 	}
 	if (pctx->archive_mode) {
+		if (pctx->meta_stream)
+			meta_ctx_done(pctx->meta_ctx);
 		pthread_join(pctx->archive_thread, NULL);
 		if (pctx->enable_rabin_global) {
 			close(pctx->archive_temp_fd);
@@ -1782,7 +1906,8 @@ plain_index:
 	len_cmp = tdat->len_cmp;
 	*((typeof (len_cmp) *)(tdat->cmp_seg)) = htonll(tdat->len_cmp);
 	if (!pctx->encrypt_type)
-		serialize_checksum(tdat->checksum, tdat->cmp_seg + sizeof (tdat->len_cmp), pctx->cksum_bytes);
+		serialize_checksum(tdat->checksum, tdat->cmp_seg + sizeof (tdat->len_cmp),
+		    pctx->cksum_bytes);
 	tdat->len_cmp += CHUNK_FLAG_SZ;
 	tdat->len_cmp += sizeof (len_cmp);
 	tdat->len_cmp += (pctx->cksum_bytes + pctx->mac_bytes);
@@ -1879,14 +2004,16 @@ repeat:
 		if (pctx->archive_mode && tdat->decompressing) {
 			wbytes = archiver_write(pctx, tdat->cmp_seg, tdat->len_cmp);
 		} else {
+			pthread_mutex_lock(&pctx->write_mutex);
 			wbytes = Write(w->wfd, tdat->cmp_seg, tdat->len_cmp);
+			pthread_mutex_unlock(&pctx->write_mutex);
 		}
 		if (pctx->archive_temp_fd != -1 && wbytes == tdat->len_cmp) {
 			wbytes = Write(pctx->archive_temp_fd, tdat->cmp_seg, tdat->len_cmp);
 		}
 		if (unlikely(wbytes != tdat->len_cmp)) {
-			log_msg(LOG_ERR, 1, "Chunk Write (expected: %" PRIu64 ", written: %" PRIu64 ") : ",
-				tdat->len_cmp, wbytes);
+			log_msg(LOG_ERR, 1, "Chunk Write (expected: %" PRIu64
+			    ", written: %" PRId64 ") : ", tdat->len_cmp, wbytes);
 do_cancel:
 			pctx->main_cancel = 1;
 			tdat->cancel = 1;
@@ -1922,7 +2049,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	unsigned short version, flags;
 	struct stat sbuf;
 	int compfd = -1, uncompfd = -1, err;
-	int thread, wthread, bail, single_chunk;
+	int thread, bail, single_chunk;
 	uint32_t i, nprocs, np, p, dedupe_flag;
 	struct cmp_data **dary = NULL, *tdat;
 	pthread_t writer_thr;
@@ -1940,7 +2067,6 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	sbuf.st_size = 0;
 	err = 0;
 	thread = 0;
-	wthread = 0;
 	dedupe_flag = RABIN_DEDUPE_SEGMENTED; // Silence the compiler
 	compressed_chunksize = 0;
 
@@ -1966,11 +2092,11 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			memset(zero, 0, MAX_PW_LEN);
 			fd = open(pctx->pwd_file, O_RDWR);
 			if (fd != -1) {
-				pw_len = lseek(fd, 0, SEEK_END);
+				pw_len = (int)lseek(fd, 0, SEEK_END);
 				if (pw_len != -1) {
 					if (pw_len > MAX_PW_LEN) pw_len = MAX_PW_LEN-1;
 					lseek(fd, 0, SEEK_SET);
-					len = Read(fd, pw, pw_len);
+					len = (int)Read(fd, pw, pw_len);
 					if (len != -1 && len == pw_len) {
 						pw[pw_len] = '\0';
 						if (isspace(pw[pw_len - 1]))
@@ -1989,8 +2115,8 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			close(fd);
 		}
 		if (pctx->user_pw) {
-			if (init_crypto(&(pctx->crypto_ctx), pctx->user_pw, pctx->user_pw_len, pctx->encrypt_type,
-			    NULL, 0, pctx->keylen, 0, ENCRYPT_FLAG) == -1) {
+			if (init_crypto(&(pctx->crypto_ctx), pctx->user_pw, pctx->user_pw_len,
+			    pctx->encrypt_type, NULL, 0, pctx->keylen, 0, ENCRYPT_FLAG) == -1) {
 				memset(pctx->user_pw, 0, pctx->user_pw_len);
 				log_msg(LOG_ERR, 0, "Failed to initialize crypto.");
 				return (1);
@@ -2016,7 +2142,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 	 * Get number of lCPUs. When archiving with advanced filters, we use one less
 	 * lCPU to reduce threads due to increased memory requirements.
 	 */
-	nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+	nprocs = (uint32_t)sysconf(_SC_NPROCESSORS_ONLN);
 	if (pctx->archive_mode && (pctx->enable_packjpg || pctx->enable_wavpack)) {
 		nprocs = nprocs > 1 ? nprocs-1:nprocs;
 	}
@@ -2093,7 +2219,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			}
 		} else {
 			if (pctx->nthreads == 0 || pctx->nthreads > sbuf.st_size / chunksize) {
-				pctx->nthreads = sbuf.st_size / chunksize;
+				pctx->nthreads = (int)(sbuf.st_size / chunksize);
 				if (sbuf.st_size % chunksize)
 					pctx->nthreads++;
 			}
@@ -2183,15 +2309,16 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		my_sysinfo msys_info;
 
 		get_sys_limits(&msys_info);
-		global_dedupe_bufadjust(pctx->rab_blk_size, &chunksize, 0, pctx->algo, pctx->cksum,
-			CKSUM_BLAKE256, sbuf.st_size, msys_info.freeram, pctx->nthreads, pctx->pipe_mode);
+		global_dedupe_bufadjust(pctx->rab_blk_size, &chunksize, 0, pctx->algo,
+		    pctx->cksum, CKSUM_BLAKE256, sbuf.st_size, msys_info.freeram,
+		    pctx->nthreads, pctx->pipe_mode);
 	}
 
 	/*
 	 * Compressed buffer size must include zlib/dedup scratch space and
 	 * chunk header space.
 	 * See http://www.zlib.net/manual.html#compress2
-	 * 
+	 *
 	 * We do this unconditionally whether user mentioned zlib or not
 	 * to keep it simple. While zlib scratch space is only needed at
 	 * runtime, chunk header is stored in the file.
@@ -2321,6 +2448,18 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			COMP_BAIL;
 		}
 	}
+
+	/*
+	 * Now create the metadata handler context. This is relevant in archive mode where
+	 * the underlying libarchive metadata is compressed into a separate stream of
+	 * metadata chunks.
+	 */
+	if (pctx->meta_stream) {
+		pctx->meta_ctx = meta_ctx_create(pctx, VERSION, compfd);
+		if (pctx->meta_ctx == NULL) {
+			COMP_BAIL;
+		}
+	}
 	thread = 1;
 
 	/*
@@ -2373,7 +2512,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		log_msg(LOG_ERR, 1, "Error in thread creation: ");
 		COMP_BAIL;
 	}
-	wthread = 1;
+	thread = 2;
 
 	/*
 	 * Start the archiver thread if needed.
@@ -2420,7 +2559,8 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			pos += 8;
 
 		} else if (pctx->encrypt_type == CRYPTO_ALG_SALSA20) {
-			serialize_checksum(crypto_nonce(&(pctx->crypto_ctx)), pos, XSALSA20_CRYPTO_NONCEBYTES);
+			serialize_checksum(crypto_nonce(&(pctx->crypto_ctx)), pos,
+			    XSALSA20_CRYPTO_NONCEBYTES);
 			pos += XSALSA20_CRYPTO_NONCEBYTES;
 		}
 		*((int *)pos) = htonl(pctx->keylen);
@@ -2613,8 +2753,10 @@ comp_done:
 	 */
 	if (!pctx->pipe_mode) {
 		if (uncompfd != -1) close(uncompfd);
-		if (pctx->archive_mode)
-			archiver_close(pctx);
+	}
+	if (pctx->meta_stream) {
+		meta_ctx_done(pctx->meta_ctx);
+		archiver_close(pctx);
 	}
 
 	if (pctx->t_errored) err = pctx->t_errored;
@@ -2629,7 +2771,7 @@ comp_done:
 			if (pctx->encrypt_type)
 				hmac_cleanup(&tdat->chunk_hmac);
 		}
-		if (wthread)
+		if (thread == 2)
 			pthread_join(writer_thr, NULL);
 	}
 
@@ -2867,6 +3009,7 @@ create_pc_context(void)
 	ctx->pagesize = sysconf(_SC_PAGE_SIZE);
 	ctx->btype = TYPE_UNKNOWN;
 	ctx->delta2_nstrides = NSTRIDES_STANDARD;
+	pthread_mutex_init(&ctx->write_mutex, NULL);
 
 	return (ctx);
 }
@@ -2923,7 +3066,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	ff.enable_wavpack = 0;
 
 	pthread_mutex_lock(&opt_parse);
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avmKjxi")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avmKjxiT")) != -1) {
 		int ovr;
 		int64_t chunksize;
 
@@ -3099,6 +3242,9 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			pctx->dispack_preprocess = 1;
 			break;
 
+		    case 'T':
+			pctx->meta_stream = -1;
+
 		    case '?':
 		    default:
 			return (2);
@@ -3214,7 +3360,8 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	 */
 	if ((pctx->dispack_preprocess || ff.enable_packjpg || ff.enable_wavpack)
 	    && !pctx->archive_mode) {
-		log_msg(LOG_ERR, 0, "Dispack Executable Preprocessor and PackJPG are only valid when archiving.");
+		log_msg(LOG_ERR, 0, "Dispack Executable Preprocessor and PackJPG are "
+		    "only valid when archiving.");
 		return (1);
 	}
 
@@ -3337,7 +3484,8 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	pctx->main_cancel = 0;
 
 	if (pctx->cksum == 0)
-		get_checksum_props(DEFAULT_CKSUM, &(pctx->cksum), &(pctx->cksum_bytes), &(pctx->mac_bytes), 0);
+		get_checksum_props(DEFAULT_CKSUM, &(pctx->cksum), &(pctx->cksum_bytes),
+				   &(pctx->mac_bytes), 0);
 
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan) && pctx->cksum == CKSUM_CRC64) {
 		log_msg(LOG_ERR, 0, "CRC64 checksum is not suitable for Deduplication.");
@@ -3382,6 +3530,12 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 				pctx->enable_packjpg = ff.enable_packjpg;
 				pctx->enable_wavpack = ff.enable_wavpack;
 				if (pctx->level > 8) pctx->dispack_preprocess = 1;
+				if (pctx->meta_stream != -1)
+					pctx->meta_stream = 1;
+				else
+					pctx->meta_stream = 0;
+				if (pctx->pipe_mode)
+					pctx->meta_stream = 0;
 			}
 
 			/*
@@ -3410,7 +3564,8 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			if (pctx->level < 9) {
 				pctx->chunksize = DEFAULT_CHUNKSIZE;
 			} else {
-				pctx->chunksize = DEFAULT_CHUNKSIZE + (pctx->level - 8) * DEFAULT_CHUNKSIZE/4;
+				pctx->chunksize = DEFAULT_CHUNKSIZE + (pctx->level - 8) *
+				    DEFAULT_CHUNKSIZE/4;
 			}
 		}
 	} else if (pctx->do_uncompress) {

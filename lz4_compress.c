@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 #include <sys/types.h>
@@ -89,7 +89,7 @@ int
 lz4_deinit(void **data)
 {
 	struct lz4_params *lzdat = (struct lz4_params *)(*data);
-	
+
 	if (lzdat) {
 		slab_free(NULL, lzdat);
 	}

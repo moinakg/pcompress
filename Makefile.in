@@ -32,10 +32,10 @@ LIBVER=1
 MAINSRCS = utils/utils.c allocator.c lzma_compress.c ppmd_compress.c \
 	adaptive_compress.c lzfx_compress.c lz4_compress.c none_compress.c \
 	utils/xxhash_base.c utils/heap.c utils/cpuid.c filters/analyzer/analyzer.c \
-	pcompress.c
+	meta_stream.c pcompress.c
 MAINHDRS = allocator.h  pcompress.h  utils/utils.h utils/xxhash.h utils/heap.h \
 	utils/cpuid.h utils/xxhash.h archive/pc_archive.h filters/dispack/dis.hpp \
-	filters/analyzer/analyzer.h
+	meta_stream.h filters/analyzer/analyzer.h
 MAINOBJS = $(MAINSRCS:.c=.o)
 
 PROGSRCS = main.c

@@ -105,6 +105,19 @@ bzip2_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	char *dst1 = (char *)dst;
 	char *src1 = (char *)src;
 
+	/*
+	 * If the data is known to be compressed then certain types less compressed data
+	 * can be attempted to be compressed again for a possible gain. For others it is
+	 * a waste of time.
+	 */
+	if (PC_TYPE(btype) == TYPE_COMPRESSED && level < 7) {
+		int subtype = PC_SUBTYPE(btype);
+
+		if (subtype != TYPE_COMPRESSED_LZW && subtype != TYPE_COMPRESSED_GZ &&
+		    subtype != TYPE_COMPRESSED_LZ && subtype != TYPE_COMPRESSED_LZO) {
+			return (-1);
+		}
+	}
 	bzs.bzalloc = slab_alloc_i;
 	bzs.bzfree = slab_free;
 	bzs.opaque = NULL;
@@ -174,19 +187,6 @@ bzip2_decompress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	char *dst1 = (char *)dst;
 	char *src1 = (char *)src;
 
-	/*
-	 * If the data is known to be compressed then certain types less compressed data
-	 * can be attempted to be compressed again for a possible gain. For others it is
-	 * a waste of time.
-	 */
-	if (PC_TYPE(btype) == TYPE_COMPRESSED && level < 7) {
-		int subtype = PC_SUBTYPE(btype);
-
-		if (subtype != TYPE_COMPRESSED_LZW && subtype != TYPE_COMPRESSED_GZ &&
-		    subtype != TYPE_COMPRESSED_LZ && subtype != TYPE_COMPRESSED_LZO) {
-			return (-1);
-		}
-	}
 	bzs.bzalloc = slab_alloc_i;
 	bzs.bzfree = slab_free;
 	bzs.opaque = NULL;

@@ -156,7 +156,7 @@ DictFilter::Forward_Dict(u8 *src, u32 size, u8 *dst, u32 *dstsize)
 	u32 i,j,treePos = 0;
 	u32 lastSymbol = 0;
 	u32 dstSize = 0;
-	u32 idx;
+	int idx;
 
 
 	for(i = 0; i < size-5;) {
@@ -268,12 +268,20 @@ int
 dict_encode(void *dict_ctx, uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 {
 	DictFilter *df = static_cast<DictFilter *>(dict_ctx);
-	u32 fl = fromlen;
-	u32 dl = *dstlen;
+	u32 fl;
+	u32 dl;
 	int atype;
 	uchar_t *dst;
 	DEBUG_STAT_EN(double strt, en);
 
+	/*
+	 * Dict can't handle > 4GB buffers :-O
+	 */
+	if (fromlen > UINT32_MAX)
+		return (-1);
+
+	fl = (u32)fromlen;
+	dl = (u32)(*dstlen);
 	DEBUG_STAT_EN(strt = get_wtime_millis());
 	atype = analyze_buffer(from, fromlen);
 	if (PC_TYPE(atype) == TYPE_TEXT) {
@@ -298,11 +306,17 @@ int
 dict_decode(void *dict_ctx, uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 {
 	DictFilter *df = static_cast<DictFilter *>(dict_ctx);
-	u32 fl = fromlen;
+	u32 fl;
 	u32 dl;
 	u8 *src;
 	DEBUG_STAT_EN(double strt, en);
 
+	if (fromlen > UINT32_MAX) {
+		log_msg(LOG_ERR, 0, "Dict decode buffer too big!");
+		return (-1);
+	}
+
+	fl = (u32)fromlen;
 	DEBUG_STAT_EN(strt = get_wtime_millis());
 	dl = U32_P(from);
 	if (dl > *dstlen) {

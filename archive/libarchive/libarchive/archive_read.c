@@ -453,7 +453,7 @@ int
 archive_read_open1(struct archive *_a)
 {
 	struct archive_read *a = (struct archive_read *)_a;
-	struct archive_read_filter *filter, *tmp;
+	struct archive_read_filter *filter, *tmp = NULL; /* silence compiler */
 	int slot, e;
 	unsigned int i;
 
@@ -461,6 +461,8 @@ archive_read_open1(struct archive *_a)
 	    "archive_read_open");
 	archive_clear_error(&a->archive);
 
+	if (_a->is_metadata_streaming)
+		_a->cb_is_metadata = 1;
 	if (a->client.reader == NULL) {
 		archive_set_error(&a->archive, EINVAL,
 		    "No reader function provided to archive_read_open");
@@ -485,6 +487,13 @@ archive_read_open1(struct archive *_a)
 	filter = calloc(1, sizeof(*filter));
 	if (filter == NULL)
 		return (ARCHIVE_FATAL);
+	if (_a->is_metadata_streaming) {
+		tmp = calloc(1, sizeof(*filter));
+		if (tmp == NULL) {
+			free(filter);
+			return (ARCHIVE_FATAL);
+		}
+	}
 	filter->bidder = NULL;
 	filter->upstream = NULL;
 	filter->archive = a;
@@ -497,6 +506,10 @@ archive_read_open1(struct archive *_a)
 	filter->sswitch = client_switch_proxy;
 	filter->name = "none";
 	filter->code = ARCHIVE_FILTER_NONE;
+	if (_a->is_metadata_streaming) {
+		memcpy(tmp, filter, sizeof (*filter));
+		filter->shadow = tmp;
+	}
 
 	a->client.dataset[0].begin_position = 0;
 	if (!a->filter || !a->bypass_filter_bidding)
@@ -533,6 +546,8 @@ archive_read_open1(struct archive *_a)
 
 	/* Ensure libarchive starts from the first node in a multivolume set */
 	client_switch_proxy(a->filter, 0);
+	if (_a->is_metadata_streaming)
+		_a->cb_is_metadata = 0;
 	return (e);
 }
 
@@ -546,7 +561,7 @@ choose_filters(struct archive_read *a)
 {
 	int number_bidders, i, bid, best_bid;
 	struct archive_read_filter_bidder *bidder, *best_bidder;
-	struct archive_read_filter *filter;
+	struct archive_read_filter *filter, *tmp;
 	ssize_t avail;
 	int r;
 
@@ -585,9 +600,20 @@ choose_filters(struct archive_read *a)
 		    = (struct archive_read_filter *)calloc(1, sizeof(*filter));
 		if (filter == NULL)
 			return (ARCHIVE_FATAL);
+		if (a->archive.is_metadata_streaming) {
+			tmp = calloc(1, sizeof(*filter));
+			if (tmp == NULL) {
+				free(filter);
+				return (ARCHIVE_FATAL);
+			}
+		}
 		filter->bidder = best_bidder;
 		filter->archive = a;
 		filter->upstream = a->filter;
+		if (a->archive.is_metadata_streaming) {
+			memcpy(tmp, filter, sizeof (*filter));
+			filter->shadow = tmp;
+		}
 		a->filter = filter;
 		r = (best_bidder->init)(a->filter);
 		if (r != ARCHIVE_OK) {
@@ -933,6 +959,8 @@ __archive_read_free_filters(struct archive_read *a)
 {
 	while (a->filter != NULL) {
 		struct archive_read_filter *t = a->filter->upstream;
+		if (a->archive.is_metadata_streaming)
+			free(a->filter->shadow);
 		free(a->filter);
 		a->filter = t;
 	}
@@ -1222,6 +1250,15 @@ __archive_read_filter_ahead(struct archive_read_filter *filter,
 	}
 
 	/*
+	 * Switch to shadow filter for metadata reads when using separate
+	 * metadata stream.
+	 */
+	if (filter->archive->archive.is_metadata_streaming &&
+	    filter->archive->archive.cb_is_metadata) {
+		filter = filter->shadow;
+	}
+
+	/*
 	 * Keep pulling more data until we can satisfy the request.
 	 */
 	for (;;) {
@@ -1397,6 +1434,15 @@ __archive_read_filter_consume(struct archive_read_filter * filter,
 	if (request == 0)
 		return 0;
 
+	/*
+	 * Switch to shadow filter for metadata reads when using separate
+	 * metadata stream.
+	 */
+	if (filter->archive->archive.is_metadata_streaming &&
+	    filter->archive->archive.cb_is_metadata) {
+		filter = filter->shadow;
+	}
+
 	skipped = advance_file_pointer(filter, request);
 	if (skipped == request)
 		return (skipped);
@@ -1521,6 +1567,13 @@ __archive_read_filter_seek(struct archive_read_filter *filter, int64_t offset,
 		return (ARCHIVE_FATAL);
 	if (filter->seek == NULL)
 		return (ARCHIVE_FAILED);
+
+	/*
+	 * No seeking when metadata streams are enabled.
+	 */
+	if (filter->archive->archive.is_metadata_streaming) {
+		return (ARCHIVE_FAILED);
+	}
 
 	client = &(filter->archive->client);
 	switch (whence) {

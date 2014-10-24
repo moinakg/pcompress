@@ -127,6 +127,15 @@ struct archive {
 	 * separately store/handle metadata and data.
 	 */
 	int cb_is_metadata;
+
+	/*
+	 * Set the metadata handling flag. This indicates to libarchive
+	 * that callback routines are processing metadata as a separate
+	 * stream. This means that cb_is_metadata flag is set during
+	 * read/write. In addition, archive reads are handled differently
+	 * using a shadow filter structure with separate copy buffer.
+	 */
+	int is_metadata_streaming;
 };
 
 /* Check magic value and state; return(ARCHIVE_FATAL) if it isn't valid. */

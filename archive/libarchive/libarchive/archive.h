@@ -518,6 +518,12 @@ __LA_DECL int archive_read_set_options(struct archive *_a,
  */
 __LA_DECL int archive_request_is_metadata(struct archive *a);
 
+/*
+ * Indicate whether separate metadata handling is being done by the
+ * callbacks. This triggers special behavior during archive read.
+ */
+__LA_DECL int archive_set_metadata_streaming(struct archive *a, int flag);
+
 /*-
  * Convenience function to recreate the current entry (whose header
  * has just been read) on disk.

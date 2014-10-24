@@ -123,6 +123,10 @@ Standard Usage
 
                  The fastest checksum is the BLAKE2 family.
 
+       -T
+                Disable Metadata Streams. Pathname metadata is normally packed into separate
+                chunks distinct from file data. With this option this behavior is disabled.
+
        <archive filename>
                 Pathname of the resulting archive. A '.pz' extension is automatically added
                 if not already present. This can also be specified as '-' in order to send

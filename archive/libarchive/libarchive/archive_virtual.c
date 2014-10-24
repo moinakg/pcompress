@@ -113,9 +113,11 @@ archive_write_header(struct archive *a, struct archive_entry *entry)
 	int rv;
 
 	++a->file_count;
-	a->cb_is_metadata = 1;
+	if (a->is_metadata_streaming)
+		a->cb_is_metadata = 1;
 	rv = (a->vtable->archive_write_header)(a, entry);
-	a->cb_is_metadata = 0;
+	if (a->is_metadata_streaming)
+		a->cb_is_metadata = 0;
 	return (rv);
 }
 
@@ -148,9 +150,11 @@ archive_read_next_header(struct archive *a, struct archive_entry **entry)
 {
 	int rv;
 
-	a->cb_is_metadata = 1;
+	if (a->is_metadata_streaming)
+		a->cb_is_metadata = 1;
 	rv = (a->vtable->archive_read_next_header)(a, entry);
-	a->cb_is_metadata = 0;
+	if (a->is_metadata_streaming)
+		a->cb_is_metadata = 0;
 	return (rv);
 }
 
@@ -159,9 +163,11 @@ archive_read_next_header2(struct archive *a, struct archive_entry *entry)
 {
 	int rv;
 
-	a->cb_is_metadata = 1;
+	if (a->is_metadata_streaming)
+		a->cb_is_metadata = 1;
 	rv = (a->vtable->archive_read_next_header2)(a, entry);
-	a->cb_is_metadata = 0;
+	if (a->is_metadata_streaming)
+		a->cb_is_metadata = 0;
 	return (rv);
 }
 
@@ -176,4 +182,11 @@ int
 archive_request_is_metadata(struct archive *a)
 {
 	return (a->cb_is_metadata);
+}
+
+int
+archive_set_metadata_streaming(struct archive *a, int flag)
+{
+	a->is_metadata_streaming = flag;
+	return (0);
 }

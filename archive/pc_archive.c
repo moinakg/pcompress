@@ -48,7 +48,8 @@
 #include <phash/phash.h>
 #include <phash/extensions.h>
 #include <phash/standard.h>
-#include "pc_archive.h"
+#include "archive/pc_archive.h"
+#include "meta_stream.h"
 
 #undef _FEATURES_H
 #define _XOPEN_SOURCE 700
@@ -149,6 +150,24 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 		return (-1);
 	}
 
+	if (archive_request_is_metadata(arc) && pctx->meta_stream) {
+		int rv;
+
+		/*
+		 * Send the buf pointer over to the metadata thread.
+		 */
+		rv = meta_ctx_send(pctx->meta_ctx, &buf, &len);
+		if (rv == 0) {
+			archive_set_error(arc, ARCHIVE_EOF, "Metadata Thread communication error.");
+			return (-1);
+
+		} else if (rv == -1) {
+			archive_set_error(arc, ARCHIVE_EOF, "Error reported by Metadata Thread.");
+			return (-1);
+		}
+		return (len);
+	}
+
 	if (!pctx->arc_writing) {
 		Sem_Wait(&(pctx->write_sem));
 	}
@@ -178,7 +197,7 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 			} else {
 				if (pctx->arc_buf_pos < pctx->min_chunk) {
 					int diff = pctx->min_chunk - (int)(pctx->arc_buf_pos);
-					if (len > diff)
+					if (len >= diff)
 						pctx->btype = pctx->ctype;
 					else
 						pctx->ctype = pctx->btype;
@@ -282,6 +301,26 @@ extract_read_callback(struct archive *arc, void *ctx, const void **buf)
 		return (-1);
 	}
 
+	if (archive_request_is_metadata(arc) && pctx->meta_stream) {
+		int rv;
+		size_t len;
+		
+		/*
+		 * Send the buf pointer over to the metadata thread.
+		 */
+		len = 0;
+		rv = meta_ctx_send(pctx->meta_ctx, buf, &len);
+		if (rv == 0) {
+			archive_set_error(arc, ARCHIVE_EOF, "Metadata Thread communication error.");
+			return (-1);
+			
+		} else if (rv == -1) {
+			archive_set_error(arc, ARCHIVE_EOF, "Error reported by Metadata Thread.");
+			return (-1);
+		}
+		return (len);
+	}
+
 	if (!pctx->arc_writing) {
 		Sem_Wait(&(pctx->read_sem));
 	} else {
@@ -295,6 +334,7 @@ extract_read_callback(struct archive *arc, void *ctx, const void **buf)
 		archive_set_error(arc, ARCHIVE_EOF, "End of file when extracting archive.");
 		return (-1);
 	}
+
 	pctx->arc_writing = 1;
 	*buf = pctx->arc_buf;
 
@@ -817,6 +857,9 @@ setup_archiver(pc_ctx_t *pctx, struct stat *sbuf)
 		unlink(tmpfile);
 		return (-1);
 	}
+
+	if (pctx->meta_stream)
+		archive_set_metadata_streaming(arc, 1);
 	archive_write_set_format_pax_restricted(arc);
 	archive_write_set_bytes_per_block(arc, 0);
 	archive_write_open(arc, pctx, arc_open_callback,
@@ -861,6 +904,8 @@ setup_extractor(pc_ctx_t *pctx)
 		close(pipefd[0]); close(pipefd[1]);
 		return (-1);
 	}
+	if (pctx->meta_stream)
+		archive_set_metadata_streaming(arc, 1);
 	archive_read_support_format_all(arc);
 	pctx->archive_ctx = arc;
 	pctx->arc_writing = 0;
@@ -1169,7 +1214,7 @@ archiver_thread_func(void *dat) {
 		} else {
 			archive_entry_set_size(entry, archive_entry_size(entry));
 		}
-		log_msg(LOG_VERBOSE, 0, "%5d/%5d %8" PRIu64 " %s", ctr, pctx->archive_members_count,
+		log_msg(LOG_VERBOSE, 0, "%5d/%d %8" PRIu64 " %s", ctr, pctx->archive_members_count,
 		    archive_entry_size(entry), name);
 
 		archive_entry_linkify(resolver, &entry, &spare_entry);

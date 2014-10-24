@@ -40,7 +40,7 @@ archive_read_append_filter(struct archive *_a, int code)
   int r1, r2, number_bidders, i;
   char str[20];
   struct archive_read_filter_bidder *bidder;
-  struct archive_read_filter *filter;
+  struct archive_read_filter *filter, *tmp;
   struct archive_read *a = (struct archive_read *)_a;
 
   r1 = r2 = (ARCHIVE_OK);
@@ -126,6 +126,18 @@ archive_read_append_filter(struct archive *_a, int code)
     filter->bidder = bidder;
     filter->archive = a;
     filter->upstream = a->filter;
+    if (_a->is_metadata_streaming)
+    {
+      tmp = calloc(1, sizeof(*filter));
+      if (tmp == NULL)
+      {
+        free(filter);
+	archive_set_error(&a->archive, ENOMEM, "Out of memory");
+	return (ARCHIVE_FATAL);
+      }
+      memcpy(tmp, filter, sizeof (*filter));
+      filter->shadow = tmp;
+    }
     a->filter = filter;
     r2 = (bidder->init)(a->filter);
     if (r2 != ARCHIVE_OK) {

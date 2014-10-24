@@ -150,8 +150,8 @@ using namespace std;
 
 #define	DISFILTER_BLOCK	(32768)
 #define	DISFILTERED	1
-#define	ORIGSIZE		2
-#define	CLEAR_DISFILTER	0xfe
+#define	ORIGSIZE	2
+#define	E8E9		4
 #define	NORMAL_HDR	(1 + 2)
 #define	EXTENDED_HDR	(1 + 2 + 2)
 // Dispack min reduction should be 8%, otherwise we abort
@@ -927,6 +927,135 @@ is_x86_code(uchar_t *buf, int len)
 	return (freq[0x8b] > avgFreq && freq[0x00] > avgFreq * 2 && freq[0xE8] > 6);
 }
 
+/*
+ * E8E9 Filter from CSC 3.2 (Fu Siyuan). This is applied to blocks that can't
+ * be Disfiltered.
+ */
+class EFilter
+{
+public:
+	static void Forward_E89(sU8 *src, sU32 size)
+	{
+		sU32 i,j;
+		sS32 c;
+
+		E89init();
+		for(i=0, j=0; i < size; i++) {
+			c = E89forward(src[i]);
+			if (c >= 0) src[j++]=c;
+		}
+		while((c = E89flush()) >= 0) src[j++] = c;
+	}
+
+	static void Inverse_E89( sU8* src, sU32 size)
+	{
+		sU32 i,j;
+		sS32 c;
+
+		E89init();
+		for(i=0, j=0; i < size; i++) {
+			c = E89inverse(src[i]);
+			if (c >= 0) src[j++]=c;
+		}
+		while((c = E89flush()) >= 0) src[j++] = c;
+	}
+
+protected:
+	static sU32 x0,x1;
+	static sU32 i,k;
+	static sU8 cs; // cache size, F8 - 5 bytes
+
+	~EFilter() {}
+	EFilter() {}
+
+	static void E89init(void)
+	{
+		cs = 0xFF;
+		x0 = x1 = 0;
+		i  = 0;
+		k  = 5;
+	}
+
+	static sS32 E89cache_byte(sS32 c)
+	{
+		sS32 d = cs&0x80 ? -1 : (sU8)(x1);
+		x1 >>= 8;
+		x1 |= (x0<<24);
+		x0 >>= 8;
+		x0 |= (c<<24);
+		cs <<= 1; i++;
+		return d;
+	}
+
+	static sU32 E89xswap(sU32 x)
+	{
+		x<<=7;
+		return (x>>24)|((sU8)(x>>16)<<8)|((sU8)(x>>8)<<16)|((sU8)(x)<<(24-7));
+	}
+
+	static sU32 E89yswap(sU32 x)
+	{
+		x = ((sU8)(x>>24)<<7)|((sU8)(x>>16)<<8)|((sU8)(x>>8)<<16)|(x<<24);
+		return x>>7;
+	}
+
+	static sS32 E89forward(sS32 c)
+	{
+		sU32 x;
+		if(i >= k) {
+			if((x1&0xFE000000) == 0xE8000000) {
+				k = i+4;
+				x= x0 - 0xFF000000;
+				if( x<0x02000000 ) {
+					x = (x+i) & 0x01FFFFFF;
+					x = E89xswap(x);
+					x0 = x + 0xFF000000;
+				}
+			}
+		}
+		return E89cache_byte(c);
+	}
+
+	static sS32 E89inverse(sS32 c)
+	{
+		sU32 x;
+		if(i >= k) {
+			if((x1&0xFE000000) == 0xE8000000) {
+				k = i+4;
+				x = x0 - 0xFF000000;
+				if(x < 0x02000000) {
+					x = E89yswap(x);
+					x = (x-i) & 0x01FFFFFF;
+					x0 = x + 0xFF000000;
+				}
+			}
+		}
+		return E89cache_byte(c);
+	}
+
+	static sS32 E89flush(void)
+	{
+		sS32 d;
+		if(cs != 0xFF) {
+			while(cs & 0x80) E89cache_byte(0),++cs;
+			d = E89cache_byte(0); ++cs;
+			return d;
+		} else {
+			E89init();
+			return -1;
+		}
+	}
+};
+
+/*
+ * Linker weirdo!
+ */
+sU32 EFilter::x0;
+sU32 EFilter::x1;
+sU32 EFilter::i;
+sU32 EFilter::k;
+sU8 EFilter::cs;
+
 #ifdef	__cplusplus
 extern "C" {
 #endif
@@ -941,10 +1070,13 @@ int
 dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 {
 	uchar_t *pos, *hdr, type, *pos_to, *to_last;
-	uint64_t len;
+	sU32 len;
 #ifdef	DEBUG_STATS
 	double strt, en;
 #endif
+
+	if (fromlen > UINT32_MAX)
+		return (-1);
 
 	if (fromlen < DISFILTER_BLOCK)
 		return (-1);
@@ -953,7 +1085,7 @@ dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 	strt = get_wtime_millis();
 #endif
 	pos = from;
-	len = fromlen;
+	len = (sU32)fromlen;
 	pos_to = to;
 	to_last = to + *dstlen;
 	while (len > 0) {
@@ -962,6 +1094,7 @@ dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 		sU16 origsize;
 		sU32 out;
 		sU8 *rv;
+		int dis_tried;
 
 		if (len > DISFILTER_BLOCK)
 			sz = DISFILTER_BLOCK;
@@ -980,9 +1113,11 @@ dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 		}
 
 		out = sz;
+		dis_tried = 0;
 		if (is_x86_code(pos, sz)) {
 			ctx.ResetCtx(0, sz);
 			rv = DisFilter(ctx, pos, sz, 0, pos_to, out);
+			dis_tried = 1;
 		} else {
 			rv = NULL;
 		}
@@ -990,11 +1125,19 @@ dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 			if (pos_to + origsize >= to_last) {
 				return (-1);
 			}
-			type &= CLEAR_DISFILTER;
+			memcpy(pos_to, pos, origsize);
+
+			/*
+			 * If Dispack failed, we apply a simple E8E9 filter
+			 * on the block.
+			 */
+			if (dis_tried) {
+				EFilter::Forward_E89(pos_to, origsize);
+				type |= E8E9;
+			}
 			*hdr = type;
 			hdr++;
 			U16_P(hdr) = LE16(origsize);
-			memcpy(pos_to, pos, origsize);
 			pos_to += origsize;
 		} else {
 			sU16 csize;
@@ -1069,6 +1212,14 @@ dispack_decode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 				return (-1);
 			}
 			memcpy(pos_to, pos, cmpsz);
+
+			/*
+			 * If E8E9 was applied on this block, apply the inverse transform.
+			 * This only happens if this block was detected as x86 instruction
+			 * stream and Dispack was tried but it failed.
+			 */
+			if (type & E8E9)
+				EFilter::Inverse_E89(pos_to, cmpsz);
 			pos += cmpsz;
 			pos_to += cmpsz;
 			len -= cmpsz;

@@ -23,39 +23,40 @@
  *
  */
 
-#ifndef	_PCOMPRESS_H
-#define	_PCOMPRESS_H
-
-#include <pcompress.h>
-#include "utils/utils.h"
+#ifndef	_META_STREAM_H
+#define	_META_STREAM_H
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
-#define	METADATA_CHUNK_SIZE	(2 * 1024 * 1024)
-#define	METADATA_HDR_SZ		(CHUNK_HDR_SZ + COMPRESSED_CHUNKSIZE + pctx->mac_bytes)
+/*
+ * The chunk size value which indicates a metadata chunk.
+ */
+#define METADATA_INDICATOR	1
 
-struct _meta_ctx {
-	int meta_pipes[2];
-	pc_ctx_t *pctx;
-	pthread_t meta_thread;
-	uchar_t *frombuf, *tobuf;
-	uint64_t frompos;
-	uchar_t checksum[CKSUM_MAX_BYTES];
-	void *lz4_dat;
-	int comp_level;
-	mac_ctx_t chunk_hmac;
-} meta_ctx_t;
+/*
+ * Metadata chunk header format:
+ * 64-bit integer = 1: Compressed length: This indicates that this is a metadata chunk
+ * 64-bit integer: Compressed length (data portion only)
+ * 64-bit integer: Uncompressed original length
+ * 1 Byte: Chunk flag
+ * Upto 64-bytes: Checksum. This is HMAC if encrypting
+ * 32-bit integer: Header CRC32 if not encrypting, otherwise empty.
+ */
+#define CKSUM_MAX		64
+#define CRC32_SIZE		4
+#define	METADATA_HDR_SZ		(8 * 3 + 1 + CKSUM_MAX + CRC32_SIZE)
 
-struct _meta_msg {
-	uchar_t *buf;
+typedef struct _meta_ctx meta_ctx_t;
+
+typedef struct _meta_msg {
+	const uchar_t *buf;
 	size_t len;
 } meta_msg_t;
 
-meta_ctx_t *meta_ctx_create(pc_ctx_t *pctx, int file_version int comp_fd);
-int meta_ctx_write(meta_ctx_t *mctx, meta_msg_t *msg);
-int meta_ctx_read(meta_ctx_t *mctx, meta_msg_t *msg);
+meta_ctx_t *meta_ctx_create(void *pc, int file_version, int comp_fd);
+int meta_ctx_send(meta_ctx_t *mctx, const void **buf, size_t *len);
 int meta_ctx_done(meta_ctx_t *mctx);
 void meta_ctx_close_sink_channel(meta_ctx_t *mctx);
 void meta_ctx_close_src_channel(meta_ctx_t *mctx);

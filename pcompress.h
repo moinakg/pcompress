@@ -36,14 +36,16 @@ extern "C" {
 
 #include <rabin_dedup.h>
 #include <crypto_utils.h>
+#include "meta_stream.h"
 
 #define	CHUNK_FLAG_SZ	1
 #define	ALGO_SZ		8
 #define	MIN_CHUNK	2048
-#define	VERSION		9
+#define	VERSION		10
 #define	FLAG_DEDUP	1
 #define	FLAG_DEDUP_FIXED	2
 #define	FLAG_SINGLE_CHUNK	4
+#define FLAG_META_STREAM	256
 #define	FLAG_ARCHIVE	2048
 #define	UTILITY_VERSION	"3.1"
 #define	MASK_CRYPTO_ALG	0x30
@@ -220,10 +222,11 @@ typedef struct pc_ctx {
 	int encrypt_type;
 	int archive_mode;
 	int enable_archive_sort;
-	int pagesize;
+	long pagesize;
 	int force_archive_perms;
 	int no_overwrite_newer;
 	int advanced_opts;
+	int meta_stream;
 
 	/*
 	 * Archiving related context data.
@@ -241,6 +244,7 @@ typedef struct pc_ctx {
 	uint64_t temp_mmap_len;
 	struct fn_list *fn;
 	Sem_t read_sem, write_sem;
+	pthread_mutex_t write_mutex;
 	uchar_t *arc_buf;
 	uint64_t arc_buf_size, arc_buf_pos;
 	int arc_closed, arc_writing;
@@ -268,6 +272,7 @@ typedef struct pc_ctx {
 	unsigned char *user_pw;
 	int user_pw_len;
 	char *pwd_file, *f_name;
+	meta_ctx_t *meta_ctx;
 } pc_ctx_t;
 
 /*
