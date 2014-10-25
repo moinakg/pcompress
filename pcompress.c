@@ -2522,6 +2522,8 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			COMP_BAIL;
 		}
 		flags |= FLAG_ARCHIVE;
+		if (pctx->meta_stream)
+			flags |= FLAG_META_STREAM;
 	}
 
 	/*
@@ -3244,6 +3246,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 		    case 'T':
 			pctx->meta_stream = -1;
+			break;
 
 		    case '?':
 		    default:

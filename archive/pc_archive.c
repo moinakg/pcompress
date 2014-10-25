@@ -304,7 +304,7 @@ extract_read_callback(struct archive *arc, void *ctx, const void **buf)
 	if (archive_request_is_metadata(arc) && pctx->meta_stream) {
 		int rv;
 		size_t len;
-		
+
 		/*
 		 * Send the buf pointer over to the metadata thread.
 		 */
