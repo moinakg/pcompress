@@ -106,6 +106,7 @@ static struct arc_list_state {
 pthread_mutex_t nftw_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int detect_type_by_ext(const char *path, int pathlen);
+static int detect_type_from_ext(const char *ext, int len);
 static int detect_type_by_data(uchar_t *buf, size_t len);
 
 /*
@@ -208,8 +209,7 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 					Sem_Wait(&(pctx->write_sem));
 					tbuf = pctx->arc_buf + pctx->arc_buf_pos;
 					pctx->arc_writing = 1;
-					if (remaining > 0)
-						pctx->btype = pctx->ctype;
+					pctx->btype = pctx->ctype;
 				}
 			}
 		}
@@ -373,6 +373,18 @@ compare_members(const void *a, const void *b) {
 	int rv, i;
 	member_entry_t *mem1 = (member_entry_t *)a;
 	member_entry_t *mem2 = (member_entry_t *)b;
+	uint64_t sz1, sz2;
+
+	/*
+	 * First compare MSB of size. That separates extension and non-extension
+	 * files.
+	 */
+	sz1 = mem1->size & 0x8000000000000000;
+	sz2 = mem2->size & 0x8000000000000000;
+	if (sz1 > sz2)
+		return (1);
+	else if (sz1 < sz2)
+		return (-1);
 
 	rv = 0;
 	for (i = 0; i < NAMELEN; i++) {
@@ -380,9 +392,15 @@ compare_members(const void *a, const void *b) {
 		if (rv != 0)
 			return (rv);
 	}
-	if (mem1->size > mem2->size)
+
+	/*
+	 * Clear high bits of size. They are just flags.
+	 */
+	sz1 = mem1->size & 0x7FFFFFFFFFFFFFFF;
+	sz2 = mem2->size & 0x7FFFFFFFFFFFFFFF;
+	if (sz1 > sz2)
 		return (1);
-	else if (mem1->size < mem2->size)
+	else if (sz1 < sz2)
 		return (-1);
 	return (0);
 }
@@ -394,6 +412,16 @@ compare_members(const void *a, const void *b) {
 static int
 compare_members_lt(member_entry_t *mem1, member_entry_t *mem2) {
 	int rv, i;
+	uint64_t sz1, sz2;
+
+	/*
+	 * First compare MSB of size. That separates extension and non-extension
+	 * files.
+	 */
+	sz1 = mem1->size & 0x8000000000000000;
+	sz2 = mem2->size & 0x8000000000000000;
+	if (sz1 < sz2)
+		return (1);
 
 	rv = 0;
 	for (i = 0; i < NAMELEN; i++) {
@@ -403,7 +431,13 @@ compare_members_lt(member_entry_t *mem1, member_entry_t *mem2) {
 		else if (rv > 0)
 			return (0);
 	}
-	if (mem1->size < mem2->size)
+
+	/*
+	 * Clear high bits of size. They are just flags.
+	 */
+	sz1 = mem1->size & 0x7FFFFFFFFFFFFFFF;
+	sz2 = mem2->size & 0x7FFFFFFFFFFFFFFF;
+	if (sz1 < sz2)
 		return (1);
 	return (0);
 }
@@ -662,6 +696,11 @@ add_pathname(const char *fpath, const struct stat *sb,
 			 * If not a directory then we store upto first 4 chars of
 			 * the extension, if present, or first 4 chars of the
 			 * filename.
+			 *
+			 * NOTE: In order to separate files with and without extensions
+			 *       we set the MSB of the size parameter to 1 for extension
+			 *       and 0 for no extension. This limits the noted size of the
+			 *       file to INT64_MAX, but I think that is more than enough!
 			 */
 			for (i = 0; i < NAMELEN; i++) member->name[i] = 0;
 
@@ -670,11 +709,14 @@ add_pathname(const char *fpath, const struct stat *sb,
 				while (basename[i] != '\0' && i < NAMELEN) {
 					member->name[i] = basename[i]; i++;
 				}
+				// Clear 64-bit MSB
+				member->size &= 0x7FFFFFFFFFFFFFFF;
 			} else {
 				dot++;
 				while (dot[i] != '\0' && i < NAMELEN) {
 					member->name[i] = dot[i]; i++;
 				}
+				member->size |= 0x8000000000000000;
 			}
 		} else {
 			/*
@@ -690,6 +732,11 @@ add_pathname(const char *fpath, const struct stat *sb,
 			 */
 			for (i = 0; i < NAMELEN; i++) member->name[i] = 255;
 			member->size = INT64_MAX - ftwbuf->level;
+
+			/*
+			 * Set 64-bit MSB to force directories to be bunched at the end.
+			 */
+			member->size |= 0x8000000000000000;
 		}
 	}
 cont:
@@ -1629,22 +1676,17 @@ disable_all_filters()
  * outside the hash table range then the function returns unknown type.
  */
 static int
-detect_type_by_ext(const char *path, int pathlen)
+detect_type_from_ext(const char *ext, int len)
 {
-	const char *ext = NULL;
+	int i;
 	ub4 slot;
-	int i, len;
-	uint64_t extnum;
 	char extl[8];
+	uint64_t extnum;
 
-	for (i = pathlen-1; i > 0 && path[i] != '.' && path[i] != PATHSEP_CHAR; i--);
-	if (i == 0 || path[i] != '.') goto out; // If extension not found give up
-	len = pathlen - i - 1;
-	if (len == 0 || len > 8) goto out; // If extension is empty give up
-	ext = &path[i+1];
+	if (len == 0 || len > 8) goto ret; // If extension is empty give up
 	for (i = 0; i < len; i++) extl[i] = tolower(ext[i]);
 	slot = phash(extl, len);
-	if (slot >= PHASHNKEYS) goto out; // Extension maps outside hash table range, give up
+	if (slot >= PHASHNKEYS) goto ret; // Extension maps outside hash table range, give up
 	extnum = 0;
 
 	/*
@@ -1654,6 +1696,21 @@ detect_type_by_ext(const char *path, int pathlen)
 		extnum = (extnum << 8) | tolower(ext[i]);
 	if (exthtab[slot].extnum == extnum)
 		return (exthtab[slot].type);
+ret:
+	return (TYPE_UNKNOWN);
+}
+
+static int
+detect_type_by_ext(const char *path, int pathlen)
+{
+	const char *ext = NULL;
+	int i, len;
+
+	for (i = pathlen-1; i > 0 && path[i] != '.' && path[i] != PATHSEP_CHAR; i--);
+	if (i == 0 || path[i] != '.') goto out; // If extension not found give up
+	len = pathlen - i - 1;
+	ext = &path[i+1];
+	return (detect_type_from_ext(ext, len));
 out:
 	return (TYPE_UNKNOWN);
 }
@@ -1703,7 +1760,7 @@ static int
 detect_type_by_data(uchar_t *buf, size_t len)
 {
 	// At least a few bytes.
-	if (len < 512) return (TYPE_UNKNOWN);
+	if (len < 10) return (TYPE_UNKNOWN);
 
 	// WAV files.
 	if (identify_wav_type(buf, len))
@@ -1718,10 +1775,10 @@ detect_type_by_data(uchar_t *buf, size_t len)
 
 	// Try to detect DICOM medical image file. BSC compresses these better.
 	if (len > 127) {
-		size_t i;
+		int i;
 
 		// DICOM files should have either DICM or ISO_IR within the first 128 bytes
-		for (i = 0; i < 128; i++) {
+		for (i = 0; i < 128-4; i++) {
 			if (buf[i] == 'D')
 				if (memcmp(&buf[i], "DICM", 4) == 0)
 					return (TYPE_BINARY|TYPE_DICOM);

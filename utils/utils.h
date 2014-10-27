@@ -322,10 +322,10 @@ typedef enum {
  *     |                           |   |       |
  *     .---------------------------------------.
  *     |   |   |   |   |   |   |   |   |   |   |
- * Bit 10                                         Bit 0
+ * Bit 15                                         Bit 0
  */
 #define	PC_TYPE_MASK	0x7
-#define	PC_SUBTYPE_MASK	0x7f8
+#define	PC_SUBTYPE_MASK	0xfff8
 #define	PC_SUBTYPE(x)	((x) & PC_SUBTYPE_MASK)
 #define	PC_TYPE(x)	((x) & PC_TYPE_MASK)
 
