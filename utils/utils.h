@@ -277,7 +277,7 @@ typedef enum {
 	/*
 	 * Sub-types.
 	 */
-#define	NUM_SUB_TYPES	34
+#define	NUM_SUB_TYPES	33
 	TYPE_EXE32 = 8,
 	TYPE_JPEG = 16,
 	TYPE_MARKUP = 24,
