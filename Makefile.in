@@ -244,7 +244,7 @@ COMMON_VEC_FLAGS = -ftree-vectorize
 COMMON_LOOP_OPTFLAGS = $(VEC_FLAGS) -floop-interchange -floop-block
 RPATH=@RPATH@
 DTAGS=@DTAGS@
-LDLIBS = -ldl -liconv -L./buildtmp -Wl,$(RPATH)@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,$(RPATH)@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
+LDLIBS = -ldl -L./buildtmp -Wl,$(RPATH)@LIBBZ2_DIR@ -lbz2 -L./buildtmp -Wl,$(RPATH)@LIBZ_DIR@ -lz -lm @LIBBSCLFLAGS@ \
 	-L./buildtmp -Wl,$(RPATH)@OPENSSL_LIBDIR@ -lcrypto @LRT@ -L@LIBARCHIVE_DIR@/.libs -larchive $(EXTRA_LDFLAGS) \
 	-Wl,$(RPATH)/usr/lib$(DTAGS) -Wl,$(RPATH)/usr/lib64$(DTAGS) @WAVPACK_LIBSPEC@
 OBJS = $(MAINOBJS) $(LZMAOBJS) $(PPMDOBJS) $(LZFXOBJS) $(LZ4OBJS) $(CRCOBJS) \
