@@ -327,6 +327,7 @@ decompress_data(meta_ctx_t *mctx)
 		/*
 		 * Verify Header CRC32 in non-crypto mode.
 		 */
+		deserialize_checksum(checksum, cbuf + 25, pctx->cksum_bytes);
 		crc1 = U32_P(cbuf + 25 + CKSUM_MAX);
 		memset(cbuf + 25 + CKSUM_MAX, 0, CRC32_SIZE);
 		crc2 = lzma_crc32(cbuf, METADATA_HDR_SZ, 0);
@@ -360,6 +361,18 @@ decompress_data(meta_ctx_t *mctx)
 			return (0);
 		}
 		memcpy(ubuf, cseg, dstlen);
+	}
+
+	/*
+	 * Now verify normal checksum if not using encryption.
+	 */
+	if (!pctx->encrypt_type) {
+		compute_checksum(mctx->checksum, pctx->cksum, ubuf, dstlen, 0, 1);
+		if (memcmp(checksum, mctx->checksum, pctx->cksum_bytes) != 0) {
+			log_msg(LOG_ERR, 0, "Metadata chunk %d, Checksum verification failed",
+				mctx->id);
+			return (0);
+		}
 	}
 	mctx->topos = 0;
 	mctx->tosize = dstlen;
