@@ -82,6 +82,11 @@ compress_and_write(meta_ctx_t *mctx)
 	int64_t wbytes;
 
 	/*
+	 * Increment metadata chunk id. Useful when encrypting (CTR Mode).
+	 */
+	mctx->id++;
+
+	/*
 	 * Plain checksum if not encrypting.
 	 * This place will hold HMAC if encrypting.
 	 */
@@ -129,7 +134,7 @@ compress_and_write(meta_ctx_t *mctx)
 	}
 
 	if (pctx->encrypt_type) {
-		rv = crypto_buf(&(pctx->crypto_ctx), comp_chunk, comp_chunk, dstlen, 255);
+		rv = crypto_buf(&(pctx->crypto_ctx), comp_chunk, comp_chunk, dstlen, mctx->id);
 		if (rv == -1) {
 			pctx->main_cancel = 1;
 			pctx->t_errored = 1;
@@ -155,7 +160,7 @@ compress_and_write(meta_ctx_t *mctx)
 		uchar_t *mac_ptr;
 
 		mac_ptr = tobuf + 25;
-		memset(mac_ptr, 0, CKSUM_MAX + CRC32_SIZE);
+		memset(mac_ptr, 0, pctx->mac_bytes + CRC32_SIZE);
 		hmac_reinit(&mctx->chunk_hmac);
 		hmac_update(&mctx->chunk_hmac, tobuf, dstlen + METADATA_HDR_SZ);
 		hmac_final(&mctx->chunk_hmac, chash, &hlen);
@@ -218,6 +223,7 @@ metadata_compress(void *dat)
 	int ack;
 
 	mctx->running = 1;
+	mctx->id = -1;
 	while (Read(mctx->meta_pipes[SINK_CHANNEL], &msgp, sizeof (msgp)) == sizeof (msgp)) {
 		ack = 0;
 		if (mctx->frompos + msgp->len > METADATA_CHUNK_SIZE) {
@@ -299,7 +305,7 @@ decompress_data(meta_ctx_t *mctx)
 		deserialize_checksum(checksum, cbuf + 25, pctx->mac_bytes);
 		memset(cbuf + 25, 0, pctx->mac_bytes + CRC32_SIZE);
 		hmac_reinit(&mctx->chunk_hmac);
-		hmac_update(&mctx->chunk_hmac, cbuf, mctx->frompos);
+		hmac_update(&mctx->chunk_hmac, cbuf, len_cmp + METADATA_HDR_SZ);
 		hmac_final(&mctx->chunk_hmac, mctx->checksum, &len);
 		if (memcmp(checksum, mctx->checksum, len) != 0) {
 			log_msg(LOG_ERR, 0, "Metadata chunk %d, HMAC verification failed",
