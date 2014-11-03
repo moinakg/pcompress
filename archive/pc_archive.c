@@ -321,6 +321,14 @@ extract_read_callback(struct archive *arc, void *ctx, const void **buf)
 		return (len);
 	}
 
+	/*
+	 * When listing TOC we just return dummy data to be thrown away.
+	 */
+	if (pctx->list_mode && pctx->meta_stream) {
+		*buf = pctx->temp_mmap_buf;
+		return (pctx->temp_mmap_len);
+	}
+
 	if (!pctx->arc_writing) {
 		Sem_Wait(&(pctx->read_sem));
 	} else {
@@ -1452,8 +1460,8 @@ extractor_thread_func(void *dat) {
 		flags |= ARCHIVE_EXTRACT_SPARSE;
 
 		/*
-		* Extract all security attributes if we are root.
-		*/
+		 * Extract all security attributes if we are root.
+		 */
 		if (pctx->force_archive_perms || geteuid() == 0) {
 			if (geteuid() == 0)
 				flags |= ARCHIVE_EXTRACT_OWNER;

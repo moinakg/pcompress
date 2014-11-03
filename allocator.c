@@ -469,21 +469,19 @@ slab_free_real(void *p, void *address, int do_free)
 			else
 				htable[hindx] = buf->next;
 			pthread_mutex_unlock(&hbucket_locks[hindx]);
+			found = 1;
 			ATOMIC_SUB(hash_entries, 1);
 
 			if (buf->slab == NULL || do_free) {
 				free(buf->ptr);
 				free(buf);
-				found = 1;
-				break;
 			} else {
 				pthread_mutex_lock(&(buf->slab->slab_lock));
 				buf->next = buf->slab->avail;
 				buf->slab->avail = buf;
 				pthread_mutex_unlock(&(buf->slab->slab_lock));
-				found = 1;
-				break;
 			}
+			break;
 		}
 		pbuf = buf;
 		buf = buf->next;
