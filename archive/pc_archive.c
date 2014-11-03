@@ -1429,9 +1429,41 @@ copy_data_skip(struct archive *ar, struct archive_entry *entry, int typ)
 static int
 archive_list_entry(struct archive *a, struct archive_entry *entry, int typ)
 {
-	printf("%s\n", archive_entry_pathname(entry));
-	if (!archive_entry_size_is_set(entry) || archive_entry_size(entry) > 0) {
-		return (copy_data_skip(a, entry, typ));
+	time_t tm;
+	int tm_is_set = 0;
+	char strtm[13];
+
+	if (archive_entry_mtime_is_set(entry)) {
+		tm = archive_entry_mtime(entry);
+		tm_is_set = 1;
+
+	} else if (archive_entry_atime_is_set(entry)) {
+		tm = archive_entry_atime(entry);
+		tm_is_set = 1;
+
+	} else if (archive_entry_ctime_is_set(entry)) {
+		tm = archive_entry_ctime(entry);
+		tm_is_set = 1;
+
+	} else if (archive_entry_birthtime_is_set(entry)) {
+		tm = archive_entry_birthtime(entry);
+		tm_is_set = 1;
+	}
+
+	if (!tm_is_set) {
+		strcpy(strtm, "N/A");
+	} else {
+		if (strftime(strtm, sizeof (strtm), "%b %e %G", localtime(&tm)) == 0)
+			strcpy(strtm, "N/A");
+	}
+
+	if (archive_entry_size_is_set(entry)) {
+		int64_t sz = archive_entry_size(entry);
+		printf("%12" PRId64 " %13s %s\n", sz, strtm, archive_entry_pathname(entry));
+		if (sz > 0)
+			return (copy_data_skip(a, entry, typ));
+	} else {
+		printf("%12" PRId64 " %13s %s\n", 0LL, strtm, archive_entry_pathname(entry));
 	}
 	return (ARCHIVE_OK);
 }
