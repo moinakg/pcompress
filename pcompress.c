@@ -264,7 +264,8 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	}
 
 #ifndef _MPLV2_LICENSE_
-	if (pctx->lzp_preprocess && stype != TYPE_BMP && stype != TYPE_TIFF) {
+	if (pctx->lzp_preprocess && stype != TYPE_BMP && stype != TYPE_TIFF &&
+	    PC_TYPE(btype) != TYPE_BINARY) {
 		int hashsize;
 		int64_t result;
 
@@ -284,7 +285,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 
 	if (pctx->enable_delta2_encode && props->delta2_span > 0 &&
 	    stype != TYPE_DNA_SEQ && stype != TYPE_BMP &&
-	    stype != TYPE_TIFF && stype != TYPE_MP4) {
+	    stype != TYPE_TIFF && stype != TYPE_MP4 && PC_TYPE(btype) != TYPE_TEXT) {
 		_dstlen = fromlen;
 		result = delta2_encode((uchar_t *)from, fromlen, to,
 				       &_dstlen, props->delta2_span, pctx->delta2_nstrides);
