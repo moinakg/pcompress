@@ -38,6 +38,7 @@
 #include <pcompress.h>
 #include <allocator.h>
 #include <pc_archive.h>
+#include "filters/analyzer/analyzer.h"
 
 #define	FIFTY_PCT(x)	(((x)/10) * 5)
 #define	FORTY_PCT(x)	(((x)/10) * 4)
@@ -97,7 +98,15 @@ struct adapt_data {
 	void *bsc_data;
 	void *lz4_data;
 	int adapt_mode;
+	analyzer_ctx_t *actx;
 };
+
+void
+adapt_set_analyzer_ctx(void *data, analyzer_ctx_t *actx)
+{
+	struct adapt_data *adat = (struct adapt_data *)data;
+	adat->actx = actx;
+}
 
 void
 adapt_stats(int show)
@@ -246,75 +255,27 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 	uint64_t *dstlen, int level, uchar_t chdr, int btype, void *data)
 {
 	struct adapt_data *adat = (struct adapt_data *)(data);
-	uchar_t *src1 = (uchar_t *)src;
 	int rv = 0, bsc_type = 0;
 	int stype = PC_SUBTYPE(btype);
+	analyzer_ctx_t actx;
 
-	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR) {
-		uint64_t i, tot8b, tag1, tag2, tag3, lbytes;
-		double tagcnt, pct_tag;
-		uchar_t cur_byte, prev_byte;
-		/*
-		 * Count number of 8-bit binary bytes and XML tags in source.
-		 */
-		tot8b = 0;
-		tag1 = 0;
-		tag2 = 0;
-		tag3 = 0;
-		lbytes = 0;
-		prev_byte = cur_byte = 0;
-		for (i = 0; i < srclen; i++) {
-			cur_byte = src1[i];
-			tot8b += (cur_byte & 0x80); // This way for possible auto-vectorization
-			lbytes += (cur_byte < 32);
-			tag1 += (cur_byte == '<');
-			tag2 += (cur_byte == '>');
-			tag3 += ((prev_byte == '<') & (cur_byte == '/'));
-			tag3 += ((prev_byte == '/') & (cur_byte == '>'));
-			if (cur_byte != ' ')
-				prev_byte = cur_byte;
+	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR || stype == TYPE_PDF) {
+		if (adat->actx == NULL) {
+			analyze_buffer(src, srclen, &actx);
+			adat->actx = &actx;
 		}
+		if (adat->adapt_mode == 2) {
+			btype = adat->actx->forty_pct.btype;
 
-		/*
-		 * Heuristics for detecting BINARY vs generic TEXT vs XML data.
-		 */
-		tot8b = tot8b / 0x80 + lbytes;
-		tagcnt = tag1 + tag2 + tag3;
-		pct_tag = tagcnt / (double)srclen;
-		if (adat->adapt_mode == 2 && tot8b > FORTY_PCT(srclen)) {
-			btype = TYPE_BINARY;
-		} else if (adat->adapt_mode == 1 && tot8b > FIFTY_PCT(srclen)) {
-			btype = TYPE_BINARY;
-		} else {
-			btype = TYPE_TEXT;
-			if (tag1 > tag2 - 4 && tag1 < tag2 + 4 && tag3 > (double)tag1 * 0.40 &&
-			    tagcnt > (double)srclen * 0.001)
-				btype |= TYPE_MARKUP;
+		} else if (adat->adapt_mode == 1) {
+			btype = adat->actx->fifty_pct.btype;
 		}
-
-	} else if (stype == TYPE_PDF) {
-		uint64_t i, tot8b;
-		uchar_t cur_byte;
-
-		/*
-		 * For PDF files we need to check for uncompressed PDFs. Those are compressed
-		 * using Libbsc.
-		 */
-		tot8b = 0;
-		for (i = 0; i < srclen; i++) {
-			cur_byte = src1[i];
-			tot8b += (cur_byte & 0x80);
-		}
-
-		tot8b /= 0x80;
-		if (adat->adapt_mode == 2 && tot8b > FORTY_PCT(srclen)) {
-			btype = TYPE_BINARY;
-		} else if (adat->adapt_mode == 1 && tot8b > FIFTY_PCT(srclen)) {
-			btype = TYPE_BINARY;
-		} else {
-			btype = TYPE_TEXT|TYPE_MARKUP;
-		}
+		if (stype == TYPE_PDF)
+			btype |= TYPE_MARKUP;
 	}
+
+	/* Reset analyzer context for subsequent calls. */
+	adat->actx = NULL;
 
 	/*
 	 * Use PPMd if some percentage of source is 7-bit textual bytes, otherwise

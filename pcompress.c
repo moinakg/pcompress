@@ -211,7 +211,8 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	int result;
 	uint64_t _dstlen, fromlen;
 	uchar_t *from, *to;
-	int stype, dict;
+	int stype, dict, analyzed;
+	analyzer_ctx_t actx;
 	DEBUG_STAT_EN(double strt, en);
 
 	_dstlen = *dstlen;
@@ -221,6 +222,14 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	result = 0;
 	stype = PC_SUBTYPE(btype);
 	dict = 0;
+	analyzed = 0;
+
+	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR || stype == TYPE_PDF || interesting) {
+		analyze_buffer(src, srclen, &actx);
+		analyzed = 1;
+		if (pctx->adapt_mode)
+			adapt_set_analyzer_ctx(data, &actx);
+	}
 
 	/*
 	 * If Dispack is enabled it has to be done first since Dispack analyses the
@@ -246,56 +255,78 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	 * Enabling LZP also enables the DICT filter since we are dealing with text
 	 * in any case.
 	 */
-	if (pctx->lzp_preprocess && (PC_TYPE(btype) == TYPE_UNKNOWN ||
-	    PC_TYPE(btype) == TYPE_TEXT || interesting)) {
-		void *dct = new_dict_context();
-		_dstlen = fromlen;
-		result = dict_encode(dct, from, fromlen, to, &_dstlen);
-		delete_dict_context(dct);
-		if (result != -1) {
-			uchar_t *tmp;
-			tmp = from;
-			from = to;
-			to = tmp;
-			fromlen = _dstlen;
-			type |= PREPROC_TYPE_DICT;
-			dict = result;
+	if (pctx->lzp_preprocess) {
+		int b_type;
+
+		if (analyzed)
+			b_type = PC_TYPE(actx.one_pct.btype);
+		else
+			b_type = PC_TYPE(analyze_buffer_simple(from, fromlen));
+
+		if (b_type == TYPE_TEXT) {
+			void *dct = new_dict_context();
+			_dstlen = fromlen;
+			result = dict_encode(dct, from, fromlen, to, &_dstlen);
+			delete_dict_context(dct);
+			if (result != -1) {
+				uchar_t *tmp;
+				tmp = from;
+				from = to;
+				to = tmp;
+				fromlen = _dstlen;
+				type |= PREPROC_TYPE_DICT;
+				dict = result;
+			}
 		}
 	}
 
 #ifndef _MPLV2_LICENSE_
-	if (pctx->lzp_preprocess && stype != TYPE_BMP && stype != TYPE_TIFF &&
-	    PC_TYPE(btype) != TYPE_BINARY) {
-		int hashsize;
+	if (pctx->lzp_preprocess && stype != TYPE_BMP && stype != TYPE_TIFF) {
+		int hashsize, b_type;
 		int64_t result;
 
-		hashsize = lzp_hash_size(level);
-		result = lzp_compress((const uchar_t *)from, to, fromlen,
+		b_type = btype;
+		if (analyzed)
+			b_type = actx.forty_pct.btype;
+	
+		if (PC_TYPE(b_type) != TYPE_BINARY) {
+			hashsize = lzp_hash_size(level);
+			result = lzp_compress((const uchar_t *)from, to, fromlen,
 					      hashsize, LZP_DEFAULT_LZPMINLEN, 0);
-		if (result >= 0 && result < srclen) {
-			uchar_t *tmp;
-			tmp = from;
-			from = to;
-			to = tmp;
-			fromlen = result;
-			type |= PREPROC_TYPE_LZP;
+			if (result >= 0 && result < srclen) {
+				uchar_t *tmp;
+				tmp = from;
+				from = to;
+				to = tmp;
+				fromlen = result;
+				type |= PREPROC_TYPE_LZP;
+			}
 		}
 	}
 #endif
 
 	if (pctx->enable_delta2_encode && props->delta2_span > 0 &&
 	    stype != TYPE_DNA_SEQ && stype != TYPE_BMP &&
-	    stype != TYPE_TIFF && stype != TYPE_MP4 && PC_TYPE(btype) != TYPE_TEXT) {
-		_dstlen = fromlen;
-		result = delta2_encode((uchar_t *)from, fromlen, to,
-				       &_dstlen, props->delta2_span, pctx->delta2_nstrides);
-		if (result != -1) {
-			uchar_t *tmp;
-			tmp = from;
-			from = to;
-			to = tmp;
-			fromlen = _dstlen;
-			type |= PREPROC_TYPE_DELTA2;
+	    stype != TYPE_TIFF && stype != TYPE_MP4) {
+		int b_type;
+
+		b_type = btype;
+		if (analyzed)
+			b_type = actx.one_pct.btype;
+
+		if (PC_TYPE(b_type) != TYPE_TEXT) {
+			_dstlen = fromlen;
+			result = delta2_encode((uchar_t *)from, fromlen, to,
+					       &_dstlen, props->delta2_span,
+					       pctx->delta2_nstrides);
+			if (result != -1) {
+				uchar_t *tmp;
+				tmp = from;
+				from = to;
+				to = tmp;
+				fromlen = _dstlen;
+				type |= PREPROC_TYPE_DELTA2;
+			}
 		}
 	}
 

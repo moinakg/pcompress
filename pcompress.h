@@ -36,7 +36,8 @@ extern "C" {
 
 #include <rabin_dedup.h>
 #include <crypto_utils.h>
-#include "meta_stream.h"
+#include <filters/analyzer/analyzer.h>
+#include <meta_stream.h>
 
 #define	CHUNK_FLAG_SZ	1
 #define	ALGO_SZ		8
@@ -152,6 +153,7 @@ extern int lz4_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		    int file_version, compress_op_t op);
 extern int none_init(void **data, int *level, int nthreads, uint64_t chunksize,
 		     int file_version, compress_op_t op);
+extern void adapt_set_analyzer_ctx(void *data, analyzer_ctx_t *actx);
 
 extern void lzma_props(algo_props_t *data, int level, uint64_t chunksize);
 extern void lzma_mt_props(algo_props_t *data, int level, uint64_t chunksize);

@@ -29,7 +29,18 @@
 extern "C" {
 #endif
 
-extern int analyze_buffer(void *src, uint64_t srclen);
+struct significance_value {
+	int btype;
+};
+
+typedef struct _analyzer_ctx {
+	struct significance_value one_pct;
+	struct significance_value forty_pct;
+	struct significance_value fifty_pct;
+} analyzer_ctx_t;
+
+void analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx);
+int analyze_buffer_simple(void *src, uint64_t srclen);
 
 #ifdef  __cplusplus
 }
