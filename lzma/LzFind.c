@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 /* LzFind.c -- Match finder for LZ algorithms
@@ -33,6 +33,8 @@
 #else
 #include <emmintrin.h>
 #endif
+#define	PREFETCH_T0(addr,nrOfBytesAhead) _mm_prefetch(((char *)(addr))+nrOfBytesAhead,_MM_HINT_T0)
+#define	PREFETCH_FETCH_DIST 64
 #endif
 
 #include "LzFind.h"
@@ -405,6 +407,7 @@ UInt32 * GetMatchesSpec1(UInt32 lenLimit, UInt32 curMatch, UInt32 pos, const Byt
     }
     {
       CLzRef *pair = son + ((_cyclicBufferPos - delta + ((delta > _cyclicBufferPos) ? _cyclicBufferSize : 0)) << 1);
+      PREFETCH_T0((const char *)pair, 0);
       const Byte *pb = cur - delta;
       UInt32 len = (len0 < len1 ? len0 : len1);
       if (pb[len] == cur[len])
@@ -473,6 +476,9 @@ diff_cont_g:
       }
       if (pb[len] < cur[len])
       {
+        UInt32 llen = (len0 < len ? len0 : len);
+	if (llen > 0)
+		PREFETCH_T0((cur - (pos - *(pair + 1))) + llen, PREFETCH_FETCH_DIST);
         *ptr1 = curMatch;
         ptr1 = pair + 1;
         curMatch = *ptr1;
@@ -480,6 +486,9 @@ diff_cont_g:
       }
       else
       {
+        UInt32 llen = (len < len1 ? len : len1);
+	if (llen > 0)
+		PREFETCH_T0((cur - (pos - *pair)) + llen, PREFETCH_FETCH_DIST);
         *ptr0 = curMatch;
         ptr0 = pair;
         curMatch = *ptr0;

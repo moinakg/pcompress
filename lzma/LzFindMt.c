@@ -20,7 +20,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * moinakg@belenix.org, http://moinakg.wordpress.com/
- *      
+ *
  */
 
 /* LzFindMt.c -- multithreaded Match finder for LZ algorithms
