@@ -645,6 +645,14 @@ add_pathname(const char *fpath, const struct stat *sb,
 		int i;
 		char *dot;
 
+		/*
+		 * Paranoid check (Well, we can have a sparse file of any size ...).
+		 * When sorting pathnames, we can't handle files close to INT64_MAX size.
+		 */
+		if (sb->st_size > INT64_MAX - 255) {
+			log_msg(LOG_ERR, 0, "%s:\nCannot handle files > %lld bytes when sorting!",
+			    fpath, INT64_MAX - 255);
+		}
 		basename = &fpath[ftwbuf->base];
 		if (a_state.srt_pos == SORT_BUF_SIZE) {
 			struct sort_buf *srt;

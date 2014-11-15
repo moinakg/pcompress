@@ -435,10 +435,12 @@ $(PROG): $(LIB) $(PROGOBJS) ./buildtmp/$(PROG)
 test: all
 	(cd test; ulimit -c unlimited; sh ./run_test.sh $(TESTSUITE) ) 2>&1 | tee test.log
 
-clean:
+topclean:
 	$(RM) buildtmp/$(PROG) $(OBJS) $(PROGOBJS) $(BAKFILES) $(LIB) $(LIB).$(LIBVER)
 	$(RM) test.log
 	$(RM_RF) test/datafiles
+
+clean: topclean
 	(cd @LIBARCHIVE_DIR@; make clean)
 	[ "x@ENABLE_WAVPACK@" != "x" ] && (cd @WAVPACK_DIR@; make clean)
 	exit 0

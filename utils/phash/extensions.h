@@ -227,5 +227,7 @@ struct ext_entry {
 	{"sed"	, TYPE_TEXT,        3},
 	{"mailmap"	, TYPE_TEXT,        7},
 	{"sin"	, TYPE_BINARY,        3},
+	{"xul"	, TYPE_TEXT,        3},
+	{"xpt"	, TYPE_BINARY,        3},
 };
 #endif

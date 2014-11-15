@@ -217,3 +217,5 @@ charset,TYPE_TEXT
 sed,TYPE_TEXT
 mailmap,TYPE_TEXT
 sin,TYPE_BINARY
+xul,TYPE_TEXT
+xpt,TYPE_BINARY
