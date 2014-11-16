@@ -288,7 +288,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		b_type = btype;
 		if (analyzed)
 			b_type = actx.forty_pct.btype;
-	
+
 		if (PC_TYPE(b_type) != TYPE_BINARY) {
 			hashsize = lzp_hash_size(level);
 			result = lzp_compress((const uchar_t *)from, to, fromlen,
@@ -3120,7 +3120,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	ff.enable_wavpack = 0;
 
 	pthread_mutex_lock(&opt_parse);
-	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avmKjxiT")) != -1) {
+	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avmKjxiTn")) != -1) {
 		int ovr;
 		int64_t chunksize;
 
@@ -3298,6 +3298,10 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 		    case 'T':
 			pctx->meta_stream = -1;
+			break;
+
+		   case 'n':
+			pctx->enable_archive_sort = -1;
 			break;
 
 		    case '?':
@@ -3568,6 +3572,15 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			return (1);
 		}
 
+		if (pctx->chunksize == 0) {
+			if (pctx->level < 9) {
+				pctx->chunksize = DEFAULT_CHUNKSIZE;
+			} else {
+				pctx->chunksize = DEFAULT_CHUNKSIZE + (pctx->level - 8) *
+				    DEFAULT_CHUNKSIZE/4;
+			}
+		}
+
 		/*
 		 * Auto-select filters and preprocessing modes based on compresion level.
 		 * This is not done if user explicitly specified advanced options.
@@ -3606,22 +3619,12 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 					pctx->enable_rabin_split = 1;
 				}
 				pctx->rab_blk_size = 2;
-				if (pctx->level > 5) pctx->rab_blk_size = 1;
-				if (pctx->level > 8) pctx->rab_blk_size = 0;
 			}
 			if (pctx->level > 9) pctx->delta2_nstrides = NSTRIDES_EXTRA;
 		}
 		if (pctx->lzp_preprocess || pctx->enable_delta2_encode || pctx->dispack_preprocess) {
 			pctx->preprocess_mode = 1;
 			pctx->enable_analyzer = 1;
-		}
-		if (pctx->chunksize == 0) {
-			if (pctx->level < 9) {
-				pctx->chunksize = DEFAULT_CHUNKSIZE;
-			} else {
-				pctx->chunksize = DEFAULT_CHUNKSIZE + (pctx->level - 8) *
-				    DEFAULT_CHUNKSIZE/4;
-			}
 		}
 	} else if (pctx->do_uncompress) {
 		struct filter_flags ff;

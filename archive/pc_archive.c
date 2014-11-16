@@ -1810,6 +1810,14 @@ detect_type_by_data(uchar_t *buf, size_t len)
 	// At least a few bytes.
 	if (len < 10) return (TYPE_UNKNOWN);
 
+	// Mozilla file types
+	if (len > 15) {
+		if (memcmp(buf, "XPCOM\nMozFASL\r\n\x1A", 16) == 0)
+			return (TYPE_BINARY);
+		if (memcmp(buf, "XPCOM\nTypeLib\r\n\032", 16) == 0)
+			return (TYPE_BINARY);
+	}
+
 	// WAV files.
 	if (identify_wav_type(buf, len))
 		return (TYPE_BINARY|TYPE_WAV);
