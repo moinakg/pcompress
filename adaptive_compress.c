@@ -247,7 +247,8 @@ is_bsc_type(int btype)
 {
 	int stype = PC_SUBTYPE(btype);
 	return ((stype == TYPE_MARKUP) | (stype == TYPE_BMP) | (stype == TYPE_DNA_SEQ) |
-	    (stype == TYPE_MP4) | (stype == TYPE_FLAC) | (stype == TYPE_AVI) | (stype == TYPE_DICOM));
+	    (stype == TYPE_MP4) | (stype == TYPE_FLAC) | (stype == TYPE_AVI) |
+	    (stype == TYPE_DICOM) | (stype == TYPE_MEDIA_BSC));
 }
 
 int
@@ -286,7 +287,7 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 #ifdef ENABLE_PC_LIBBSC
 	bsc_type = is_bsc_type(btype);
 #endif
-	if (is_incompressible(btype)) {
+	if (is_incompressible(btype) && !bsc_type) {
 		rv = lz4_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->lz4_data);
 		if (rv < 0)
 			return (rv);
