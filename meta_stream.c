@@ -35,7 +35,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include "pcompress.h"
-#include "delta2/delta2.h"
+#include "filters/delta2/delta2.h"
 #include "utils/utils.h"
 #include "lzma/lzma_crc.h"
 #include "allocator.h"
@@ -104,6 +104,7 @@ compress_and_write(meta_ctx_t *mctx)
 	 */
 	tobuf = mctx->tobuf;
 	U64_P(tobuf) = htonll(METADATA_INDICATOR);
+	U64_P(tobuf + 16) = LE64(mctx->frompos); // Record original length
 	comp_chunk = tobuf + METADATA_HDR_SZ;
 	dstlen = mctx->frompos;
 
@@ -148,7 +149,6 @@ compress_and_write(meta_ctx_t *mctx)
 	 * for the header.
 	 */
 	U64_P(tobuf + 8) = LE64(dstlen);
-	U64_P(tobuf + 16) = LE64(mctx->frompos);
 	*(tobuf + 24) = type;
 
 	if (!pctx->encrypt_type)
@@ -354,13 +354,14 @@ decompress_data(meta_ctx_t *mctx)
 	}
 
 	if (type & PREPROC_TYPE_DELTA2) {
-		dstlen = origlen;
-		rv = delta2_decode(ubuf, len_cmp, cseg, &dstlen);
+		uint64_t _dstlen = origlen;
+		rv = delta2_decode(ubuf, dstlen, cseg, &_dstlen);
 		if (rv == -1) {
 			log_msg(LOG_ERR, 0, "Metadata chunk %d, Delta2 decoding failed.", mctx->id);
 			return (0);
 		}
-		memcpy(ubuf, cseg, dstlen);
+		memcpy(ubuf, cseg, _dstlen);
+                dstlen = _dstlen;
 	}
 
 	/*
