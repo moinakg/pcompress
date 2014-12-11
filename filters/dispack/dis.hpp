@@ -31,8 +31,12 @@
 extern "C" {
 #endif
 
-int dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *_dstlen);
+int dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *_dstlen,
+    int stype);
 int dispack_decode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen);
+
+int Forward_E89(uint8_t *src, uint64_t sz);
+int Inverse_E89(uint8_t *src, uint64_t sz);
 
 #ifdef	__cplusplus
 }

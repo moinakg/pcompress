@@ -232,22 +232,23 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	}
 
 	/*
-	 * If Dispack is enabled it has to be done first since Dispack analyses the
-	 * x86 instruction stream in the raw data.
-	 * AR archives are typically static libraries. So we Dispack them unconditionally.
-	 * TODO: Is this too much to assume in the generic case? Can we look inside ar archives?
+	 * Dispack is used for 32-bit EXE files via a libarchive filter routine.
+	 * However if Dispack fails or 64-bit exes are detected we apply an E8E9
+	 * CALL/JMP transform filter.
 	 */
-	if (pctx->dispack_preprocess && (stype == TYPE_EXE32 || stype == TYPE_EXE64 ||
-	    stype == TYPE_ARCHIVE_AR)) {
-		_dstlen = fromlen;
-		result = dispack_encode((uchar_t *)from, fromlen, to, &_dstlen);
-		if (result != -1) {
-			uchar_t *tmp;
-			tmp = from;
-			from = to;
-			to = tmp;
-			fromlen = _dstlen;
-			type |= PREPROC_TYPE_DISPACK;
+	if (pctx->exe_preprocess) {
+		if (stype == TYPE_EXE32 || stype == TYPE_EXE64 ||
+		    stype == TYPE_ARCHIVE_AR) {
+			_dstlen = fromlen;
+			memcpy(to, from, fromlen);
+			if (Forward_E89(to, fromlen) == 0) {
+				uchar_t *tmp;
+				tmp = from;
+				from = to;
+				to = tmp;
+				fromlen = _dstlen;
+				type |= PREPROC_TYPE_E8E9;
+			}
 		}
 	}
 
@@ -449,7 +450,18 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 		}
 	}
 
-	if (type & PREPROC_TYPE_DISPACK) {
+	if (type & PREPROC_TYPE_E8E9) {
+		_dstlen1 = srclen;
+		memcpy(dst, src, srclen);
+		result = Inverse_E89(dst, srclen);
+		if (result != -1) {
+			*dstlen = _dstlen1;
+		} else {
+			log_msg(LOG_ERR, 0, "E8E9 decoding failed.");
+			return (result);
+		}
+
+	} else if (type & PREPROC_TYPE_DISPACK) { // Backward compatibility
 		result = dispack_decode((uchar_t *)src, srclen, (uchar_t *)dst, &_dstlen1);
 		if (result != -1) {
 			*dstlen = _dstlen1;
@@ -1768,7 +1780,6 @@ redo:
 	rbytes = tdat->rbytes;
 	dedupe_index_sz = 0;
 	type = COMPRESSED;
-
 
 	/* Perform Dedup if enabled. */
 	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan)) {
@@ -3106,7 +3117,6 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	char *pos;
 	struct filter_flags ff;
 
-
 	pctx->level = -1;
 	err = 0;
 	pctx->keylen = DEFAULT_KEYLEN;
@@ -3171,7 +3181,6 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			break;
 
 		    case 'B':
-			pctx->advanced_opts = 1;
 			pctx->rab_blk_size = atoi(optarg);
 			if (pctx->rab_blk_size < 0 || pctx->rab_blk_size > 5) {
 				log_msg(LOG_ERR, 0, "Average Dedupe block size must be in range 0 (2k), 1 (4k) .. 5 (64k)");
@@ -3293,7 +3302,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 
 		    case 'x':
 			pctx->advanced_opts = 1;
-			pctx->dispack_preprocess = 1;
+			pctx->exe_preprocess = 1;
 			break;
 
 		    case 'T':
@@ -3415,11 +3424,11 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	}
 
 	/*
-	 * Dispack, PackJPG and WavPack are only valid when archiving files.
+	 * EXE, PackJPG and WavPack are only valid when archiving files.
 	 */
-	if ((pctx->dispack_preprocess || ff.enable_packjpg || ff.enable_wavpack)
+	if ((pctx->exe_preprocess || ff.enable_packjpg || ff.enable_wavpack)
 	    && !pctx->archive_mode) {
-		log_msg(LOG_ERR, 0, "Dispack Executable Preprocessor and PackJPG are "
+		log_msg(LOG_ERR, 0, "Executable File Preprocessor and PackJPG are "
 		    "only valid when archiving.");
 		return (1);
 	}
@@ -3597,7 +3606,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 				init_filters(&ff);
 				pctx->enable_packjpg = ff.enable_packjpg;
 				pctx->enable_wavpack = ff.enable_wavpack;
-				if (pctx->level > 8) pctx->dispack_preprocess = 1;
+				if (pctx->level > 8) pctx->exe_preprocess = 1;
 				if (pctx->meta_stream != -1)
 					pctx->meta_stream = 1;
 				else
@@ -3622,7 +3631,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			}
 			if (pctx->level > 9) pctx->delta2_nstrides = NSTRIDES_EXTRA;
 		}
-		if (pctx->lzp_preprocess || pctx->enable_delta2_encode || pctx->dispack_preprocess) {
+		if (pctx->lzp_preprocess || pctx->enable_delta2_encode || pctx->exe_preprocess) {
 			pctx->preprocess_mode = 1;
 			pctx->enable_analyzer = 1;
 		}

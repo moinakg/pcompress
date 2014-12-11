@@ -255,7 +255,7 @@ Read_Adjusted(int fd, uchar_t *buf, uint64_t count, int64_t *rabin_count, void *
 		rcount = Read(fd, buf2, count);
         if (rcount > 0) {
                 rcount += *rabin_count;
-		if (rcount == count) {
+		if (rcount == count + *rabin_count) {
 			uint64_t rc, rbc;
 			rc = rcount;
 			rbc = *rabin_count;

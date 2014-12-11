@@ -156,6 +156,8 @@ DictFilter::Forward_Dict(u8 *src, u32 size, u8 *dst, u32 *dstsize)
 
 
 	for(i = 0; i < size-5;) {
+		if (dstSize > *dstsize-4)
+			return (0);
 		if (src[i] >= 'a' && src[i] <= 'z') {
 
 			u32 matchSymbol = 0,longestWord = 0;
@@ -199,6 +201,8 @@ DictFilter::Forward_Dict(u8 *src, u32 size, u8 *dst, u32 *dstsize)
 	}
 
 	for (; i<size; i++) {
+		if (dstSize > *dstsize-4)
+			return (0);
 		if (src[i] >= 0x82) {
 			dst[dstSize++] = 254;
 			dst[dstSize++] = src[i];
@@ -282,7 +286,7 @@ dict_encode(void *dict_ctx, uchar_t *from, uint64_t fromlen, uchar_t *to, uint64
 	dst = to + 4;
 	dl -= 4;
 	if (df->Forward_Dict(from, fl, dst, &dl)) {
-		*dstlen = dl + 8;
+		*dstlen = dl + 4;
 		DEBUG_STAT_EN(en = get_wtime_millis());
 		DEBUG_STAT_EN(fprintf(stderr, "DICT: fromlen: %" PRIu64 ", dstlen: %" PRIu64 "\n",
 				      fromlen, *dstlen));

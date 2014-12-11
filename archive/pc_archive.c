@@ -198,17 +198,18 @@ creat_write_callback(struct archive *arc, void *ctx, const void *buf, size_t len
 			} else {
 				if (pctx->arc_buf_pos < pctx->min_chunk) {
 					int diff = pctx->min_chunk - (int)(pctx->arc_buf_pos);
-					if (len >= diff)
+					if (len >= diff) {
 						pctx->btype = pctx->ctype;
-					else
+					} else {
 						pctx->ctype = pctx->btype;
+					}
 					pctx->interesting = 1;
 				} else {
 					pctx->arc_writing = 0;
 					Sem_Post(&(pctx->read_sem));
 					Sem_Wait(&(pctx->write_sem));
-					tbuf = pctx->arc_buf + pctx->arc_buf_pos;
 					pctx->arc_writing = 1;
+					tbuf = pctx->arc_buf;
 					pctx->btype = pctx->ctype;
 				}
 			}
@@ -258,6 +259,7 @@ archiver_read(void *ctx, void *buf, uint64_t count)
 	pctx->btype = TYPE_UNKNOWN;
 	Sem_Post(&(pctx->write_sem));
 	Sem_Wait(&(pctx->read_sem));
+
 	pctx->arc_buf = NULL;
 	return (pctx->arc_buf_pos);
 }
@@ -313,7 +315,7 @@ extract_read_callback(struct archive *arc, void *ctx, const void **buf)
 		if (rv == 0) {
 			archive_set_error(arc, ARCHIVE_EOF, "Metadata Thread communication error.");
 			return (-1);
-			
+
 		} else if (rv == -1) {
 			archive_set_error(arc, ARCHIVE_EOF, "Error reported by Metadata Thread.");
 			return (-1);
@@ -722,8 +724,50 @@ add_pathname(const char *fpath, const struct stat *sb,
 
 			i = 0;
 			if (!dot) {
-				while (basename[i] != '\0' && i < NAMELEN) {
-					member->name[i] = basename[i]; i++;
+				int plen = strlen(fpath);
+				int nsep;
+
+				/*
+				 * Filenames without an extension are sorted based on
+				 * their entire path characteristics. This mostly avoids
+				 * unwanted mixing of different file types if we just
+				 * sort by filename.
+				 *
+				 * For every path separator we take the first character
+				 * of the directory name limited by NAMELEN chars. Counting
+				 * is backward from the basename itself. If less than
+				 * NAMELEN path separators are present (i.e. fewer than
+				 * NAMELEN level dir nesting) then remaining chars are filled
+				 * from the basename.
+				 */
+				nsep = 0;
+				for (i = 0; i < plen; i++) {
+					if (fpath[i] == '/') {
+						nsep++;
+					}
+				}
+
+				if (nsep < NAMELEN) {
+					int diff = NAMELEN - nsep;
+					nsep = NAMELEN-1;
+					i = ftwbuf->base + diff;
+					while (diff > 0) {
+						member->name[nsep] = fpath[i];
+						nsep--;
+						i--;
+						diff--;
+					}
+				} else {
+					nsep = NAMELEN-1;
+				}
+
+				i = ftwbuf->base;
+				while (nsep > -1 && i > 0) {
+					if (fpath[i-1] == '/') {
+						member->name[nsep] = fpath[i];
+						nsep--;
+					}
+					i--;
 				}
 				// Clear 64-bit MSB
 				member->size &= 0x7FFFFFFFFFFFFFFF;
@@ -1807,6 +1851,8 @@ out:
 static int
 detect_type_by_data(uchar_t *buf, size_t len)
 {
+	uint16_t leval;
+
 	// At least a few bytes.
 	if (len < 10) return (TYPE_UNKNOWN);
 
@@ -1875,16 +1921,24 @@ detect_type_by_data(uchar_t *buf, size_t len)
 			} else {
 				uint32_t off = LE32(U32_P(buf + 0x3c));
 				// This is non-MSDOS, check whether PE
-				if (off < len - 3) {
+				if (off < len - 100) {
 					if (buf[off] == 'P' && buf[off+1] == 'E' &&
 					    buf[off+2] == '\0' && buf[off+3] == '\0') {
+						uint16_t id;
+
 						// This is a PE executable.
 						// Check 32/64-bit.
-						off = LE32(U32_P(buf + 0x3c))+4;
-						if (LE16(U16_P(buf + off)) == 0x8664) {
-							return (TYPE_BINARY|TYPE_EXE64);
+						off = LE32(U32_P(buf + 0x3c))+24;
+						id = LE16(U16_P(buf + off));
+						if (id == 0x010b || id == 0x020b) {
+							off = LE32(U32_P(buf + 0x3c))+4;
+							id = LE16(U16_P(buf + off));
+							if (id == 0x8664)
+								return (TYPE_BINARY|TYPE_EXE64);
+							else
+								return (TYPE_BINARY|TYPE_EXE32);
 						} else {
-							return (TYPE_BINARY|TYPE_EXE32);
+							return (TYPE_BINARY);
 						}
 					} else {
 						return (TYPE_BINARY|TYPE_EXE32);
@@ -1921,6 +1975,21 @@ detect_type_by_data(uchar_t *buf, size_t len)
 		else
 			return (TYPE_BINARY);
 	}
+
+	// x86 Unix format object files (COFF)
+	leval = LE16(U16_P(buf));
+	if (leval == 0502 || leval == 0503 || leval == 0510 || leval == 0511 ||
+	    leval == 0512 || leval == 0514 || leval == 0522) {
+		return (TYPE_BINARY|TYPE_EXE32);
+	}
+
+	// AMD64 COFF
+	if (leval == 0x8664)
+		return (TYPE_BINARY|TYPE_EXE64);
+
+	// Intel BIOS ROM images
+	if (*buf == 0x55 && *(buf + 1) == 0xaa)
+		return (TYPE_BINARY|TYPE_EXE32);
 
 	if (U16_P(buf + 2) == COM_MAGIC || U16_P(buf + 4) == COM_MAGIC ||
 	    U16_P(buf + 4) == COM_MAGIC || U16_P(buf + 5) == COM_MAGIC ||

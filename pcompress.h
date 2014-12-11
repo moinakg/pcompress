@@ -71,6 +71,7 @@ extern "C" {
 #define	PREPROC_TYPE_DELTA2	2
 #define	PREPROC_TYPE_DISPACK	4
 #define	PREPROC_TYPE_DICT	8
+#define	PREPROC_TYPE_E8E9	16
 #define	PREPROC_COMPRESSED	128
 
 /*
@@ -220,7 +221,7 @@ typedef struct pc_ctx {
 	int enable_analyzer;
 	int preprocess_mode;
 	int lzp_preprocess;
-	int dispack_preprocess;
+	int exe_preprocess;
 	int encrypt_type;
 	int archive_mode;
 	int enable_archive_sort;
