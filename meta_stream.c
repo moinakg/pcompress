@@ -245,6 +245,7 @@ metadata_compress(void *dat)
 			 * compress and write the buffer.
 			 */
 			memcpy(mctx->frombuf + mctx->frompos, msgp->buf, msgp->len);
+			mctx->frompos += msgp->len;
 			if (!compress_and_write(mctx)) {
 				Write(mctx->meta_pipes[SINK_CHANNEL], &ack, sizeof (ack));
 				return (NULL);

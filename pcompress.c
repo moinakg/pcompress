@@ -3590,6 +3590,16 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			}
 		}
 
+		if (pctx->archive_mode) {
+			if (pctx->meta_stream != -1)
+				pctx->meta_stream = 1;
+			else
+				pctx->meta_stream = 0;
+		}
+
+		if (pctx->pipe_mode)
+			pctx->meta_stream = 0;
+
 		/*
 		 * Auto-select filters and preprocessing modes based on compresion level.
 		 * This is not done if user explicitly specified advanced options.
@@ -3607,12 +3617,6 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 				pctx->enable_packjpg = ff.enable_packjpg;
 				pctx->enable_wavpack = ff.enable_wavpack;
 				if (pctx->level > 8) pctx->exe_preprocess = 1;
-				if (pctx->meta_stream != -1)
-					pctx->meta_stream = 1;
-				else
-					pctx->meta_stream = 0;
-				if (pctx->pipe_mode)
-					pctx->meta_stream = 0;
 			}
 
 			/*

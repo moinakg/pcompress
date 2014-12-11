@@ -362,7 +362,7 @@ archiver_write(void *ctx, void *buf, uint64_t count)
 	}
 
 	if (pctx->arc_buf != NULL) {
-		log_msg(LOG_ERR, 0, "Incorrect sequencing of archiver_read() call.");
+		log_msg(LOG_ERR, 0, "Incorrect sequencing of archiver_write() call.");
 		return (-1);
 	}
 
@@ -661,7 +661,7 @@ add_pathname(const char *fpath, const struct stat *sb,
 
 			/*
 			 * Sort Buffer is full so sort it. Sorting is done by file extension and size.
-			 * If file has no extension then first 4 chars of the filename are used.
+			 * If file has no extension then an algorithm is used, described below.
 			 */
 			srt = (struct sort_buf *)malloc(sizeof (struct sort_buf));
 			if (srt == NULL) {
@@ -742,7 +742,7 @@ add_pathname(const char *fpath, const struct stat *sb,
 				 */
 				nsep = 0;
 				for (i = 0; i < plen; i++) {
-					if (fpath[i] == '/') {
+					if (fpath[i] == PATHSEP_CHAR) {
 						nsep++;
 					}
 				}
