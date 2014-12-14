@@ -327,7 +327,7 @@ wavpack_filter_encode(uchar_t *in_buf, size_t len, uchar_t **out_buf, int cmp_le
 
 	if (cmp_level < 6) {
 		loc_config.flags |= CONFIG_FAST_FLAG;
-	} else if (cmp_level > 8) {
+	} else if (cmp_level > 7) {
 		loc_config.flags |= CONFIG_HIGH_FLAG;
 	}
 

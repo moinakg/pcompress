@@ -182,6 +182,7 @@ typedef int32_t bsize_t;
 #endif
 
 #define	PATHSEP_CHAR	'/'
+#define	PATHSEP_STR	"/"
 #define	BYTES_TO_MB(x) ((x) / (1024 * 1024))
 #define	U64_P(x) *((uint64_t *)(x))
 #define	U32_P(x) *((uint32_t *)(x))

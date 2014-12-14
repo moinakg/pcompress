@@ -1022,8 +1022,8 @@ setup_extractor(pc_ctx_t *pctx)
 
 static ssize_t
 process_by_filter(int fd, int *typ, struct archive *target_arc,
-    struct archive *source_arc, struct archive_entry *entry, int cmp,
-    int level)
+    struct archive *source_arc, struct archive_entry *entry,
+    filter_output_t *fout, int cmp, int level)
 {
 	struct filter_info fi;
 	int64_t wrtn;
@@ -1036,9 +1036,10 @@ process_by_filter(int fd, int *typ, struct archive *target_arc,
 	fi.block_size = AW_BLOCK_SIZE;
 	fi.type_ptr = typ;
 	fi.cmp_level = level;
+	fi.fout = fout;
 	wrtn = (*(typetab[(*typ >> 3)].filter_func))(&fi, typetab[(*typ >> 3)].filter_private);
 	if (wrtn == FILTER_RETURN_ERROR) {
-		log_msg(LOG_ERR, 0, "Error invoking filter module: %s",
+		log_msg(LOG_ERR, 0, "Warning: Error invoking filter: %s (skipping)",
 		    typetab[(*typ >> 3)].filter_name);
 	}
 	return (wrtn);
@@ -1075,6 +1076,7 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 	uchar_t *mapbuf;
 	int rv, fd, typ1;
 	const char *fpath;
+	filter_output_t fout;
 
 	typ1 = typ;
 	offset = 0;
@@ -1093,21 +1095,40 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 			int64_t rv;
 			char *fname = typetab[(typ >> 3)].filter_name;
 
-			archive_entry_xattr_add_entry(entry, FILTER_XATTR_ENTRY,
-			    fname, strlen(fname));
+			pctx->ctype = typ;
+			rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry,
+			    &fout, 1, pctx->level);
+			if (rv != FILTER_RETURN_SKIP &&
+			    rv != FILTER_RETURN_ERROR) {
+				if (fout.output_type == FILTER_OUTPUT_MEM) {
+					archive_entry_xattr_add_entry(entry, FILTER_XATTR_ENTRY,
+								      fname, strlen(fname));
+					if (write_header(arc, entry) == -1) {
+						close(fd);
+						return (-1);
+					}
+					rv = archive_write_data(arc, &(fout.hdr),
+								sizeof (fout.hdr));
+					if (rv != sizeof (fout.hdr))
+						return (rv);
+					rv = archive_write_data(arc, fout.out,
+								fout.out_size);
+					free(fout.out);
+					close(fd);
+					if (rv != fout.out_size)
+						return (ARCHIVE_FATAL);
+					else
+						return (ARCHIVE_OK);
+				} else {
+					log_msg(LOG_WARN, 0,
+						"Unsupported filter output for entry: %s.",
+						archive_entry_pathname(entry));
+					return (ARCHIVE_FATAL);
+				}
+			}
 			if (write_header(arc, entry) == -1) {
 				close(fd);
 				return (-1);
-			}
-			pctx->ctype = typ;
-			rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry,
-			    1, pctx->level);
-			if (rv == FILTER_RETURN_ERROR) {
-				close(fd);
-				return (-1);
-			} else if (rv != FILTER_RETURN_SKIP) {
-				close(fd);
-				return (ARCHIVE_OK);
 			}
 		} else {
 			if (write_header(arc, entry) == -1) {
@@ -1150,26 +1171,46 @@ do_map:
 					int64_t rv;
 					char *fname = typetab[(typ >> 3)].filter_name;
 
-					archive_entry_xattr_add_entry(entry, FILTER_XATTR_ENTRY,
-					    fname, strlen(fname));
+					munmap(mapbuf, len);
+					rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry,
+					    &fout, 1, pctx->level);
+					if (rv != FILTER_RETURN_SKIP &&
+					    rv != FILTER_RETURN_ERROR) {
+						if (fout.output_type == FILTER_OUTPUT_MEM) {
+							archive_entry_xattr_add_entry(entry,
+										      FILTER_XATTR_ENTRY,
+										      fname, strlen(fname));
+							if (write_header(arc, entry) == -1) {
+								close(fd);
+								return (-1);
+							}
+							rv = archive_write_data(arc, &(fout.hdr),
+										sizeof (fout.hdr));
+							if (rv != sizeof (fout.hdr))
+								return (rv);
+							rv = archive_write_data(arc, fout.out,
+										fout.out_size);
+							free(fout.out);
+							close(fd);
+							if (rv != fout.out_size)
+								return (ARCHIVE_FATAL);
+							else
+								return (ARCHIVE_OK);
+						} else {
+							log_msg(LOG_WARN, 0,
+								"Unsupported filter output for entry: %s.",
+								archive_entry_pathname(entry));
+							return (ARCHIVE_FATAL);
+						}
+					}
 					if (write_header(arc, entry) == -1) {
 						close(fd);
 						return (-1);
 					}
-
-					munmap(mapbuf, len);
-					rv = process_by_filter(fd, &(pctx->ctype), arc, NULL, entry,
-					    1, pctx->level);
-					if (rv == FILTER_RETURN_ERROR) {
-						return (-1);
-					} else if (rv == FILTER_RETURN_SKIP) {
-						lseek(fd, 0, SEEK_SET);
-						typ = TYPE_COMPRESSED;
-						offset = 0;
-						goto do_map;
-					} else {
-						return (ARCHIVE_OK);
-					}
+					lseek(fd, 0, SEEK_SET);
+					typ = TYPE_COMPRESSED;
+					offset = 0;
+					goto do_map;
 				} else {
 					if (write_header(arc, entry) == -1) {
 						close(fd);
@@ -1264,7 +1305,8 @@ archiver_thread_func(void *dat) {
 		if (rbytes == -1) break;
 		archive_entry_copy_sourcepath(entry, fpath);
 		if (archive_read_disk_entry_from_file(ard, entry, -1, NULL) != ARCHIVE_OK) {
-			log_msg(LOG_WARN, 1, "archive_read_disk_entry_from_file:\n  %s", archive_error_string(ard));
+			log_msg(LOG_WARN, 1, "archive_read_disk_entry_from_file:\n  %s",
+			    archive_error_string(ard));
 			archive_entry_clear(entry);
 			continue;
 		}
@@ -1328,6 +1370,9 @@ archiver_thread_func(void *dat) {
 		ent = entry;
 		while (ent != NULL) {
 			if (write_entry(pctx, arc, ent, typ) != 0) {
+				log_msg(LOG_WARN, 1, "Error archiving entry: %s\n%s",
+				    archive_entry_pathname(entry),
+				    archive_error_string(ard));
 				goto done;
 			}
 			ent = spare_entry;
@@ -1370,42 +1415,63 @@ copy_data_out(struct archive *ar, struct archive *aw, struct archive_entry *entr
 	int64_t offset;
 	const void *buff;
 	size_t size;
-	int r;
+	int r, ret;
+	filter_output_t fout;
 
+	ret = ARCHIVE_OK;
 	if (typ != TYPE_UNKNOWN) {
 		if (typetab[(typ >> 3)].filter_func != NULL) {
 			int64_t rv;
 
-			rv = process_by_filter(-1, &typ, aw, ar, entry, 0, 0);
+			rv = process_by_filter(-1, &typ, aw, ar, entry, &fout, 0, 0);
 			if (rv == FILTER_RETURN_ERROR) {
 				archive_set_error(ar, archive_errno(aw),
 				    "%s", archive_error_string(aw));
 				return (ARCHIVE_FATAL);
 
-			} else if (rv == FILTER_RETURN_SKIP) {
-				log_msg(LOG_WARN, 0, "Filter function skipped.");
-				return (ARCHIVE_WARN);
-
-			} else if (rv == FILTER_RETURN_SOFT_ERROR) {
-				log_msg(LOG_WARN, 0, "Filter function failed for entry: %s.",
-				    archive_entry_pathname(entry));
+			} else if (rv == FILTER_RETURN_SOFT_ERROR ||
+				   rv == FILTER_RETURN_SKIP) {
+				if (rv == FILTER_RETURN_SKIP) {
+					log_msg(LOG_WARN, 0, "Filter function skipped"
+						" for entry: %s.",
+						archive_entry_pathname(entry));
+				} else {
+					log_msg(LOG_WARN, 0, "Filter function failed"
+						" for entry: %s.",
+						archive_entry_pathname(entry));
+				}
 				pctx->errored_count++;
 				if (pctx->err_paths_fd) {
-					fprintf(pctx->err_paths_fd, "%s,%s",
+					fprintf(pctx->err_paths_fd, "%s,%s\n",
 					    archive_entry_pathname(entry),
 					    typetab[(typ >> 3)].filter_name);
 				}
-				return (ARCHIVE_WARN);
+				ret = ARCHIVE_WARN;
+			}
+			if (fout.output_type == FILTER_OUTPUT_MEM) {
+				int rv;
+				rv = archive_write_data(aw, fout.out, fout.out_size);
+				free(fout.out);
+				if (rv < ret)
+					ret = rv;
+				return (ret);
 			} else {
-				return (ARCHIVE_OK);
+				log_msg(LOG_WARN, 0,
+					"Unsupported filter output for entry: %s.",
+					archive_entry_pathname(entry));
+				return (ARCHIVE_FATAL);
 			}
 		}
+		/*
+		 * If the filter above fails we fall through below to consume
+		 * the data for the entry.
+		 */
 	}
 
 	for (;;) {
 		r = archive_read_data_block(ar, &buff, &size, &offset);
 		if (r == ARCHIVE_EOF)
-			return (ARCHIVE_OK);
+			break;
 		if (r != ARCHIVE_OK)
 			return (r);
 		r = (int)archive_write_data_block(aw, buff, size, offset);
@@ -1417,7 +1483,7 @@ copy_data_out(struct archive *ar, struct archive *aw, struct archive_entry *entr
 			return (r);
 		}
 	}
-	return (ARCHIVE_OK);
+	return (ret);
 }
 
 static int
@@ -1613,11 +1679,6 @@ extractor_thread_func(void *dat) {
 		}
 
 		typ = TYPE_UNKNOWN;
-		if (archive_entry_filetype(entry) == AE_IFREG) {
-			const char *fpath = archive_entry_pathname(entry);
-			typ = detect_type_by_ext(fpath, strlen(fpath));
-		}
-
 		/*
 		 * Workaround for libarchive weirdness on Non MAC OS X platforms for filenames
 		 * starting with '._'. See above ...

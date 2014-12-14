@@ -168,7 +168,6 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 	struct scratch_buffer *sdat = (struct scratch_buffer *)filter_private;
 	uchar_t *mapbuf, *out;
 	uint64_t len, in_size = 0, len1;
-	ssize_t rv;
 
 	len = archive_entry_size(fi->entry);
 	len1 = len;
@@ -225,7 +224,13 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		 * version number. We also check if it is supported.
 		 */
 		if (mapbuf[0] != 'J' || mapbuf[1] != 'S' || !pjg_version_supported(mapbuf[2])) {
-			return (archive_write_data(fi->target_arc, sdat->in_buff, len));
+			uint8_t *out = malloc(len);
+
+			memcpy(out, sdat->in_buff, len);
+			fi->fout->output_type = FILTER_OUTPUT_MEM;
+			fi->fout->out = out;
+			fi->fout->out_size = len;
+			return (FILTER_RETURN_SOFT_ERROR);
 		}
 	}
 
@@ -242,13 +247,11 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 		}
 		munmap(mapbuf, len1);
 
-		in_size = LE64(len);
-		rv = archive_write_data(fi->target_arc, &in_size, 8);
-		if (rv != 8)
-			return (rv);
-		rv = archive_write_data(fi->target_arc, out, len);
-		free(out);
-		return (rv);
+		fi->fout->output_type = FILTER_OUTPUT_MEM;
+		fi->fout->out = out;
+		fi->fout->out_size = len;
+		fi->fout->hdr.in_size = LE64(len);
+		return (ARCHIVE_OK);
 	}
 
 	/*
@@ -257,17 +260,23 @@ packjpg_filter(struct filter_info *fi, void *filter_private)
 	out = NULL;
 	if ((len = packjpg_filter_process(mapbuf, in_size, &out)) == 0) {
 		/*
-		 * If filter failed we write out the original data and indicate a
-		 * soft error to continue the archive extraction.
+		 * If filter failed we indicate a soft error to continue the
+		 * archive extraction.
 		 */
 		free(out);
-		if (archive_write_data(fi->target_arc, mapbuf, len1) < len1)
-			return (FILTER_RETURN_ERROR);
+		out = malloc(len);
+		memcpy(out, sdat->in_buff, len);
+
+		fi->fout->output_type = FILTER_OUTPUT_MEM;
+		fi->fout->out = out;
+		fi->fout->out_size = len;
 		return (FILTER_RETURN_SOFT_ERROR);
 	}
-	rv = archive_write_data(fi->target_arc, out, len);
-	free(out);
-	return (rv);
+
+	fi->fout->output_type = FILTER_OUTPUT_MEM;
+	fi->fout->out = out;
+	fi->fout->out_size = len;
+	return (ARCHIVE_OK);
 }
 
 ssize_t
@@ -276,7 +285,6 @@ packpnm_filter(struct filter_info *fi, void *filter_private)
 	struct scratch_buffer *sdat = (struct scratch_buffer *)filter_private;
 	uchar_t *mapbuf, *out;
 	uint64_t len, in_size = 0, len1;
-	ssize_t rv;
 
 	len = archive_entry_size(fi->entry);
 	len1 = len;
@@ -327,7 +335,13 @@ packpnm_filter(struct filter_info *fi, void *filter_private)
 		 * Write the raw data and skip.
 		 */
 		if (identify_pnm_type(mapbuf, len - 8) != 2) {
-			return (archive_write_data(fi->target_arc, sdat->in_buff, len));
+			uint8_t *out = malloc(len);
+
+			memcpy(out, sdat->in_buff, len);
+			fi->fout->output_type = FILTER_OUTPUT_MEM;
+			fi->fout->out = out;
+			fi->fout->out_size = len;
+			return (FILTER_RETURN_SOFT_ERROR);
 		}
 	}
 
@@ -344,13 +358,11 @@ packpnm_filter(struct filter_info *fi, void *filter_private)
 		}
 		munmap(mapbuf, len1);
 
-		in_size = LE64(len);
-		rv = archive_write_data(fi->target_arc, &in_size, 8);
-		if (rv != 8)
-			return (rv);
-		rv = archive_write_data(fi->target_arc, out, len);
-		free(out);
-		return (rv);
+		fi->fout->output_type = FILTER_OUTPUT_MEM;
+		fi->fout->out = out;
+		fi->fout->out_size = len;
+		fi->fout->hdr.in_size = LE64(len);
+		return (ARCHIVE_OK);
 	}
 
 	/*
@@ -359,17 +371,23 @@ packpnm_filter(struct filter_info *fi, void *filter_private)
 	out = NULL;
 	if ((len = packpnm_filter_process(mapbuf, in_size, &out)) == 0) {
 		/*
-		 * If filter failed we write out the original data and indicate a
-		 * soft error to continue the archive extraction.
+		 * If filter failed we indicate a soft error to continue the
+		 * archive extraction.
 		 */
 		free(out);
-		if (archive_write_data(fi->target_arc, mapbuf, len1) < len1)
-			return (FILTER_RETURN_ERROR);
+		out = malloc(len);
+		memcpy(out, sdat->in_buff, len);
+
+		fi->fout->output_type = FILTER_OUTPUT_MEM;
+		fi->fout->out = out;
+		fi->fout->out_size = len;
 		return (FILTER_RETURN_SOFT_ERROR);
 	}
-	rv = archive_write_data(fi->target_arc, out, len);
-	free(out);
-	return (rv);
+
+	fi->fout->output_type = FILTER_OUTPUT_MEM;
+	fi->fout->out = out;
+	fi->fout->out_size = len;
+	return (ARCHIVE_OK);
 }
 #endif /* _MPLV2_LICENSE_ */
 
@@ -380,7 +398,6 @@ wavpack_filter(struct filter_info *fi, void *filter_private)
 	struct scratch_buffer *sdat = (struct scratch_buffer *)filter_private;
 	uchar_t *mapbuf, *out;
 	uint64_t len, in_size = 0, len1;
-	ssize_t rv;
 
 	len = archive_entry_size(fi->entry);
 	len1 = len;
@@ -434,7 +451,13 @@ wavpack_filter(struct filter_info *fi, void *filter_private)
 		 */
 		wpkstr = (char *)mapbuf;
 		if (strncmp(wpkstr, "wvpk", 4) != 0) {
-			return (archive_write_data(fi->target_arc, sdat->in_buff, len));
+			uint8_t *out = malloc(len);
+
+			memcpy(out, sdat->in_buff, len);
+			fi->fout->output_type = FILTER_OUTPUT_MEM;
+			fi->fout->out = out;
+			fi->fout->out_size = len;
+			return (FILTER_RETURN_SOFT_ERROR);
 		}
 	}
 
@@ -451,32 +474,36 @@ wavpack_filter(struct filter_info *fi, void *filter_private)
 		}
 		munmap(mapbuf, len1);
 
-		in_size = LE64(len1);
-		rv = archive_write_data(fi->target_arc, &in_size, 8);
-		if (rv != 8)
-			return (rv);
-		rv = archive_write_data(fi->target_arc, out, len);
-		free(out);
-		return (rv);
+		fi->fout->output_type = FILTER_OUTPUT_MEM;
+		fi->fout->out = out;
+		fi->fout->out_size = len;
+		fi->fout->hdr.in_size = LE64(len1);
+		return (ARCHIVE_OK);
 	}
 
 	/*
 	 * Decompression case.
 	 */
 	out = NULL;
-	if ((len = wavpack_filter_decode(mapbuf, len, &out, in_size)) == 0) {
+	if ((len = wavpack_filter_decode(mapbuf, in_size, &out, len)) == 0) {
 		/*
-		 * If filter failed we write out the original data and indicate a
-		 * soft error to continue the archive extraction.
+		 * If filter failed we indicate a soft error to continue the
+		 * archive extraction.
 		 */
 		free(out);
-		if (archive_write_data(fi->target_arc, mapbuf, len1) < len1)
-			return (FILTER_RETURN_ERROR);
+		out = malloc(len);
+		memcpy(out, sdat->in_buff, len);
+
+		fi->fout->output_type = FILTER_OUTPUT_MEM;
+		fi->fout->out = out;
+		fi->fout->out_size = len;
 		return (FILTER_RETURN_SOFT_ERROR);
 	}
-	rv = archive_write_data(fi->target_arc, out, len);
-	free(out);
-	return (rv);
+
+	fi->fout->output_type = FILTER_OUTPUT_MEM;
+	fi->fout->out = out;
+	fi->fout->out_size = len;
+	return (ARCHIVE_OK);
 }
 #endif /* _ENABLE_WAVPACK_ */
 

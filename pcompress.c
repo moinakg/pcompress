@@ -1320,10 +1320,22 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 
 	if (flags & FLAG_ARCHIVE) {
 		if (pctx->enable_rabin_global) {
-			strcpy(pctx->archive_temp_file, to_filename);
-			strcat(pctx->archive_temp_file, "/.data");
+			char cwd[MAXPATHLEN];
+
+			if (to_filename[0] != PATHSEP_CHAR) {
+				if (getcwd(cwd, MAXPATHLEN) == NULL) {
+					log_msg(LOG_ERR, 1, "Cannot get current dir");
+					UNCOMP_BAIL;
+				}
+
+				snprintf(pctx->archive_temp_file, sizeof (pctx->archive_temp_file),
+				    "%s" PATHSEP_STR "%s" PATHSEP_STR ".data", cwd, to_filename);
+			} else {
+				snprintf(pctx->archive_temp_file, sizeof (pctx->archive_temp_file),
+					 "%s" PATHSEP_STR ".data", to_filename);
+			}
 			if ((pctx->archive_temp_fd = open(pctx->archive_temp_file,
-			O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1) {
+			    O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1) {
 				log_msg(LOG_ERR, 1, "Cannot open temporary data file in "
 				    "target directory.");
 				UNCOMP_BAIL;

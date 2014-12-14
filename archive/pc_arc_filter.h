@@ -42,6 +42,9 @@ extern "C" {
 #define	FILTER_RETURN_SOFT_ERROR	(-2)
 #define FILTER_XATTR_ENTRY  "_._pc_filter_xattr"
 
+#define	FILTER_OUTPUT_MEM	1
+#define	FILTER_OUTPUT_FILE	2
+
 #define HELPER_DEF_BUFSIZ       (512 * 1024)
 #define WVPK_FILE_SIZE_LIMIT    (18 * 1024 * 1024)
 
@@ -57,6 +60,20 @@ extern "C" {
 #	define  PJG_APPVERSION2         (25)
 #endif
 
+#pragma	pack(1)
+typedef struct _filter_std_hdr {
+	uint64_t in_size;
+} filter_std_hdr_t;
+#pragma	pack()
+
+typedef struct _filter_output {
+	int output_type;
+	uint8_t *out;
+	size_t out_size;
+	int out_fd;
+	filter_std_hdr_t hdr;
+} filter_output_t;
+
 struct filter_info {
 	struct archive *source_arc;
 	struct archive *target_arc;
@@ -65,6 +82,7 @@ struct filter_info {
 	int compressing, block_size;
 	int *type_ptr;
 	int cmp_level;
+	filter_output_t *fout;
 	uchar_t scratch_buffer;
 	size_t scratch_buffer_size;
 };
