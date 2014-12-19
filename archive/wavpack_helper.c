@@ -224,7 +224,7 @@ pack_audio(WavpackContext *wpc, read_data *rdat)
 	uint32_t samples_remaining, input_samples = INPUT_SAMPLES, samples_read = 0;
 	int bytes_per_sample;
 	int32_t *sample_buffer;
-	unsigned char *input_buffer;
+	unsigned char *input_buffer = NULL; // Silence compiler
 
 	// don't use an absurd amount of memory just because we have an absurd number of channels
 

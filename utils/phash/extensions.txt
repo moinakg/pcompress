@@ -73,7 +73,7 @@ ps,TYPE_TEXT
 bib,TYPE_TEXT
 lua,TYPE_TEXT
 nse,TYPE_TEXT
-dtd,TYPE_TEXT
+dtd,TYPE_TEXT|TYPE_MARKUP
 qml,TYPE_TEXT|TYPE_MARKUP
 
 # These are all genomic data file extensions

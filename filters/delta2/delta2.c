@@ -110,7 +110,8 @@ static int delta2_encode_real(uchar_t *src, uint64_t srclen, uchar_t *dst, uint6
  * buffer then delta encoding is aborted.
  */
 int
-delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int rle_thresh, int nstrides)
+delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen,
+	      int rle_thresh, int nstrides)
 {
 	if (srclen > MAX_THRESH) {
 		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 " is too big.\n", srclen));
@@ -135,7 +136,8 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		if (rv == -1)
 			return (rv);
 		*dstlen += MAIN_HDR;
-		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 ", dstlen: %" PRIu64 "\n", srclen, *dstlen));
+		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 ", dstlen: %" PRIu64 "\n",
+				      srclen, *dstlen));
 		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: header overhead: %d\n", hdr_ovr));
 	} else {
 		uchar_t *srcpos, *dstpos, *lastdst, *lastsrc, *dstend;
@@ -205,9 +207,11 @@ delta2_encode(uchar_t *src, uint64_t srclen, uchar_t *dst, uint64_t *dstlen, int
 		}
 		*dstlen = dstpos - dst;
 		DEBUG_STAT_EN(en = get_wtime_millis());
-		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 ", dstlen: %" PRIu64 "\n", srclen, *dstlen));
+		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: srclen: %" PRIu64 ", dstlen: %" PRIu64 "\n",
+				      srclen, *dstlen));
 		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: header overhead: %d\n", hdr_ovr));
-		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: Processed at %.3f MB/s\n", get_mb_s(srclen, strt, en)));
+		DEBUG_STAT_EN(fprintf(stderr, "DELTA2: Processed at %.3f MB/s\n",
+				      get_mb_s(srclen, strt, en)));
 	}
 	return (0);
 }

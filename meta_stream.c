@@ -41,7 +41,7 @@
 #include "allocator.h"
 #include "meta_stream.h"
 
-#define	METADATA_CHUNK_SIZE	(2 * 1024 * 1024)
+#define	METADATA_CHUNK_SIZE	(3 * 1024 * 1024)
 
 extern int bzip2_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
                int level, uchar_t chdr, int btype, void *data);

@@ -1014,7 +1014,7 @@ Inverse_E89(uint8_t *src, uint64_t sz)
  * a block contains valid x86 code by trying to estimate some instruction metrics.
  */
 int
-dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen, int stype)
+dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 {
 	uchar_t *pos, *hdr, type, *pos_to, *to_last;
 	sU32 len;

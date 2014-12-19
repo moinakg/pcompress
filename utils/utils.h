@@ -193,7 +193,7 @@ typedef int32_t bsize_t;
 
 #ifdef __APPLE__
 #define	CLOCK_MONOTONIC 0
-#define CLOCK_REALTIME  1
+#define	CLOCK_REALTIME  1
 #endif
 
 /*
