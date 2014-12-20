@@ -156,7 +156,7 @@ PPNMOBJS = $(PPNMSRCS:.cpp=.o)
 WAVPKSRCS = archive/wavpack_helper.c
 WAVPKOBJS = $(WAVPKSRCS:.c=.o)
 
-DISPACKSRCS = filters/dispack/dis.cpp
+DISPACKSRCS = filters/dispack/dis.cpp archive/dispack_helper.cpp
 DISPACKHDRS = filters/dispack/dis.hpp filters/dispack/types.hpp
 DISPACKOBJS = $(DISPACKSRCS:.cpp=.o)
 
@@ -235,7 +235,7 @@ BASE_CPPFLAGS = -I. -I./lzma -I./lzfx -I./lz4 -I./rabin -I./bsdiff -DNODEFAULT_P
 	-I./crypto/scrypt -I./crypto/aes -I./crypto @KEYLEN@ -I./rabin/global \
 	-I./crypto/keccak -I./filters/transpose -I./crypto/blake2 $(EXTRA_CPPFLAGS) \
 	-I./crypto/xsalsa20 -I./archive -pedantic -Wall -I./filters -fno-strict-aliasing \
-	-Wno-unused-but-set-variable -Wno-enum-compare -I./filters/analyzer \
+	-Wno-unused-but-set-variable -Wno-enum-compare -I./filters/analyzer -I./filters/dispack \
 	@COMPAT_CPPFLAGS@ @XSALSA20_DEBUG@ -I@LIBARCHIVE_DIR@/libarchive -I./filters/packjpg \
 	-I./filters/packpnm @ENABLE_WAVPACK@
 COMMON_CPPFLAGS = $(BASE_CPPFLAGS) -std=gnu99

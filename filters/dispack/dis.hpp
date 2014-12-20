@@ -26,12 +26,12 @@
 #define __DIS_HPP__
 
 #include <utils.h>
+#include "types.hpp"
 
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
-int dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *_dstlen);
 int dispack_decode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen);
 
 int Forward_E89(uint8_t *src, uint64_t sz);
@@ -39,6 +39,11 @@ int Inverse_E89(uint8_t *src, uint64_t sz);
 
 #ifdef	__cplusplus
 }
+#endif
+
+#ifdef	__cplusplus
+sU8 *DisFilter(sU8 *src, sU32 size, sU32 origin, sU8 *dst, sU32 &outputSize);
+sBool DisUnFilter(sU8 *source,sU32 sourceSize,sU8 *dest,sU32 destSize,sU32 memStart);
 #endif
 
 #endif

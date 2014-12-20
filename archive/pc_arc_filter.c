@@ -61,6 +61,10 @@ extern size_t wavpack_filter_decode(uchar_t *in_buf, size_t len, uchar_t **out_b
 ssize_t wavpack_filter(struct filter_info *fi, void *filter_private);
 #endif
 
+size_t dispack_filter_encode(uchar_t *inData, size_t len, uchar_t **out_buf);
+size_t dispack_filter_decode(uchar_t *inData, size_t len, uchar_t **out_buf);
+ssize_t dispack_filter(struct filter_info *fi, void *filter_private);
+
 void
 add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 {
@@ -90,6 +94,18 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 	}
 #endif
 
+	if (ff->exe_preprocess) {
+		if (!sdat) {
+			sdat = (struct scratch_buffer *)malloc(sizeof (struct scratch_buffer));
+			sdat->in_buff = NULL;
+			sdat->in_bufflen = 0;
+		}
+		slot = TYPE_EXE32_PE >> 3;
+		typetab[slot].filter_private = sdat;
+		typetab[slot].filter_func = dispack_filter;
+		typetab[slot].filter_name = "Dispack";
+	}
+
 #ifdef _ENABLE_WAVPACK_
 	if (ff->enable_wavpack) {
 		if (!sdat) {
@@ -111,7 +127,7 @@ type_tag_from_filter_name(struct type_data *typetab, const char *fname, size_t l
 {
     size_t i;
 
-    for (i = 0; i < NUM_SUB_TYPES; i++)
+    for (i = 0; i <= NUM_SUB_TYPES; i++)
     {
         if (typetab[i].filter_name &&
             strncmp(fname, typetab[i].filter_name, len) == 0)
@@ -506,4 +522,104 @@ wavpack_filter(struct filter_info *fi, void *filter_private)
 	return (ARCHIVE_OK);
 }
 #endif /* _ENABLE_WAVPACK_ */
+
+ssize_t
+dispack_filter(struct filter_info *fi, void *filter_private)
+{
+	struct scratch_buffer *sdat = (struct scratch_buffer *)filter_private;
+	uchar_t *mapbuf, *out;
+	uint64_t len, in_size = 0, len1;
+
+	len = archive_entry_size(fi->entry);
+	len1 = len;
+	if (len > WVPK_FILE_SIZE_LIMIT) // Bork on massive files
+		return (FILTER_RETURN_SKIP);
+
+	if (fi->compressing) {
+		mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fi->fd, 0);
+		if (mapbuf == NULL) {
+			log_msg(LOG_ERR, 1, "Mmap failed in Dispack filter.");
+			return (FILTER_RETURN_ERROR);
+		}
+
+		/*
+		 * No check for supported 32-bit exe here. EXE types are always
+		 * detected by file header analysis. So no need to duplicate here.
+		 */
+	} else {
+		/*
+		 * Allocate input buffer and read archive data stream for the entry
+		 * into this buffer.
+		 */
+		ensure_buffer(sdat, len);
+		if (sdat->in_buff == NULL) {
+			log_msg(LOG_ERR, 1, "Out of memory.");
+			return (FILTER_RETURN_ERROR);
+		}
+
+		in_size = copy_archive_data(fi->source_arc, sdat->in_buff);
+		if (in_size != len) {
+			log_msg(LOG_ERR, 0, "Failed to read archive data.");
+			return (FILTER_RETURN_ERROR);
+		}
+
+		/*
+		 * First 8 bytes in the data is the compressed size of the entry.
+		 * LibArchive always zero-pads entries to their original size so
+		 * we need to separately store the compressed size.
+		 */
+		in_size = LE64(U64_P(sdat->in_buff));
+		mapbuf = sdat->in_buff + 8;
+
+		/*
+		 * No check for supported EXE types needed here since supported
+		 * and filtered files are tagged in the archive using xattrs during
+		 * compression.
+		 */
+	}
+
+	/*
+	 * Compression case.
+	 */
+	if (fi->compressing) {
+		out = NULL;
+		len = dispack_filter_encode(mapbuf, len, &out);
+		if (len == 0 || len >= (len1 - 8)) {
+			munmap(mapbuf, len1);
+			free(out);
+			return (FILTER_RETURN_SKIP);
+		}
+		munmap(mapbuf, len1);
+
+		fi->fout->output_type = FILTER_OUTPUT_MEM;
+		fi->fout->out = out;
+		fi->fout->out_size = len;
+		fi->fout->hdr.in_size = LE64(len1);
+		return (ARCHIVE_OK);
+	}
+
+	/*
+	 * Decompression case.
+	 */
+	out = NULL;
+	if ((len = dispack_filter_decode(mapbuf, in_size, &out)) == 0) {
+		/*
+		 * If filter failed we indicate a soft error to continue the
+		 * archive extraction.
+		 */
+		free(out);
+		out = malloc(len);
+		memcpy(out, sdat->in_buff, len);
+
+		fi->fout->output_type = FILTER_OUTPUT_MEM;
+		fi->fout->out = out;
+		fi->fout->out_size = len;
+		return (FILTER_RETURN_SOFT_ERROR);
+	}
+
+	fi->fout->output_type = FILTER_OUTPUT_MEM;
+	fi->fout->out = out;
+	fi->fout->out_size = len;
+	return (ARCHIVE_OK);
+}
 

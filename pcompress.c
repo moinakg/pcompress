@@ -223,7 +223,6 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	stype = PC_SUBTYPE(btype);
 	dict = 0;
 	analyzed = 0;
-
 	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR || stype == TYPE_PDF || interesting) {
 		analyze_buffer(src, srclen, &actx);
 		analyzed = 1;
@@ -3140,6 +3139,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 	pctx->advanced_opts = 0;
 	ff.enable_packjpg = 0;
 	ff.enable_wavpack = 0;
+	ff.exe_preprocess = 0;
 
 	pthread_mutex_lock(&opt_parse);
 	while ((opt = getopt(argc, argv, "dc:s:l:pt:MCDGEe:w:LPS:B:Fk:avmKjxiTn")) != -1) {
@@ -3315,6 +3315,7 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		    case 'x':
 			pctx->advanced_opts = 1;
 			pctx->exe_preprocess = 1;
+			ff.exe_preprocess = 1;
 			break;
 
 		    case 'T':
@@ -3625,10 +3626,13 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 					ff.enable_packjpg = 1;
 					ff.enable_wavpack = 1;
 				}
+				if (pctx->level > 8) {
+					pctx->exe_preprocess = 1;
+					ff.exe_preprocess = 1;
+				}
 				init_filters(&ff);
 				pctx->enable_packjpg = ff.enable_packjpg;
 				pctx->enable_wavpack = ff.enable_wavpack;
-				if (pctx->level > 8) pctx->exe_preprocess = 1;
 			}
 
 			/*
@@ -3658,8 +3662,10 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 		 */
 		ff.enable_packjpg = 1;
 		ff.enable_wavpack = 1;
+		ff.exe_preprocess = 1;
 		pctx->enable_packjpg = 1;
 		pctx->enable_wavpack = 1;
+		pctx->exe_preprocess = 1;
 		init_filters(&ff);
 	}
 	pctx->inited = 1;

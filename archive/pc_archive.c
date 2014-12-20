@@ -63,7 +63,7 @@ static struct ext_hash_entry {
 	int type;
 } *exthtab = NULL;
 
-static struct type_data typetab[NUM_SUB_TYPES];
+static struct type_data typetab[NUM_SUB_TYPES+1];
 
 /*
 AE_IFREG   Regular file
@@ -1100,6 +1100,7 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 			    &fout, 1, pctx->level);
 			if (rv != FILTER_RETURN_SKIP &&
 			    rv != FILTER_RETURN_ERROR) {
+				pctx->ctype = TYPE_UNKNOWN; // Force analyzer on filter output
 				if (fout.output_type == FILTER_OUTPUT_MEM) {
 					archive_entry_xattr_add_entry(entry, FILTER_XATTR_ENTRY,
 								      fname, strlen(fname));
@@ -1176,6 +1177,7 @@ do_map:
 					    &fout, 1, pctx->level);
 					if (rv != FILTER_RETURN_SKIP &&
 					    rv != FILTER_RETURN_ERROR) {
+						pctx->ctype = TYPE_UNKNOWN; // Force analyzer on filter output
 						if (fout.output_type == FILTER_OUTPUT_MEM) {
 							archive_entry_xattr_add_entry(entry,
 										      FILTER_XATTR_ENTRY,
@@ -1997,7 +1999,7 @@ detect_type_by_data(uchar_t *buf, size_t len)
 							if (id == 0x8664)
 								return (TYPE_BINARY|TYPE_EXE64);
 							else
-								return (TYPE_BINARY|TYPE_EXE32);
+								return (TYPE_BINARY|TYPE_EXE32_PE);
 						} else {
 							return (TYPE_BINARY);
 						}

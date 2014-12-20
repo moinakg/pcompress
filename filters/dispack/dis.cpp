@@ -637,10 +637,10 @@ struct DisFilterCtx
 
 /****************************************************************************/
 
-static sU8 *
-DisFilter(DisFilterCtx &ctx, sU8 *src, sU32 size, sU32 origin, sU8 *dst, sU32 &outputSize)
+sU8 *
+DisFilter(sU8 *src, sU32 size, sU32 origin, sU8 *dst, sU32 &outputSize)
 {
-//  DisFilterCtx ctx(origin,origin+size);
+  DisFilterCtx ctx(origin,origin+size);
 
   // main loop: handle everything but the last few bytes
   sU32 pos = 0;
@@ -707,7 +707,7 @@ static inline sU32 Copy32(sU8 *&d,sU8 *&s)    { sU32 v = Fetch32B(s); Write32(d,
 #define Copy16Chk(strm)         do { CheckSrcDst(strm,2); Copy16(dest,stream[strm]); } while(0)
 #define Copy32Chk(strm)         do { CheckSrcDst(strm,4); Copy32(dest,stream[strm]); } while(0)
 
-static sBool
+sBool
 DisUnFilter(sU8 *source,sU32 sourceSize,sU8 *dest,sU32 destSize,sU32 memStart)
 {
   sU8 *stream[ST_MAX];
@@ -903,6 +903,10 @@ DisUnFilter(sU8 *source,sU32 sourceSize,sU8 *dest,sU32 destSize,sU32 memStart)
 }
 
 /*
+ * NOTE: function unused. Retained for future need.
+ */
+#if 0
+/*
  * Try to estimate if the given data block contains 32-bit x86 instructions
  * especially of the call and jmp variety.
  * Estimator is adapted from CSC 3.2 Analyzer (Fu Siyuan).
@@ -926,6 +930,7 @@ is_x86_code(uchar_t *buf, int len)
 	avgFreq = ln>>8;
 	return (freq[0x8b] > avgFreq && freq[0x00] > avgFreq * 2 && freq[0xE8] > 6);
 }
+#endif
 
 #ifdef	__cplusplus
 extern "C" {
@@ -1007,6 +1012,10 @@ Inverse_E89(uint8_t *src, uint64_t sz)
 	return (0);
 }
 
+/*
+ * NOTE: function unused. Retained for future need.
+ */
+#if 0
 /*
  * 32-bit x86 executable packer top-level routines. Detected x86 executable data
  * are passed through these encoding routines. The data chunk is split into 32KB
@@ -1106,7 +1115,12 @@ dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 #endif
 	return (0);
 }
+#endif
 
+/*
+ * This function retained for ability to decode older archives encoded using raw block
+ * dispack.
+ */
 int
 dispack_decode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 {

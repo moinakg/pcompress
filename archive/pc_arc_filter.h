@@ -90,6 +90,7 @@ struct filter_info {
 struct filter_flags {
 	int enable_packjpg;
 	int enable_wavpack;
+	int exe_preprocess;
 };
 
 typedef ssize_t (*filter_func_ptr)(struct filter_info *fi, void *filter_private);

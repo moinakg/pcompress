@@ -39,12 +39,14 @@ typedef uint64_t                  sU64;
 typedef int64_t                   sS64;
 typedef int                       sInt;
 typedef char                      sChar;
-typedef bool                      sBool;
 typedef float                     sF32;
 typedef double                    sF64;
 
+#ifdef __cplusplus
+typedef bool                      sBool;
 #define sTRUE                     true
 #define sFALSE                    false
+#endif
 
 #define _byteswap_ushort          htons
 #define _byteswap_ulong           htonl
