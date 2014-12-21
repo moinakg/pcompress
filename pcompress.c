@@ -237,7 +237,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	 */
 	if (pctx->exe_preprocess) {
 		if (stype == TYPE_EXE32 || stype == TYPE_EXE64 ||
-		    stype == TYPE_ARCHIVE_AR) {
+		    stype == TYPE_ARCHIVE_AR || stype == TYPE_EXE32_PE) {
 			_dstlen = fromlen;
 			memcpy(to, from, fromlen);
 			if (Forward_E89(to, fromlen) == 0) {

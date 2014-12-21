@@ -262,6 +262,7 @@ then
 	salsa20_stream_c='\$\(XSALSA20_STREAM_C\)'
 	salsa20_stream_asm=
 	salsa20_debug='\$\(XSALSA20_DEBUG\)'
+	extra_opt_flags="${extra_opt_flags} -fno-inline"
 else
 	typ="RELEASE"
 fi

@@ -562,14 +562,7 @@ dispack_filter(struct filter_info *fi, void *filter_private)
 			log_msg(LOG_ERR, 0, "Failed to read archive data.");
 			return (FILTER_RETURN_ERROR);
 		}
-
-		/*
-		 * First 8 bytes in the data is the compressed size of the entry.
-		 * LibArchive always zero-pads entries to their original size so
-		 * we need to separately store the compressed size.
-		 */
-		in_size = LE64(U64_P(sdat->in_buff));
-		mapbuf = sdat->in_buff + 8;
+		mapbuf = sdat->in_buff;
 
 		/*
 		 * No check for supported EXE types needed here since supported
@@ -584,7 +577,7 @@ dispack_filter(struct filter_info *fi, void *filter_private)
 	if (fi->compressing) {
 		out = NULL;
 		len = dispack_filter_encode(mapbuf, len, &out);
-		if (len == 0 || len >= (len1 - 8)) {
+		if (len == 0) {
 			munmap(mapbuf, len1);
 			free(out);
 			return (FILTER_RETURN_SKIP);
@@ -594,7 +587,8 @@ dispack_filter(struct filter_info *fi, void *filter_private)
 		fi->fout->output_type = FILTER_OUTPUT_MEM;
 		fi->fout->out = out;
 		fi->fout->out_size = len;
-		fi->fout->hdr.in_size = LE64(len1);
+		fi->fout->hdr_valid = 0;
+		*(fi->type_ptr) = TYPE_UNKNOWN;
 		return (ARCHIVE_OK);
 	}
 

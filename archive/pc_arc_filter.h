@@ -71,6 +71,7 @@ typedef struct _filter_output {
 	uint8_t *out;
 	size_t out_size;
 	int out_fd;
+	int hdr_valid;
 	filter_std_hdr_t hdr;
 } filter_output_t;
 

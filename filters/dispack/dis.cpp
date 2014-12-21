@@ -429,11 +429,16 @@ struct DisFilterCtx
       Buffer[i].ResetBuffer();
   }
 
-  sInt DetectJumpTable(sU8 *instr,sU32 addr)
+  sInt DetectJumpTable(sU8 *instr, sU32 addr, sU8 *srcEnd)
   {
     assert(addr < CodeEnd);
     sInt nMax = (CodeEnd - addr) / 4;
     sInt count = 0;
+
+    // Check for overflow
+    if (instr + (nMax + 1) * 4 > srcEnd) {
+	return (0);
+    }
 
     while(count<nMax)
     {
@@ -450,9 +455,10 @@ struct DisFilterCtx
     return count;
   }
 
-  sInt ProcessInstr(sU8 *instr,sU32 memory)
+  sInt ProcessInstr(sU8 *instr, sU32 memory, sU8 *srcEnd)
   {
-    if(sInt nJump = DetectJumpTable(instr,memory))
+
+    if(sInt nJump = DetectJumpTable(instr, memory, srcEnd))
     {
       // probable jump table with nJump entries
       sInt remaining = nJump;
@@ -640,13 +646,16 @@ struct DisFilterCtx
 sU8 *
 DisFilter(sU8 *src, sU32 size, sU32 origin, sU8 *dst, sU32 &outputSize)
 {
+  sU8 *srcEnd = src + size;
   DisFilterCtx ctx(origin,origin+size);
 
+  if (size < MAXINSTR)
+	  return (NULL);
   // main loop: handle everything but the last few bytes
   sU32 pos = 0;
   while(pos < size - MAXINSTR)
   {
-    sInt bytes = ctx.ProcessInstr(src + pos,origin + pos);
+    sInt bytes = ctx.ProcessInstr(src + pos, origin + pos, srcEnd);
     pos += bytes;
   }
 
@@ -666,7 +675,7 @@ DisFilter(sU8 *src, sU32 size, sU32 origin, sU8 *dst, sU32 &outputSize)
       checkpt[i] = ctx.Buffer[i].Size;
 
     // process the instruction
-    sInt bytes = ctx.ProcessInstr(instrBuf,origin + pos);
+    sInt bytes = ctx.ProcessInstr(instrBuf, origin + pos, srcEnd);
 
     if(pos + bytes <= size) // valid instruction
       pos += bytes;

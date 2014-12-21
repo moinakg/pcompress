@@ -1028,6 +1028,7 @@ process_by_filter(int fd, int *typ, struct archive *target_arc,
 	struct filter_info fi;
 	int64_t wrtn;
 
+	fout->hdr_valid = 1;
 	fi.source_arc = source_arc;
 	fi.target_arc = target_arc;
 	fi.entry = entry;
@@ -1100,7 +1101,6 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 			    &fout, 1, pctx->level);
 			if (rv != FILTER_RETURN_SKIP &&
 			    rv != FILTER_RETURN_ERROR) {
-				pctx->ctype = TYPE_UNKNOWN; // Force analyzer on filter output
 				if (fout.output_type == FILTER_OUTPUT_MEM) {
 					archive_entry_xattr_add_entry(entry, FILTER_XATTR_ENTRY,
 								      fname, strlen(fname));
@@ -1108,10 +1108,12 @@ copy_file_data(pc_ctx_t *pctx, struct archive *arc, struct archive_entry *entry,
 						close(fd);
 						return (-1);
 					}
-					rv = archive_write_data(arc, &(fout.hdr),
-								sizeof (fout.hdr));
-					if (rv != sizeof (fout.hdr))
-						return (rv);
+					if (fout.hdr_valid) {
+						rv = archive_write_data(arc, &(fout.hdr),
+									sizeof (fout.hdr));
+						if (rv != sizeof (fout.hdr))
+							return (rv);
+					}
 					rv = archive_write_data(arc, fout.out,
 								fout.out_size);
 					free(fout.out);
@@ -1177,7 +1179,6 @@ do_map:
 					    &fout, 1, pctx->level);
 					if (rv != FILTER_RETURN_SKIP &&
 					    rv != FILTER_RETURN_ERROR) {
-						pctx->ctype = TYPE_UNKNOWN; // Force analyzer on filter output
 						if (fout.output_type == FILTER_OUTPUT_MEM) {
 							archive_entry_xattr_add_entry(entry,
 										      FILTER_XATTR_ENTRY,
@@ -1186,10 +1187,12 @@ do_map:
 								close(fd);
 								return (-1);
 							}
-							rv = archive_write_data(arc, &(fout.hdr),
-										sizeof (fout.hdr));
-							if (rv != sizeof (fout.hdr))
-								return (rv);
+							if (fout.hdr_valid) {
+								rv = archive_write_data(arc, &(fout.hdr),
+											sizeof (fout.hdr));
+								if (rv != sizeof (fout.hdr))
+									return (rv);
+							}
 							rv = archive_write_data(arc, fout.out,
 										fout.out_size);
 							free(fout.out);

@@ -40,10 +40,12 @@ extern "C" {
 #endif
 
 typedef unsigned char uchar_t;
+#define DISPACK_MAGIC	"DisPack "
 
 #pragma pack(1)
 struct FileHeader
 {
+	char magic[8];
 	sU32 SizeBefore;      // number of bytes before start of code section
 	sU32 SizeAfter;       // number of bytes after code section
 	sU32 SizeTransformed; // size of transformed code section
@@ -57,6 +59,7 @@ dispack_filter_encode(uchar_t *inData, size_t len, uchar_t **out_buf)
 {
 	uchar_t *pos;
 	FileHeader hdr;
+	sU32 sizeNow;
 
 	*out_buf = (uchar_t *)malloc(len);
 	if (*out_buf == NULL)
@@ -95,25 +98,48 @@ dispack_filter_encode(uchar_t *inData, size_t len, uchar_t **out_buf)
 
 	// transform code
 	sU32 transSize = len - sizeof (hdr);
-	if (DisFilter(inData + fileOffs, codeSize, imageBase + codeStart, pos, transSize) == NULL)
-		return (0);
+	if (fileOffs + codeSize > len) {
+		codeSize = len - fileOffs;
+	}
+	if (DisFilter(inData + fileOffs, codeSize, imageBase + codeStart, pos, transSize) == NULL) {
+		goto cmp_E89;
+	}
 	pos += transSize;
 
-	// Now plonk the header
+	// Give up if dispack savings is not enough for header space and we can overflow the buffer.
+	memcpy(hdr.magic, DISPACK_MAGIC, strlen(DISPACK_MAGIC));
 	hdr.SizeBefore = fileOffs;
 	hdr.SizeAfter = len - (fileOffs + codeSize);
 	hdr.SizeTransformed = transSize;
 	hdr.SizeOriginal = codeSize;
 	hdr.Origin = imageBase + codeStart;
+	sizeNow = pos - *out_buf;
+	if (sizeNow + hdr.SizeBefore + hdr.SizeAfter >= len) {
+		goto cmp_E89;
+	}
+
+	// Now plonk the header
 	memcpy(*out_buf, &hdr, sizeof (hdr));
 
-	// Copy rest of the data
-	memcpy(pos, inData, hdr.SizeBefore);
-	pos += hdr.SizeBefore;
-	memcpy(pos, inData + (fileOffs + codeSize), hdr.SizeAfter);
-	pos += hdr.SizeAfter;
+	if (hdr.SizeBefore > 0) {
+		// Copy rest of the data
+		memcpy(pos, inData, hdr.SizeBefore);
+		pos += hdr.SizeBefore;
+	}
+	if (hdr.SizeAfter > 0) {
+		memcpy(pos, inData + (fileOffs + codeSize), hdr.SizeAfter);
+		pos += hdr.SizeAfter;
+	}
 
 	return (pos -  *out_buf);
+cmp_E89:
+	// Apply an E8E9 filter this does not put the DISPACK_MAGIC into the
+	// file header. So, when decoding, that is detected and E8E9 decode
+	// is applied.
+	memcpy(*out_buf, inData, len);
+	if (Forward_E89(*out_buf, len) != 0)
+		return (0);
+	return (len);
 }
 
 size_t
@@ -131,6 +157,9 @@ dispack_filter_decode(uchar_t *inData, size_t len, uchar_t **out_buf)
 	if (*out_buf == NULL)
 		return (0);
 
+	if (memcmp(hdr->magic, DISPACK_MAGIC, strlen(DISPACK_MAGIC)) != 0)
+		goto dec_E89;
+
 	decoded = *out_buf;
 	memcpy(decoded, before, hdr->SizeBefore);
 	decoded += hdr->SizeBefore;
@@ -144,6 +173,11 @@ dispack_filter_decode(uchar_t *inData, size_t len, uchar_t **out_buf)
 	decoded += hdr->SizeAfter;
 
 	return (decoded - *out_buf);
+dec_E89:
+	memcpy(*out_buf, inData, len);
+	if (Inverse_E89(*out_buf, len) == -1)
+		return (0);
+	return (len);
 }
 
 #ifdef	__cplusplus

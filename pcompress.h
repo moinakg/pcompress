@@ -305,7 +305,7 @@ struct cmp_data {
 	mac_ctx_t chunk_hmac;
 	algo_props_t *props;
 	int decompressing;
-	uchar_t btype;
+	int btype;
 	pc_ctx_t *pctx;
 };
 
