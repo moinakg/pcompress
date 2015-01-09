@@ -59,7 +59,7 @@ analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
 		if (cur_byte != ' ')
 			prev_byte = cur_byte;
 	}
-	
+
 	/*
 	 * Heuristics for detecting BINARY vs generic TEXT vs XML data at various
 	 * significance levels.
@@ -72,7 +72,7 @@ analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
 	} else {
 		actx->forty_pct.btype = TYPE_TEXT;
 	}
-	
+
 	if (tot_8b > FIFTY_PCT(srclen)) {
 		actx->fifty_pct.btype = TYPE_BINARY;
 	} else {

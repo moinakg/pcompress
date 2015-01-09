@@ -259,15 +259,13 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		int b_type;
 
 		if (analyzed)
-			b_type = PC_TYPE(actx.one_pct.btype);
+			b_type = PC_TYPE(actx.forty_pct.btype);
 		else
 			b_type = PC_TYPE(analyze_buffer_simple(from, fromlen));
 
 		if (b_type == TYPE_TEXT) {
-			void *dct = new_dict_context();
 			_dstlen = fromlen;
-			result = dict_encode(dct, from, fromlen, to, &_dstlen);
-			delete_dict_context(dct);
+			result = dict_encode(from, fromlen, to, &_dstlen);
 			if (result != -1) {
 				uchar_t *tmp;
 				tmp = from;
@@ -346,7 +344,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	_dstlen = srclen;
 	DEBUG_STAT_EN(strt = get_wtime_millis());
 	result = cmp_func(src, srclen, dest+9, &_dstlen, level, chdr,
-	    (dict?TYPE_TEXT:btype), data);
+	    btype, data);
 	DEBUG_STAT_EN(en = get_wtime_millis());
 
 	if (result > -1 && _dstlen < srclen) {
@@ -407,6 +405,7 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 			memcpy(src, dst, _dstlen);
 			srclen = _dstlen;
 			*dstlen = _dstlen;
+			_dstlen = _dstlen1;
 		} else {
 			log_msg(LOG_ERR, 0, "Delta2 decoding failed.");
 			return (result);
@@ -436,13 +435,12 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 	}
 
 	if (type & PREPROC_TYPE_DICT) {
-		void *dct = new_dict_context();
-		result = dict_decode(dct, src, srclen, dst, &_dstlen);
-		delete_dict_context(dct);
+		result = dict_decode(src, srclen, dst, &_dstlen);
 		if (result != -1) {
 			memcpy(src, dst, _dstlen);
 			srclen = _dstlen;
 			*dstlen = _dstlen;
+			_dstlen = _dstlen1;
 		} else {
 			log_msg(LOG_ERR, 0, "DICT decoding failed.");
 			return (result);

@@ -39,11 +39,8 @@
 extern "C" {
 #endif
 
-void *new_dict_context();
-void delete_dict_context(void *dict_ctx);
-
-int dict_encode(void *dict_ctx, uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen);
-int dict_decode(void *dict_ctx, uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen);
+int dict_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen);
+int dict_decode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen);
 
 #ifdef  __cplusplus
 }

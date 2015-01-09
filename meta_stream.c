@@ -510,7 +510,9 @@ meta_ctx_create(void *pc, int file_version, int comp_fd)
 	pc_ctx_t *pctx = (pc_ctx_t *)pc;
 	meta_ctx_t *mctx;
 
-	mctx = (meta_ctx_t *)malloc(sizeof (meta_ctx_t));
+	slab_cache_add(METADATA_CHUNK_SIZE + METADATA_HDR_SZ);
+	slab_cache_add(sizeof (meta_ctx_t));
+	mctx = (meta_ctx_t *)slab_alloc(NULL, sizeof (meta_ctx_t));
 	if (!mctx) {
 		log_msg(LOG_ERR, 1, "Failed to allocate metadata context.");
 		return (NULL);
