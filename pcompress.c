@@ -211,7 +211,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	int result;
 	uint64_t _dstlen, fromlen;
 	uchar_t *from, *to;
-	int stype, dict, analyzed;
+	int stype, analyzed;
 	analyzer_ctx_t actx;
 	DEBUG_STAT_EN(double strt, en);
 
@@ -221,9 +221,9 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	fromlen = srclen;
 	result = 0;
 	stype = PC_SUBTYPE(btype);
-	dict = 0;
 	analyzed = 0;
-	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR || stype == TYPE_PDF || interesting) {
+	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR || stype == TYPE_PDF ||
+	    PC_TYPE(btype) == TYPE_TEXT || interesting) {
 		analyze_buffer(src, srclen, &actx);
 		analyzed = 1;
 		if (pctx->adapt_mode)
@@ -258,12 +258,13 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	if (pctx->lzp_preprocess) {
 		int b_type;
 
+		b_type = btype;
 		if (analyzed)
-			b_type = PC_TYPE(actx.forty_pct.btype);
+			b_type = PC_TYPE(actx.one_pct.btype);
 		else
-			b_type = PC_TYPE(analyze_buffer_simple(from, fromlen));
+			b_type = analyze_buffer_simple(from, fromlen);
 
-		if (b_type == TYPE_TEXT) {
+		if (PC_TYPE(b_type) == TYPE_TEXT) {
 			_dstlen = fromlen;
 			result = dict_encode(from, fromlen, to, &_dstlen);
 			if (result != -1) {
@@ -273,7 +274,6 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 				to = tmp;
 				fromlen = _dstlen;
 				type |= PREPROC_TYPE_DICT;
-				dict = result;
 			}
 		}
 	}
@@ -1354,7 +1354,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 				log_msg(LOG_ERR, 1, "Can't seek in metadata fd: ");
 				UNCOMP_BAIL;
 			}
-			
+
 			/*
 			 * Finally create the metadata context.
 			 */
@@ -1364,7 +1364,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 				UNCOMP_BAIL;
 			}
 		}
-		
+
 		uncompfd = -1;
 		if (setup_extractor(pctx) == -1) {
 			log_msg(LOG_ERR, 0, "Setup of extraction context failed.");
@@ -1400,7 +1400,7 @@ start_decompress(pc_ctx_t *pctx, const char *filename, char *to_filename)
 	if (pctx->archive_mode) {
 		nprocs = nprocs > 1 ? nprocs-1:nprocs;
 	}
-	
+
 	if (pctx->nthreads > 0 && pctx->nthreads < nprocs)
 		nprocs = pctx->nthreads;
 	else

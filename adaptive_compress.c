@@ -40,10 +40,6 @@
 #include <pc_archive.h>
 #include "filters/analyzer/analyzer.h"
 
-#define	FIFTY_PCT(x)	(((x)/10) * 5)
-#define	FORTY_PCT(x)	(((x)/10) * 4)
-#define	ONE_PCT(x)	((x)/100)
-
 static unsigned int lzma_count = 0;
 static unsigned int bzip2_count = 0;
 static unsigned int bsc_count = 0;
@@ -246,9 +242,12 @@ int
 is_bsc_type(int btype)
 {
 	int stype = PC_SUBTYPE(btype);
-	return ((stype == TYPE_MARKUP) | (stype == TYPE_BMP) | (stype == TYPE_DNA_SEQ) |
+	int mtype = PC_TYPE(btype);
+
+	return ((stype == TYPE_BMP) | (stype == TYPE_DNA_SEQ) |
 	    (stype == TYPE_MP4) | (stype == TYPE_FLAC) | (stype == TYPE_AVI) |
-	    (stype == TYPE_DICOM) | (stype == TYPE_MEDIA_BSC));
+	    (stype == TYPE_DICOM) | (stype == TYPE_MEDIA_BSC) |
+	    (mtype == TYPE_TEXT && stype != TYPE_MARKUP));
 }
 
 int
@@ -260,7 +259,8 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 	int stype = PC_SUBTYPE(btype);
 	analyzer_ctx_t actx;
 
-	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR || stype == TYPE_PDF) {
+	if (btype == TYPE_UNKNOWN || PC_TYPE(btype) == TYPE_TEXT ||
+	    stype == TYPE_ARCHIVE_TAR || stype == TYPE_PDF) {
 		if (adat->actx == NULL) {
 			analyze_buffer(src, srclen, &actx);
 			adat->actx = &actx;
@@ -271,8 +271,6 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 		} else if (adat->adapt_mode == 1) {
 			btype = adat->actx->fifty_pct.btype;
 		}
-		if (stype == TYPE_PDF)
-			btype |= TYPE_MARKUP;
 	}
 
 	/* Reset analyzer context for subsequent calls. */

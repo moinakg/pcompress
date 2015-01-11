@@ -324,7 +324,6 @@ DictFilter::DictFilter()
 	SEPARATOR['\r'] = 1;
 	SEPARATOR['>'] = 1;
 	SEPARATOR[']'] = 1;
-	SEPARATOR['\''] = 1;
 	SEPARATOR[')'] = 1;
 	SEPARATOR['.'] = 1;
 	SEPARATOR['?'] = 1;
@@ -847,13 +846,12 @@ DictFilter::Forward_Dict(uint8_t *src, uint32_t size, uint8_t *dst, uint32_t *ds
 				 * Encode literal numeric strings.
 				 */
 				converted = 0;
-				if (word[0] != '+' && word[0] != '-' && word[0] != '0' &&
-				    toklen > 4 && toklen < 10) {
+				if (isdigit(word[0]) && word[0] != '0' && toklen > 4 && toklen < 10) {
 					copy_bytes(num, word, toklen);
 					num[toklen] = '\0';
 					val = strtoul((const char *)num, (char **)&word, 10);
 
-					if (*word == '\0') {
+					if (*word == '\0' && word - num == toklen && val > 0) {
 						uint8_t tok_hdr[10], *dnum;
 						sz = sizeof (tok_hdr);
 						dnum = to_base_enc(val, tok_hdr, sz);
@@ -914,7 +912,7 @@ DictFilter::Inverse_Dict(uint8_t *src, uint32_t srclen, uint8_t *dst, uint32_t *
 	decode_dict_entry_t *w_dict;
 
 	end = src + srclen;
-	srcpos = (uint8_t *)strchr((const char *)src, ' ');
+	srcpos = (uint8_t *)memchr((const void *)src, ' ', WORD_MAX);
 	if (srcpos - src > 12) {
 		return (0);
 	}
@@ -924,7 +922,11 @@ DictFilter::Inverse_Dict(uint8_t *src, uint32_t srclen, uint8_t *dst, uint32_t *
 	w_dict = new decode_dict_entry_t[numWords];
 	for (i = 0; i < numWords && srcpos < end; i++) {
 		uint8_t *w_src = srcpos;
-		srcpos = (uint8_t *)strchr((const char *)srcpos, ' ');
+		size_t limit;
+
+		limit = end - srcpos;
+		if (limit > WORD_MAX+1) limit = WORD_MAX+1;
+		srcpos = (uint8_t *)memchr((const void *)srcpos, ' ', limit);
 		if (srcpos - w_src > WORD_MAX)
 			return (0);
 
@@ -1089,6 +1091,7 @@ dict_decode(uint8_t *from, uint64_t fromlen, uint8_t *to, uint64_t *dstlen)
 		log_msg(LOG_ERR, 0, "dict_decode: Failed.\n");
 		return (-1);
 	}
+
 	if (dl < *dstlen) {
 		log_msg(LOG_ERR, 0, "dict_decode: Expected: %" PRIu64 ", Got: %" PRIu64 "\n",
 		    *dstlen, dl);

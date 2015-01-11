@@ -27,13 +27,13 @@
 
 #define	FIFTY_PCT(x)	(((x)/10) * 5)
 #define	FORTY_PCT(x)	(((x)/10) * 4)
-#define	ONE_PCT(x)	((x)/100)
+#define	TEN_PCT(x)	((x)/10)
 
 void
 analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
 {
 	uchar_t *src1 = (uchar_t *)src;
-	uint64_t i, tot8b, tot_8b, lbytes;
+	uint64_t i, tot8b, tot_8b, lbytes, spc;
 	uchar_t cur_byte, prev_byte;
 	uint64_t tag1, tag2, tag3;
 	double tagcnt, pct_tag;
@@ -47,11 +47,13 @@ analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
 	tag2 = 0;
 	tag3 = 0;
 	lbytes = 0;
+	spc = 0;
 	prev_byte = cur_byte = 0;
 	for (i = 0; i < srclen; i++) {
 		cur_byte = src1[i];
 		tot8b += (cur_byte & 0x80); // This way for possible auto-vectorization
 		lbytes += (cur_byte < 32);
+		spc += (cur_byte == ' ');
 		tag1 += (cur_byte == '<');
 		tag2 += (cur_byte == '>');
 		tag3 += ((prev_byte == '<') & (cur_byte == '/'));
@@ -65,7 +67,7 @@ analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
 	 * significance levels.
 	 */
 	tot_8b = tot8b / 0x80 + lbytes;
-	tagcnt = tag1 + tag2 + tag3;
+	tagcnt = tag1 + tag2;
 	pct_tag = tagcnt / (double)srclen;
 	if (tot_8b > FORTY_PCT(srclen)) {
 		actx->forty_pct.btype = TYPE_BINARY;
@@ -80,13 +82,13 @@ analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
 	}
 
 	tot8b /= 0x80;
-	if (tot8b == 0 && lbytes < ((srclen>>1) + (srclen>>2) + (srclen>>3))) {
+	if (tot8b <= TEN_PCT((double)srclen) && lbytes < ((srclen>>1) + (srclen>>2) + (srclen>>3))) {
 		actx->one_pct.btype = TYPE_TEXT;
 	}
 
 	markup = 0;
 	if (tag1 > tag2 - 4 && tag1 < tag2 + 4 && tag3 > (double)tag1 * 0.40 &&
-	    tagcnt > (double)srclen * 0.001)
+	    tagcnt > (double)spc * 0.1)
 		markup = 1;
 
 	if (markup) {
@@ -120,7 +122,7 @@ analyze_buffer_simple(void *src, uint64_t srclen)
 	 * Heuristics for detecting BINARY vs generic TEXT
 	 */
 	tot8b /= 0x80;
-	if (tot8b == 0 && lbytes < ((srclen>>1) + (srclen>>2) + (srclen>>3))) {
+	if (tot8b <= TEN_PCT((double)srclen) && lbytes < ((srclen>>1) + (srclen>>2) + (srclen>>3))) {
 		btype = TYPE_TEXT;
 	}
 	return (btype);
