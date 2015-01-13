@@ -88,7 +88,7 @@ analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
 
 	markup = 0;
 	if (tag1 > tag2 - 4 && tag1 < tag2 + 4 && tag3 > (double)tag1 * 0.40 &&
-	    tagcnt > (double)spc * 0.1)
+	    tagcnt > (double)spc * 0.06)
 		markup = 1;
 
 	if (markup) {

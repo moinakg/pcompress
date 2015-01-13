@@ -157,7 +157,7 @@ zlib_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	 * can be attempted to be compressed again for a possible gain. For others it is
 	 * a waste of time.
 	 */
-	if (PC_TYPE(btype) == TYPE_COMPRESSED && level < 7) {
+	if (PC_TYPE(btype) & TYPE_COMPRESSED && level < 7) {
 		int subtype = PC_SUBTYPE(btype);
 
 		if (subtype != TYPE_COMPRESSED_LZW &&

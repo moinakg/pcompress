@@ -1042,6 +1042,9 @@ process_by_filter(int fd, int *typ, struct archive *target_arc,
 	if (wrtn == FILTER_RETURN_ERROR) {
 		log_msg(LOG_ERR, 0, "Warning: Error invoking filter: %s (skipping)",
 		    typetab[(*typ >> 3)].filter_name);
+	} else if (wrtn != FILTER_RETURN_SKIP) {
+		if (typetab[(*typ >> 3)].result_type != 0)
+			*typ = typetab[(*typ >> 3)].result_type;
 	}
 	return (wrtn);
 }

@@ -247,7 +247,7 @@ is_bsc_type(int btype)
 	return ((stype == TYPE_BMP) | (stype == TYPE_DNA_SEQ) |
 	    (stype == TYPE_MP4) | (stype == TYPE_FLAC) | (stype == TYPE_AVI) |
 	    (stype == TYPE_DICOM) | (stype == TYPE_MEDIA_BSC) |
-	    (mtype == TYPE_TEXT && stype != TYPE_MARKUP));
+	    (mtype & TYPE_TEXT && stype != TYPE_MARKUP));
 }
 
 int
@@ -259,7 +259,7 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 	int stype = PC_SUBTYPE(btype);
 	analyzer_ctx_t actx;
 
-	if (btype == TYPE_UNKNOWN || PC_TYPE(btype) == TYPE_TEXT ||
+	if (btype == TYPE_UNKNOWN || PC_TYPE(btype) & TYPE_TEXT ||
 	    stype == TYPE_ARCHIVE_TAR || stype == TYPE_PDF) {
 		if (adat->actx == NULL) {
 			analyze_buffer(src, srclen, &actx);
@@ -292,14 +292,14 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 		rv = ADAPT_COMPRESS_LZ4;
 		lz4_count++;
 
-	} else if (adat->adapt_mode == 2 && PC_TYPE(btype) == TYPE_BINARY && !bsc_type) {
+	} else if (adat->adapt_mode == 2 && PC_TYPE(btype) & TYPE_BINARY && !bsc_type) {
 		rv = lzma_compress(src, srclen, dst, dstlen, level, chdr, btype, adat->lzma_data);
 		if (rv < 0)
 			return (rv);
 		rv = ADAPT_COMPRESS_LZMA;
 		lzma_count++;
 
-	} else if (adat->adapt_mode == 1 && PC_TYPE(btype) == TYPE_BINARY && !bsc_type) {
+	} else if (adat->adapt_mode == 1 && PC_TYPE(btype) & TYPE_BINARY && !bsc_type) {
 		rv = bzip2_compress(src, srclen, dst, dstlen, level, chdr, btype, NULL);
 		if (rv < 0)
 			return (rv);

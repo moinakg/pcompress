@@ -114,7 +114,7 @@ lz_fx_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	/*
 	 * Ignore compressed data in fast modes.
 	 */
-	if (level < 7 && PC_TYPE(btype) == TYPE_COMPRESSED)
+	if (level < 7 && PC_TYPE(btype) & TYPE_COMPRESSED)
 		return (-1);
 
 	rv = lzfx_compress(src, _srclen, dst, &_dstlen, lzdat->htab_bits);

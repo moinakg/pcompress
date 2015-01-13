@@ -81,16 +81,19 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 		typetab[slot].filter_private = sdat;
 		typetab[slot].filter_func = packjpg_filter;
 		typetab[slot].filter_name = "packJPG";
+		typetab[slot].result_type = TYPE_BINARY;
 
 		slot = TYPE_BMP >> 3;
 		typetab[slot].filter_private = sdat;
 		typetab[slot].filter_func = packpnm_filter;
 		typetab[slot].filter_name = "packPNM";
+		typetab[slot].result_type = TYPE_BINARY;
 
 		slot = TYPE_PNM >> 3;
 		typetab[slot].filter_private = sdat;
 		typetab[slot].filter_func = packpnm_filter;
 		typetab[slot].filter_name = "packPNM";
+		typetab[slot].result_type = TYPE_BINARY;
 	}
 #endif
 
@@ -104,6 +107,7 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 		typetab[slot].filter_private = sdat;
 		typetab[slot].filter_func = dispack_filter;
 		typetab[slot].filter_name = "Dispack";
+		typetab[slot].result_type = 0;
 	}
 
 #ifdef _ENABLE_WAVPACK_
@@ -118,6 +122,7 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 		typetab[slot].filter_private = sdat;
 		typetab[slot].filter_func = wavpack_filter;
 		typetab[slot].filter_name = "WavPack";
+		typetab[slot].result_type = 0;
 	}
 #endif
 }

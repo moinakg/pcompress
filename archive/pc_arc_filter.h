@@ -100,6 +100,7 @@ struct type_data {
 	void *filter_private;
 	filter_func_ptr filter_func;
 	char *filter_name;
+	int result_type;
 };
 
 void add_filters_by_type(struct type_data *typetab, struct filter_flags *ff);

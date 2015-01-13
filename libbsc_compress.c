@@ -165,7 +165,7 @@ libbsc_compress(void *src, uint64_t srclen, void *dst, uint64_t *dstlen,
 	int rv;
 	struct libbsc_params *bscdat = (struct libbsc_params *)data;
 
-	if (PC_TYPE(btype) == TYPE_COMPRESSED) {
+	if (PC_TYPE(btype) & TYPE_COMPRESSED && level < 7) {
 		int subtype = PC_SUBTYPE(btype);
 		if (subtype == TYPE_COMPRESSED_BZ2 || subtype == TYPE_COMPRESSED_LZMA)
 			return (-1);

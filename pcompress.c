@@ -223,7 +223,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	stype = PC_SUBTYPE(btype);
 	analyzed = 0;
 	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR || stype == TYPE_PDF ||
-	    PC_TYPE(btype) == TYPE_TEXT || interesting) {
+	    PC_TYPE(btype) & TYPE_TEXT || interesting) {
 		analyze_buffer(src, srclen, &actx);
 		analyzed = 1;
 		if (pctx->adapt_mode)
@@ -264,7 +264,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		else
 			b_type = analyze_buffer_simple(from, fromlen);
 
-		if (PC_TYPE(b_type) == TYPE_TEXT) {
+		if (PC_TYPE(b_type) & TYPE_TEXT) {
 			_dstlen = fromlen;
 			result = dict_encode(from, fromlen, to, &_dstlen);
 			if (result != -1) {
@@ -287,7 +287,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		if (analyzed)
 			b_type = actx.forty_pct.btype;
 
-		if (PC_TYPE(b_type) != TYPE_BINARY) {
+		if (!(PC_TYPE(b_type) & TYPE_BINARY)) {
 			hashsize = lzp_hash_size(level);
 			result = lzp_compress((const uchar_t *)from, to, fromlen,
 					      hashsize, LZP_DEFAULT_LZPMINLEN, 0);
@@ -312,7 +312,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		if (analyzed)
 			b_type = actx.one_pct.btype;
 
-		if (PC_TYPE(b_type) != TYPE_TEXT) {
+		if (!(PC_TYPE(b_type) & TYPE_TEXT)) {
 			_dstlen = fromlen;
 			result = delta2_encode((uchar_t *)from, fromlen, to,
 					       &_dstlen, props->delta2_span,
