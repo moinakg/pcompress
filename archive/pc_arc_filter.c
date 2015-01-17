@@ -81,7 +81,7 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 		typetab[slot].filter_private = sdat;
 		typetab[slot].filter_func = packjpg_filter;
 		typetab[slot].filter_name = "packJPG";
-		typetab[slot].result_type = TYPE_BINARY;
+		typetab[slot].result_type = -1;
 
 		slot = TYPE_BMP >> 3;
 		typetab[slot].filter_private = sdat;
@@ -115,14 +115,14 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 		if (!sdat) {
 			sdat = (struct scratch_buffer *)malloc(sizeof (struct scratch_buffer));
 			sdat->in_buff = NULL;
-			sdat->in_bufflen = 0;
+			sdat->in_bufflen = -1;
 		}
 
 		slot = TYPE_WAV >> 3;
 		typetab[slot].filter_private = sdat;
 		typetab[slot].filter_func = wavpack_filter;
 		typetab[slot].filter_name = "WavPack";
-		typetab[slot].result_type = 0;
+		typetab[slot].result_type = -1;
 	}
 #endif
 }
@@ -593,7 +593,6 @@ dispack_filter(struct filter_info *fi, void *filter_private)
 		fi->fout->out = out;
 		fi->fout->out_size = len;
 		fi->fout->hdr_valid = 0;
-		*(fi->type_ptr) = TYPE_UNKNOWN;
 		return (ARCHIVE_OK);
 	}
 

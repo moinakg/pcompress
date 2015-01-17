@@ -1043,8 +1043,9 @@ process_by_filter(int fd, int *typ, struct archive *target_arc,
 		log_msg(LOG_ERR, 0, "Warning: Error invoking filter: %s (skipping)",
 		    typetab[(*typ >> 3)].filter_name);
 	} else if (wrtn != FILTER_RETURN_SKIP) {
-		if (typetab[(*typ >> 3)].result_type != 0)
+		if (typetab[(*typ >> 3)].result_type > -1) {
 			*typ = typetab[(*typ >> 3)].result_type;
+		}
 	}
 	return (wrtn);
 }
@@ -1978,6 +1979,7 @@ detect_type_by_data(uchar_t *buf, size_t len)
 			return (TYPE_BINARY);
 		}
 	}
+
 	if (buf[1] == 'Z') {
 		 // Check for MSDOS/Windows Exe types
 		if (buf[0] == 'L') {
@@ -2002,10 +2004,11 @@ detect_type_by_data(uchar_t *buf, size_t len)
 						if (id == 0x010b || id == 0x020b) {
 							off = LE32(U32_P(buf + 0x3c))+4;
 							id = LE16(U16_P(buf + off));
-							if (id == 0x8664)
+							if (id == 0x8664) {
 								return (TYPE_BINARY|TYPE_EXE64);
-							else
+							} else {
 								return (TYPE_BINARY|TYPE_EXE32_PE);
+							}
 						} else {
 							return (TYPE_BINARY);
 						}

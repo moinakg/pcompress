@@ -2288,8 +2288,13 @@ INTERN inline void rgb_process( unsigned int* rgb ) {
 			rgb[c] -= ( rgb[1] >> ( cmask[1]->s - cmask[c]->s ) );
 			rgb[c] &= cmask[c]->m;
 		} else {
-			rgb[c] -= rgb[1];
-			if ( rgb[c] < 0 ) rgb[c] += pnmax + 1;
+			int64_t rg;
+
+			rg = rgb[c];
+			rg -= rgb[1];
+			if (rg < 0)
+				rg += pnmax + 1;
+			rgb[c] = rg;
 		}
 	}
 }
