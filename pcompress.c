@@ -222,6 +222,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 	result = 0;
 	stype = PC_SUBTYPE(btype);
 	analyzed = 0;
+
 	if (btype == TYPE_UNKNOWN || stype == TYPE_ARCHIVE_TAR || stype == TYPE_PDF ||
 	    PC_TYPE(btype) & TYPE_TEXT || interesting) {
 		analyze_buffer(src, srclen, &actx);
@@ -469,7 +470,7 @@ preproc_decompress(pc_ctx_t *pctx, compress_func_ptr dec_func, void *src, uint64
 	}
 
 	if (!(type & (PREPROC_COMPRESSED|PREPROC_TYPE_DELTA2|PREPROC_TYPE_LZP|
-		      PREPROC_TYPE_DISPACK|PREPROC_TYPE_DICT))
+		      PREPROC_TYPE_DISPACK|PREPROC_TYPE_DICT|PREPROC_TYPE_E8E9))
 	    && type > 0) {
 		log_msg(LOG_ERR, 0, "Invalid preprocessing flags: %d", type);
 		return (-1);
@@ -1631,12 +1632,8 @@ redo:
 			if (!tdat->compressed_chunk && tdat->len_cmp != METADATA_INDICATOR) {
 				tdat->compressed_chunk = (uchar_t *)slab_alloc(NULL,
 				    compressed_chunksize);
-				if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan))
-					tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
-					    compressed_chunksize);
-				else
-					tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
-					    chunksize);
+				tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
+				    compressed_chunksize);
 				if (!tdat->compressed_chunk || !tdat->uncompressed_chunk) {
 					log_msg(LOG_ERR, 0, "2: Out of memory");
 					UNCOMP_BAIL;
@@ -1926,9 +1923,15 @@ plain_index:
 	 * If at all compression expands/does not shrink data then the chunk
 	 * will be left uncompressed. Also if the compression errored the
 	 * chunk will be left uncompressed.
+	 *
+	 * HOWEVER, increased chunk size is allowed in preprocessing mode since
+	 * there are unavoidable cases where an E8E9 filter is applied and then
+	 * later on compression does not happen. So we have to retain information
+	 * that E8E9 hapened, to recover the data correctly. In this corner case
+	 * the chunk size is increased by 1 byte for the preproc header.
 	 */
 	tdat->len_cmp = _chunksize;
-	if (_chunksize >= tdat->rbytes || rv < 0) {
+	if ((_chunksize >= tdat->rbytes && !pctx->preprocess_mode) || rv < 0) {
 		if (!(pctx->enable_rabin_scan || pctx->enable_fixed_scan) || !tdat->rctx->valid)
 			memcpy(compressed_chunk, tdat->uncompressed_chunk, tdat->rbytes);
 		type = UNCOMPRESSED;
@@ -2444,10 +2447,7 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 		log_msg(LOG_INFO, 0, "Scaling to 1 thread");
 	nprocs = pctx->nthreads;
 	dary = (struct cmp_data **)slab_calloc(NULL, nprocs, sizeof (struct cmp_data *));
-	if ((pctx->enable_rabin_scan || pctx->enable_fixed_scan))
-		cread_buf = (uchar_t *)slab_alloc(NULL, compressed_chunksize);
-	else
-		cread_buf = (uchar_t *)slab_alloc(NULL, chunksize);
+	cread_buf = (uchar_t *)slab_alloc(NULL, compressed_chunksize);
 	if (!cread_buf) {
 		log_msg(LOG_ERR, 0, "3: Out of memory");
 		COMP_BAIL;
@@ -2477,7 +2477,8 @@ start_compress(pc_ctx_t *pctx, const char *filename, uint64_t chunksize, int lev
 			if (single_chunk)
 				tdat->uncompressed_chunk = (uchar_t *)1;
 			else
-				tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL, chunksize);
+				tdat->uncompressed_chunk = (uchar_t *)slab_alloc(NULL,
+					compressed_chunksize);
 			tdat->cmp_seg = (uchar_t *)slab_alloc(NULL, compressed_chunksize);
 		}
 		tdat->compressed_chunk = tdat->cmp_seg + COMPRESSED_CHUNKSZ +

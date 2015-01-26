@@ -957,14 +957,15 @@ int
 Forward_E89(uint8_t *src, uint64_t sz)
 {
 	uint32_t i;
-	uint32_t size;
+	uint32_t size, conversions;
 
-	if (sz > UINT32_MAX) {
+	if (sz > UINT32_MAX || sz < 25) {
 		return (-1);
 	}
 
 	size = sz;
 	i = 0;
+	conversions = 0;
 	while (i < size-4) {
 		if ((src[i] & 0xfe) == 0xe8 &&
 		    (src[i+4] == 0 || src[i+4] == 0xff))
@@ -979,11 +980,14 @@ Forward_E89(uint8_t *src, uint64_t sz)
 					src[i+1] = (uint8_t)(off >> 16);
 					src[i+2] = (uint8_t)(off >> 8);
 					src[i+3] = (uint8_t)off;
+					conversions++;
 				}
 			}
 		}
 		i++;
 	}
+	if (conversions < 10)
+		return (-1);
 	return (0);
 }
 
