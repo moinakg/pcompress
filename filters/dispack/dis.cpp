@@ -986,7 +986,7 @@ Forward_E89(uint8_t *src, uint64_t sz)
 		}
 		i++;
 	}
-	if (conversions < 10)
+	if (conversions < 5)
 		return (-1);
 	return (0);
 }

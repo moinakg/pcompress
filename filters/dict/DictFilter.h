@@ -39,7 +39,7 @@
 extern "C" {
 #endif
 
-int dict_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen);
+int dict_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen, int is_fasta);
 int dict_decode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen);
 
 #ifdef  __cplusplus

@@ -222,6 +222,9 @@ public:
 	int Forward_Dict(uint8_t *src, uint32_t size, uint8_t *dst, uint32_t *dstsize);
 	int Inverse_Dict(uint8_t *src, uint32_t size, uint8_t *dst, uint32_t *dstsize);
 
+	int Forward_Dict_Fasta(uint8_t *src, uint32_t size, uint8_t *dst, uint32_t *dstsize);
+	int Inverse_Dict_Fasta(uint8_t *src, uint32_t size, uint8_t *dst, uint32_t *dstsize);
+
 	static DictFilter *getInstance() {
 		pthread_mutex_lock(&inst_lock);
 		if (!inst) {
@@ -335,6 +338,15 @@ DictFilter::DictFilter()
 	SEPARATOR['-'] = 1;
 	SEPARATOR['+'] = 1;
 	SEPARATOR['*'] = 1;
+
+	SEPARATOR['a'] = 128;
+	SEPARATOR['t'] = 128;
+	SEPARATOR['g'] = 128;
+	SEPARATOR['c'] = 128;
+	SEPARATOR['A'] = 128;
+	SEPARATOR['T'] = 128;
+	SEPARATOR['G'] = 128;
+	SEPARATOR['C'] = 128;
 
 	/*
 	 * Prefix characters for encoded words and numbers.
@@ -662,7 +674,7 @@ DictFilter::Forward_Dict(uint8_t *src, uint32_t size, uint8_t *dst, uint32_t *ds
 	for (i=0; i<size; i++) {
 		uint8_t c = src[i];
 
-		if (SEPARATOR[c]) {
+		if (SEPARATOR[c] & 1) {
 			dict_entry_t *de;
 			size_t toklen = i - pos;
 
@@ -792,7 +804,7 @@ DictFilter::Forward_Dict(uint8_t *src, uint32_t size, uint8_t *dst, uint32_t *ds
 		uint8_t *tok, c;
 
 		c = src[i];
-		if (SEPARATOR[c]) {
+		if (SEPARATOR[c] & 1) {
 			dict_entry_t *de;
 			size_t toklen = i - pos;
 
@@ -905,6 +917,322 @@ bail:
 }
 
 int
+DictFilter::Forward_Dict_Fasta(uint8_t *src, uint32_t size, uint8_t *dst, uint32_t *dstsize)
+{
+	uint32_t dstSize = 0, dictSize, i, pos, num_entries;
+	hash_context_t hctx;
+	list_context_t lctx;
+	dict_entry_t **sorted_dict;
+	uint8_t num_dict[10], *numd;
+	ssize_t new_size;
+	int rv, sz, j;
+
+	if (size < 1024)
+		return 0;
+
+	if (size > 20000) {
+		dictSize = size / 10000;
+		dictSize += (dictSize >> 1);
+	} else {
+		dictSize = (size >> 1);
+	}
+	dictSize++;
+
+	pos = 0;
+	rv = 0;
+	j = 0;
+	hash_context_init(&hctx, dictSize);
+	list_context_init(&lctx, dictSize);
+	sorted_dict = new dict_entry_t* [dictSize];
+
+	/*
+	 * Scan words in the data and build the dictionary.
+	 */
+	for (i=0; i<size; i++) {
+		uint8_t c = src[i];
+		int is_sep, genome;
+
+		if (c == flag || c == flag1 || c == flag2)
+			goto bail;
+
+		is_sep = SEPARATOR[c] & 1;
+		if (is_sep || j == 4) {
+			dict_entry_t *de;
+			size_t toklen = i - pos;
+
+			if (j == 4 && !is_sep) {
+				unsigned char *bf = src+pos;
+
+				genome = ((SEPARATOR[bf[0]]&128) & (SEPARATOR[bf[1]]&128) &
+					  (SEPARATOR[bf[2]]&128) & (SEPARATOR[bf[3]]&128));
+				if (!genome) {
+					j = 0;
+					continue;
+				}
+			}
+
+			j = 0;
+			if (toklen < WORD_MIN || toklen > WORD_MAX) {
+				if (is_sep) {
+					pos = i+1;
+					j--;
+				} else {
+					pos = i;
+				}
+				j++;
+				continue;
+			}
+
+			de = hash_add(&hctx, src+pos, toklen, NULL);
+			if (!de && i > (size>>1)) {
+				de = list_pop_lru_min(&lctx);
+				if (de) {
+					dict_entry_t *de1;
+					de1 = hash_remove(&hctx, de->word, de->sz, de);
+					assert(de1 == de);
+					de1 = hash_add(&hctx, src+pos, toklen, de);
+					assert(de1 != NULL);
+					assert(de1 != hctx.sentinel);
+					list_push(&lctx, de1);
+				}
+			} else if (de != hctx.sentinel) {
+				list_push(&lctx, de);
+			}
+			if (is_sep) {
+				pos = i+1;
+				j--;
+			} else {
+				pos = i;
+			}
+		}
+		j++;
+	}
+
+	/*
+	 * Mark below-threshold entries in the dictionary. Also sorted_dict holds a
+	 * flattened view of the hash.
+	 */
+	pos = 0;
+	for (i=0; i<dictSize; i++) {
+		if (hctx.dict[i]) {
+			dict_entry_t *de;
+
+			de = hctx.dict[i];
+			while (de) {
+				ssize_t val;
+
+				val = (size_t)de->occur * (size_t)de->sz;
+				if (val <= 4500) {
+					de->occur = 0;
+					de = de->next;
+					continue;
+				}
+
+				sorted_dict[pos++] = de;
+				de = de->next;
+			}
+		}
+	}
+
+	/*
+	 * Sort the flattened view of the hash in descending order of
+	 * occurrence X word size.
+	 */
+	qsort(sorted_dict, pos, sizeof (dict_entry_t *), cmpoccur);
+	num_entries = 0;
+	new_size = size;
+
+	for (i=0; i<pos; i++) {
+		dict_entry_t *de;
+		ssize_t prev_size;
+
+		de = sorted_dict[i];
+		if (de->occur > 1) {
+			ssize_t val;
+
+			/*
+			 * Mark entries for which the encoded representation will be
+			 * larger than the original.
+			 */
+			prev_size = new_size;
+			val = (size_t)de->occur * (size_t)de->sz;
+			new_size -= val;
+			if (num_entries == 0)
+				new_size += ((size_t)de->sz + (size_t)de->occur * 1);
+			else if (num_entries < NUMERAL_BASE)
+				new_size += ((size_t)de->sz + (size_t)de->occur * 2);
+			else if (num_entries < NUMERAL_BASE * NUMERAL_BASE)
+				new_size += ((size_t)de->sz + (size_t)de->occur * 3);
+			else if (num_entries < NUMERAL_BASE * NUMERAL_BASE * NUMERAL_BASE)
+				new_size += ((size_t)de->sz + (size_t)de->occur * 4);
+			else
+				new_size += ((size_t)de->sz + (size_t)de->occur * 5);
+			if (new_size >= prev_size) {
+				new_size = prev_size;
+				de->occur = 0;
+				continue;
+			}
+
+			de->indx = num_entries;
+			num_entries++;
+		} else {
+			de->occur = 0;
+		}
+	}
+
+	sz = sizeof (num_dict);
+	numd = to_base_enc(num_entries, num_dict, sz);
+	dstSize = num_dict+sz-numd-1;
+	copy_bytes(dst, numd, dstSize);
+	dst[dstSize++] = ' ';
+
+	// Copy the flags
+	dst[dstSize++] = flag;
+	dst[dstSize++] = flag1;
+	dst[dstSize++] = flag2;
+	dst[dstSize++] = ' ';
+
+	/*
+	 * Copy the dictionary to the output buffer.
+	 */
+	for (i=0; i<pos && dstSize<*dstsize; i++) {
+		dict_entry_t *de;
+
+		de = sorted_dict[i];
+		if (de->occur > 1) {
+			dst[dstSize++] = de->lcfirst;
+			if (dstSize + de->sz + 1 >= *dstsize) {
+				goto bail;
+			}
+
+			copy_bytes(&dst[dstSize], de->word+1, de->sz-1);
+			dstSize += (de->sz-1);
+			dst[dstSize++] = ' ';
+		}
+	}
+
+	pos = 0;
+	j = 0;
+	for (i=0; i<size && dstSize<*dstsize; i++) {
+		uint8_t *tok, c;
+		int is_sep, genome;
+
+		c = src[i];
+		is_sep = SEPARATOR[c] & 1;
+		if (is_sep || j == 4) {
+			dict_entry_t *de;
+			size_t toklen = i - pos;
+
+			if (j == 4 && !is_sep) {
+				unsigned char *bf = src+pos;
+
+				genome = ((SEPARATOR[bf[0]]&128) & (SEPARATOR[bf[1]]&128) &
+					  (SEPARATOR[bf[2]]&128) & (SEPARATOR[bf[3]]&128));
+				if (!genome) {
+					j = 0;
+					continue;
+				}
+			}
+
+			j = 0;
+			if (toklen < WORD_MIN || toklen > WORD_MAX) {
+				if (is_sep) {
+					if (dstSize + toklen + 1 > *dstsize) {
+						goto bail;
+					}
+					copy_bytes(&dst[dstSize], src+pos, toklen+1);
+					dstSize += (toklen+1);
+					pos = i+1;
+					j--;
+				} else {
+					if (dstSize + toklen > *dstsize) {
+						goto bail;
+					}
+					copy_bytes(&dst[dstSize], src+pos, toklen);
+					dstSize += toklen;
+					pos = i;
+				}
+				j++;
+				continue;
+			}
+
+			tok = src+pos;
+			de = hash_lookup(&hctx, tok, toklen, tolower(tok[0]));
+			if (de != NULL && de->occur > 1) {
+				uint16_t val;
+				unsigned char tok_hdr[10], *dnum;
+
+				/*
+				 * Encode word with dictionary reference.
+				 */
+				sz = sizeof (tok_hdr);
+				val = de->indx;
+				dnum = to_base_enc(val, tok_hdr, sz);
+				dnum--;
+				if (isupper(tok[0])) {
+					*dnum = flag1;
+				} else {
+					*dnum = flag;
+				}
+
+				val = tok_hdr+sz - dnum-1;
+
+				if (dstSize + val + 1 > *dstsize) {
+					goto bail;
+				}
+				copy_bytes(&dst[dstSize], dnum, val);
+				dstSize += val;
+				if (is_sep) {
+					dst[dstSize++] = src[i];
+				} else {
+					dst[dstSize++] = flag2;
+				}
+			} else {
+				if (is_sep) {
+					if (dstSize + toklen + 1 > *dstsize) {
+						goto bail;
+					}
+					copy_bytes(&dst[dstSize], src+pos, toklen+1);
+					dstSize += (toklen+1);
+				} else {
+					if (dstSize + toklen > *dstsize) {
+						goto bail;
+					}
+					copy_bytes(&dst[dstSize], src+pos, toklen);
+					dstSize += toklen;
+				}
+			}
+			if (is_sep) {
+				pos = i+1;
+				j--;
+			} else {
+				pos = i;
+			}
+		}
+		j++;
+	}
+	if (pos < size) {
+		uint32_t sz = size - pos;
+
+		if (dstSize + sz > *dstsize) {
+			goto bail;
+		}
+		copy_bytes(&dst[dstSize], src+pos, sz);
+		dstSize += sz;
+	}
+
+	*dstsize = dstSize;
+	rv = 1;
+
+bail:
+	hash_context_delete(&hctx);
+	list_context_delete(&lctx);
+	delete sorted_dict;
+
+	return rv;
+}
+
+int
 DictFilter::Inverse_Dict(uint8_t *src, uint32_t srclen, uint8_t *dst, uint32_t *dstsize)
 {
 	uint32_t numWords, i, enclen, pos;
@@ -942,7 +1270,7 @@ DictFilter::Inverse_Dict(uint8_t *src, uint32_t srclen, uint8_t *dst, uint32_t *
 
 	for (i = 0; i < enclen && dstpos < dstend; i++) {
 		c = srcpos[i];
-		if (SEPARATOR[c]) {
+		if (SEPARATOR[c] & 1) {
 			uint32_t toklen = i - pos;
 			uint32_t dpos;
 
@@ -1021,17 +1349,182 @@ DictFilter::Inverse_Dict(uint8_t *src, uint32_t srclen, uint8_t *dst, uint32_t *
 	return (1);
 }
 
+int
+DictFilter::Inverse_Dict_Fasta(uint8_t *src, uint32_t srclen, uint8_t *dst, uint32_t *dstsize)
+{
+	uint32_t numWords, i, enclen, pos;
+	uint8_t *srcpos, *end, *dstpos, *dstend, c;
+	decode_dict_entry_t *w_dict;
+	int flag, flag1, flag2;
+	uint8_t separator[256];
+
+	end = src + srclen;
+	srcpos = (uint8_t *)memchr((const void *)src, ' ', WORD_MAX);
+	if (srcpos - src > 12) {
+		return (0);
+	}
+
+	numWords = from_base_enc(src, srcpos - src);
+	srcpos++;
+
+	if ((srclen - (srcpos - src)) < 10) {
+		return (0);
+	}
+	flag = *srcpos++;
+	flag1 = *srcpos++;
+	flag2 = *srcpos++;
+
+	if (*srcpos != ' ')
+		return (0);
+	srcpos++;
+
+	memcpy(separator, SEPARATOR, sizeof (SEPARATOR));
+	separator[flag] = 1;
+	separator[flag1] = 1;
+	separator[flag2] = 1;
+
+	w_dict = new decode_dict_entry_t[numWords];
+	for (i = 0; i < numWords && srcpos < end; i++) {
+		size_t limit;
+		uint8_t *w_src;
+
+		w_src = srcpos;
+		limit = end - srcpos;
+		if (limit > WORD_MAX+1) limit = WORD_MAX+1;
+		srcpos = (uint8_t *)memchr((const void *)srcpos, ' ', limit);
+		if (srcpos - w_src > WORD_MAX)
+			return (0);
+
+		w_dict[i].sz = srcpos - w_src;
+		w_dict[i].word = w_src;
+		srcpos++;
+	}
+
+	enclen = srclen - (srcpos - src);
+	dstpos = dst;
+	dstend = dst + *dstsize;
+	pos = 0;
+
+	for (i = 1; i < enclen && dstpos < dstend; i++) {
+		c = srcpos[i];
+		if (separator[c]&1) {
+			uint32_t toklen;
+			uint32_t dpos;
+			uint8_t pc;
+
+			toklen = i - pos;
+			pc = srcpos[pos];
+			if (pc == flag) {
+				toklen --;
+				dpos = from_base_enc(srcpos+pos+1, toklen);
+
+				if (dstpos + w_dict[dpos].sz > dstend) {
+					log_msg(LOG_ERR, 0, "1: Overflow in DICT decode.");
+					return (0);
+				}
+				copy_bytes(dstpos, w_dict[dpos].word, w_dict[dpos].sz);
+				dstpos += w_dict[dpos].sz;
+
+			} else if (pc == flag1) {
+				toklen --;
+				dpos = from_base_enc(srcpos+pos+1, toklen);
+
+				if (dstpos + w_dict[dpos].sz > dstend) {
+					log_msg(LOG_ERR, 0, "2: Overflow in DICT decode.");
+					return (0);
+				}
+				*dstpos++ = toupper(*(w_dict[dpos].word));
+				copy_bytes(dstpos, w_dict[dpos].word+1, w_dict[dpos].sz-1);
+				dstpos += (w_dict[dpos].sz-1);
+
+			} else if (pc == flag2) {
+				toklen --;
+				if (toklen > 0) {
+					if (dstpos + toklen > dstend) {
+						log_msg(LOG_ERR, 0, "3: Overflow in DICT decode.");
+						return (0);
+					}
+					copy_bytes(dstpos, srcpos+pos+1, toklen);
+					dstpos += toklen;
+				}
+			} else {
+				if (dstpos + toklen > dstend) {
+					log_msg(LOG_ERR, 0, "4: Overflow in DICT decode.");
+					return (0);
+				}
+				copy_bytes(dstpos, srcpos+pos, toklen);
+				dstpos += toklen;
+			}
+			pos = i;
+		}
+	}
+
+	if (pos < i) {
+		uint32_t toklen;
+		uint32_t dpos;
+		uint8_t pc;
+
+		toklen = i - pos;
+		pc = srcpos[pos];
+		if (pc == flag) {
+			toklen --;
+			dpos = from_base_enc(srcpos+pos+1, toklen);
+
+			if (dstpos + w_dict[dpos].sz > dstend) {
+				log_msg(LOG_ERR, 0, "5: Overflow in DICT decode.\n");
+				return (0);
+			}
+			copy_bytes(dstpos, w_dict[dpos].word, w_dict[dpos].sz);
+			dstpos += w_dict[dpos].sz;
+
+		} else if (pc == flag1) {
+			toklen --;
+			dpos = from_base_enc(srcpos+pos+1, toklen);
+
+			if (dstpos + w_dict[dpos].sz > dstend) {
+				log_msg(LOG_ERR, 0, "6: Overflow in DICT decode.\n");
+				return (0);
+			}
+			*dstpos++ = toupper(*(w_dict[dpos].word));
+			copy_bytes(dstpos, w_dict[dpos].word+1, w_dict[dpos].sz-1);
+			dstpos += (w_dict[dpos].sz-1);
+
+		} else if (pc == flag2) {
+			toklen --;
+			if (toklen > 0) {
+				if (dstpos + toklen > dstend) {
+					log_msg(LOG_ERR, 0, "7: Overflow in DICT decode.\n");
+					return (0);
+				}
+				copy_bytes(dstpos, srcpos+pos+1, toklen);
+				dstpos += toklen;
+			}
+		} else {
+			if (dstpos + toklen > dstend) {
+				log_msg(LOG_ERR, 0, "8: Overflow in DICT decode.\n");
+				return (0);
+			}
+			copy_bytes(dstpos, srcpos+pos, toklen);
+			dstpos += toklen;
+		}
+	}
+
+	*dstsize = dstpos - dst;
+	return (1);
+}
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
 
 int
-dict_encode(uint8_t *from, uint64_t fromlen, uint8_t *to, uint64_t *dstlen)
+dict_encode(uint8_t *from, uint64_t fromlen, uint8_t *to, uint64_t *dstlen, int is_fasta)
 {
 	DictFilter *df = DictFilter::getInstance();
 	u32 fl;
 	u32 dl;
 	uint8_t *dst;
+	int rv;
 	DEBUG_STAT_EN(double strt, en);
 
 	/*
@@ -1046,8 +1539,17 @@ dict_encode(uint8_t *from, uint64_t fromlen, uint8_t *to, uint64_t *dstlen)
 	U32_P(to) = LE32(fl);
 	dst = to + 4;
 	dl -= 4;
-	if (df->Forward_Dict(from, fl, dst, &dl)) {
-		*dstlen = dl + 4;
+	if (!is_fasta) {
+		*dst++ = 0;
+		dl--;
+		rv = df->Forward_Dict(from, fl, dst, &dl);
+	} else {
+		*dst++ = 1;
+		dl--;
+		rv = df->Forward_Dict_Fasta(from, fl, dst, &dl);
+	}
+	if (rv) {
+		*dstlen = dl + 5;
 		DEBUG_STAT_EN(en = get_wtime_millis());
 		DEBUG_STAT_EN(fprintf(stderr, "DICT: fromlen: %" PRIu64 ", dstlen: %" PRIu64 "\n",
 				      fromlen, *dstlen));
@@ -1066,7 +1568,7 @@ dict_decode(uint8_t *from, uint64_t fromlen, uint8_t *to, uint64_t *dstlen)
 	u32 fl;
 	u32 dl;
 	u8 *src;
-	int rv;
+	int rv, is_fasta;
 	DEBUG_STAT_EN(double strt, en);
 
 	if (fromlen > UINT32_MAX) {
@@ -1085,8 +1587,13 @@ dict_decode(uint8_t *from, uint64_t fromlen, uint8_t *to, uint64_t *dstlen)
 	*dstlen = dl;
 	src = from + 4;
 	fl -= 4;
+	is_fasta = *src++;
+	fl--;
 
-	rv = df->Inverse_Dict(src, fl, to, &dl);
+	if (!is_fasta)
+		rv = df->Inverse_Dict(src, fl, to, &dl);
+	else
+		rv = df->Inverse_Dict_Fasta(src, fl, to, &dl);
 	if (!rv) {
 		log_msg(LOG_ERR, 0, "dict_decode: Failed.\n");
 		return (-1);

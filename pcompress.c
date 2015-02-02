@@ -267,7 +267,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 
 		if (PC_TYPE(b_type) & TYPE_TEXT) {
 			_dstlen = fromlen;
-			result = dict_encode(from, fromlen, to, &_dstlen);
+			result = dict_encode(from, fromlen, to, &_dstlen, (stype == TYPE_DNA_SEQ));
 			if (result != -1) {
 				uchar_t *tmp;
 				tmp = from;
