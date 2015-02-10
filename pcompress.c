@@ -355,8 +355,6 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		    get_mb_s(srclen, strt, en)));
 	} else {
 		DEBUG_STAT_EN(fprintf(stderr, "Chunk did not compress.\n"));
-		memcpy(dest+1, src, srclen);
-		*dstlen = srclen + 1;
 		/*
 		 * If compression failed but one of the pre-processing succeeded then
 		 * type flags will be non-zero. In that case we still indicate a success
@@ -364,8 +362,17 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		 * type flags will indicate that compression was not done and the
 		 * decompress routine will not be called.
 		 */
-		if (type > 0)
+		if (type > 0) {
+			memcpy(dest+1, src, srclen);
+			*dstlen = srclen + 1;
 			result = 0;
+		} else {
+			/*
+			 * Not Compressed and not preprocessed. Ensure that we signal
+			 * error upstream, so this is handled correctly.
+			 */
+			result = -1;
+		}
 	}
 	return (result);
 }
@@ -500,6 +507,9 @@ perform_decompress(void *dat)
 	pctx = tdat->pctx;
 redo:
 	Sem_Wait(&tdat->start_sem);
+	if (pctx->main_cancel)
+		return (NULL);
+
 	if (unlikely(tdat->cancel)) {
 		tdat->len_cmp = 0;
 		Sem_Post(&tdat->cmp_done_sem);
@@ -752,12 +762,15 @@ redo:
 			tdat->len_cmp = 0;
 			log_msg(LOG_ERR, 0, "ERROR: Chunk %d, checksums do not match.", tdat->id);
 			pctx->t_errored = 1;
+			pctx->main_cancel = 1;
 		}
 	}
 
 cont:
 	Sem_Post(&tdat->cmp_done_sem);
-	goto redo;
+	if (!pctx->t_errored)
+		goto redo;
+	return (NULL);
 }
 
 /*
