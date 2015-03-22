@@ -25,9 +25,9 @@
 #include "utils.h"
 #include "analyzer.h"
 
-#define	FIFTY_PCT(x)	(((x)/10) * 5)
-#define	FORTY_PCT(x)	(((x)/10) * 4)
-#define	TEN_PCT(x)	((x)/10)
+#define	FIFTY_PCT(x)	((((double)x)/10) * 5)
+#define	THIRTY_PCT(x)	((((double)x)/10) * 3)
+#define	TEN_PCT(x)	(((double)x)/10)
 
 void
 analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
@@ -37,7 +37,6 @@ analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
 	uchar_t cur_byte, prev_byte;
 	uint64_t tag1, tag2, tag3;
 	double tagcnt, pct_tag;
-	int markup;
 
 	/*
 	 * Count number of 8-bit binary bytes and XML tags in source.
@@ -49,9 +48,10 @@ analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
 	lbytes = 0;
 	spc = 0;
 	prev_byte = cur_byte = 0;
+	memset(actx, 0, sizeof (analyzer_ctx_t));
 	for (i = 0; i < srclen; i++) {
 		cur_byte = src1[i];
-		tot8b += (cur_byte & 0x80); // This way for possible auto-vectorization
+		tot8b += (cur_byte > 127);
 		lbytes += (cur_byte < 32);
 		spc += (cur_byte == ' ');
 		tag1 += (cur_byte == '<');
@@ -66,13 +66,13 @@ analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
 	 * Heuristics for detecting BINARY vs generic TEXT vs XML data at various
 	 * significance levels.
 	 */
-	tot_8b = tot8b / 0x80 + lbytes;
+	tot_8b = tot8b + lbytes;
 	tagcnt = tag1 + tag2;
 	pct_tag = tagcnt / (double)srclen;
-	if (tot_8b > FORTY_PCT(srclen)) {
-		actx->forty_pct.btype = TYPE_BINARY;
+	if (tot_8b > THIRTY_PCT(srclen)) {
+		actx->thirty_pct.btype = TYPE_BINARY;
 	} else {
-		actx->forty_pct.btype = TYPE_TEXT;
+		actx->thirty_pct.btype = TYPE_TEXT;
 	}
 
 	if (tot_8b > FIFTY_PCT(srclen)) {
@@ -81,23 +81,18 @@ analyze_buffer(void *src, uint64_t srclen, analyzer_ctx_t *actx)
 		actx->fifty_pct.btype = TYPE_TEXT;
 	}
 
-	tot8b /= 0x80;
+	/* This should be tot8b and not tot_8b. */
 	if (tot8b <= TEN_PCT((double)srclen) && lbytes < ((srclen>>1) + (srclen>>2) + (srclen>>3))) {
-		actx->one_pct.btype = TYPE_TEXT;
+		actx->ten_pct.btype = TYPE_TEXT;
+	} else {
+		actx->ten_pct.btype = TYPE_BINARY;
 	}
 
-	markup = 0;
 	if (tag1 > tag2 - 4 && tag1 < tag2 + 4 && tag3 > (double)tag1 * 0.40 &&
-	    tagcnt > (double)spc * 0.06)
-		markup = 1;
-
-	if (markup) {
-		if (actx->forty_pct.btype == TYPE_TEXT)
-			actx->forty_pct.btype |= TYPE_MARKUP;
-		if (actx->fifty_pct.btype == TYPE_TEXT)
-			actx->fifty_pct.btype |= TYPE_MARKUP;
-		if (actx->one_pct.btype == TYPE_TEXT)
-			actx->one_pct.btype |= TYPE_MARKUP;
+	    tagcnt > (double)spc * 0.06) {
+		actx->thirty_pct.btype |= TYPE_MARKUP;
+		actx->fifty_pct.btype |= TYPE_MARKUP;
+		actx->ten_pct.btype |= TYPE_MARKUP;
 	}
 }
 

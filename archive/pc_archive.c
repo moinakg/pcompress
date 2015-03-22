@@ -1471,10 +1471,6 @@ copy_data_out(struct archive *ar, struct archive *aw, struct archive_entry *entr
 				return (ARCHIVE_FATAL);
 			}
 		}
-		/*
-		 * If the filter above fails we fall through below to consume
-		 * the data for the entry.
-		 */
 	}
 
 	for (;;) {

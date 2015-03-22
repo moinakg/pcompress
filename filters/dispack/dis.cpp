@@ -912,10 +912,6 @@ DisUnFilter(sU8 *source,sU32 sourceSize,sU8 *dest,sU32 destSize,sU32 memStart)
 }
 
 /*
- * NOTE: function unused. Retained for future need.
- */
-#if 0
-/*
  * Try to estimate if the given data block contains 32-bit x86 instructions
  * especially of the call and jmp variety.
  * Estimator is adapted from CSC 3.2 Analyzer (Fu Siyuan).
@@ -939,7 +935,6 @@ is_x86_code(uchar_t *buf, int len)
 	avgFreq = ln>>8;
 	return (freq[0x8b] > avgFreq && freq[0x00] > avgFreq * 2 && freq[0xE8] > 6);
 }
-#endif
 
 #ifdef	__cplusplus
 extern "C" {
@@ -1026,10 +1021,6 @@ Inverse_E89(uint8_t *src, uint64_t sz)
 }
 
 /*
- * NOTE: function unused. Retained for future need.
- */
-#if 0
-/*
  * 32-bit x86 executable packer top-level routines. Detected x86 executable data
  * are passed through these encoding routines. The data chunk is split into 32KB
  * blocks and each block is separately Dispack-ed. The code tries to detect if
@@ -1058,7 +1049,6 @@ dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 	pos_to = to;
 	to_last = to + *dstlen;
 	while (len > 0) {
-		DisFilterCtx ctx(0, DISFILTER_BLOCK);
 		sU32 sz;
 		sU16 origsize;
 		sU32 out;
@@ -1082,8 +1072,7 @@ dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 
 		out = sz;
 		if (is_x86_code(pos, sz)) {
-			ctx.ResetCtx(0, sz);
-			rv = DisFilter(ctx, pos, sz, 0, pos_to, out);
+			rv = DisFilter(pos, sz, 0, pos_to, out);
 		} else {
 			rv = NULL;
 		}
@@ -1128,7 +1117,6 @@ dispack_encode(uchar_t *from, uint64_t fromlen, uchar_t *to, uint64_t *dstlen)
 #endif
 	return (0);
 }
-#endif
 
 /*
  * This function retained for ability to decode older archives encoded using raw block

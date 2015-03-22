@@ -93,7 +93,7 @@ add_filters_by_type(struct type_data *typetab, struct filter_flags *ff)
 		typetab[slot].filter_private = sdat;
 		typetab[slot].filter_func = packpnm_filter;
 		typetab[slot].filter_name = "packPNM";
-		typetab[slot].result_type = TYPE_BINARY;
+		typetab[slot].result_type = TYPE_BINARY | TYPE_MEDIA_BSC;
 	}
 #endif
 

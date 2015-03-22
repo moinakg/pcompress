@@ -244,10 +244,11 @@ is_bsc_type(int btype)
 	int stype = PC_SUBTYPE(btype);
 	int mtype = PC_TYPE(btype);
 
-	return ((stype == TYPE_BMP) | (stype == TYPE_DNA_SEQ) |
+	return ((stype == TYPE_BMP) | (stype == TYPE_DNA_SEQ) | (stype == TYPE_PNM) |
 	    (stype == TYPE_MP4) | (stype == TYPE_FLAC) | (stype == TYPE_AVI) |
 	    (stype == TYPE_DICOM) | (stype == TYPE_MEDIA_BSC) |
-	    (mtype & TYPE_TEXT && stype != TYPE_MARKUP));
+	    (mtype & TYPE_TEXT && stype != TYPE_MARKUP) |
+	    (mtype & TYPE_BINARY && stype == TYPE_MARKUP));
 }
 
 int
@@ -266,12 +267,13 @@ adapt_compress(void *src, uint64_t srclen, void *dst,
 			adat->actx = &actx;
 		}
 		if (adat->adapt_mode == 2) {
-			btype = adat->actx->forty_pct.btype;
+			btype = adat->actx->thirty_pct.btype;
 
 		} else if (adat->adapt_mode == 1) {
 			btype = adat->actx->fifty_pct.btype;
 		}
 	}
+
 
 	/* Reset analyzer context for subsequent calls. */
 	adat->actx = NULL;

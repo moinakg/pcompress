@@ -34,8 +34,8 @@ struct significance_value {
 };
 
 typedef struct _analyzer_ctx {
-	struct significance_value one_pct;
-	struct significance_value forty_pct;
+	struct significance_value ten_pct;
+	struct significance_value thirty_pct;
 	struct significance_value fifty_pct;
 } analyzer_ctx_t;
 

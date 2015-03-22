@@ -233,12 +233,34 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 
 	/*
 	 * Dispack is used for 32-bit EXE files via a libarchive filter routine.
-	 * However if Dispack fails or 64-bit exes are detected we apply an E8E9
-	 * CALL/JMP transform filter.
+	 * For 64-bit exes or AR archives we apply an E8E9 CALL/JMP transform filter.
 	 */
 	if (pctx->exe_preprocess) {
-		if (stype == TYPE_EXE32 || stype == TYPE_EXE64 ||
-		    stype == TYPE_ARCHIVE_AR || stype == TYPE_EXE32_PE) {
+		int processed = 0;
+
+		if (stype == TYPE_EXE32 ||  stype == TYPE_EXE32_PE ||
+		    stype == TYPE_EXE64 || stype == TYPE_ARCHIVE_AR) {
+			/*
+			 * If file-level Dispack did not happen for 32-bit EXEs it was
+			 * most likely that the file was large. So, as a workaround,
+			 * we do raw-block Dispack here. However if even this fails to
+			 * get any worthwhile reduction we do E8E9 as the final
+			 * fallback.
+			 */
+			_dstlen = fromlen;
+			result = dispack_encode((uchar_t *)from, fromlen, to, &_dstlen);
+			if (result != -1) {
+				uchar_t *tmp;
+				tmp = from;
+				from = to;
+				to = tmp;
+				fromlen = _dstlen;
+				type |= PREPROC_TYPE_DISPACK;
+				processed = 1;
+			}
+		}
+
+		if (!processed) {
 			_dstlen = fromlen;
 			memcpy(to, from, fromlen);
 			if (Forward_E89(to, fromlen) == 0) {
@@ -260,10 +282,11 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 		int b_type;
 
 		b_type = btype;
-		if (analyzed)
-			b_type = PC_TYPE(actx.one_pct.btype);
-		else
+		if (analyzed) {
+			b_type = actx.ten_pct.btype;
+		} else {
 			b_type = analyze_buffer_simple(from, fromlen);
+		}
 
 		if (PC_TYPE(b_type) & TYPE_TEXT) {
 			_dstlen = fromlen;
@@ -286,7 +309,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 
 		b_type = btype;
 		if (analyzed)
-			b_type = actx.forty_pct.btype;
+			b_type = actx.thirty_pct.btype;
 
 		if (!(PC_TYPE(b_type) & TYPE_BINARY)) {
 			hashsize = lzp_hash_size(level);
@@ -311,7 +334,7 @@ preproc_compress(pc_ctx_t *pctx, compress_func_ptr cmp_func, void *src, uint64_t
 
 		b_type = btype;
 		if (analyzed)
-			b_type = actx.one_pct.btype;
+			b_type = actx.ten_pct.btype;
 
 		if (!(PC_TYPE(b_type) & TYPE_TEXT)) {
 			_dstlen = fromlen;
