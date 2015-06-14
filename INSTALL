@@ -74,64 +74,50 @@ is not the usual GNU Autoconf script.
 
 <options> can be one of the following:
 
---prefix=<val>		The installation prefix. 
-			This is set to /usr by default. However alternate
-			prefix needs to eb used during packaging.
+<options> can be one of the following:
 
---enable-debug		Enable debug mode compilation.
-			This reduces the compiler optimization level to
-			basic and taks out all the loop optimization flags.
-			This is primarily to aid debugging.
+--prefix=<val>          The installation prefix (default: /usr).
 
---disable-allocator	Disable use of internal memory allocator mechanism.
-			The internal allocator can be totally disabled by
-			setting this build time flag. It is also possible
-			to dynamically disable the allocator by setting the
-			following env variable:
-			ALLOCATOR_BYPASS=1
+--enable-debug          Enable debug mode compilation (default: disabled).
 
---enable-debug-stats	Enable printing of some verbose debug info.
-			This at present shows some info related to Dedupe
-			efficiency.
+--disable-allocator     Disable use of internal memory allocator mechanism (default: enabled).
+
+--enable-debug-stats    Enable printing of some verbose debug info (default: disabled).
+
+--with-openssl=<path to OpenSSL installation tree> (Default: System)
+                        This defaults to the system's OpenSSL library. You can use this option
+                        if you want to use an alternate OpenSSL installation.
 
 --with-zlib=<path to zlib installation tree> (Default: System)
                         Enable building against an alternate Zlib installation.
 
 --with-bzlib=<path to Bzip2 library installation tree> (Default: System)
-                        Enable building against an alternate Bzip2 and library
-                        installation.
-
---with-libarchive=<path to libarchive installation tree> (Default: System)
-                        Enable building against an alternate libarchive installation.
-
-                        NOTE:
-                        Pcompress only uses basic Libarchive functionality of
-                        creating PAX archives. No other functionality or filter
-                        support is used. So a local static libarchive build with
-                        most features disabled can be used with this option.
+                        Enable building against an alternate Bzip2 and library installation.
 
 --with-external-libbsc=<path to libbsc source tree>
-                        Enable building with exernal libbsc sources. In the LGPL licensed
-			sources a fork of the previous LGPL licensed libbsc source tree is
-			already included in the Pcompress repo. The same is not true for the
-			MPLv2 licensed sources. So libbsc has to be downloaded separately
-			from: http://libbsc.com/ and linked into Pcompress using this option.
-			The current libbsc sources are licensed with ASLv2.
+                        Enable building with exernal libbsc sources. Can be used to link with
+                        ASLv2 libbsc when using MPLv2 licensed sources.
 
---no-sse-detect         Do not try to detect the CPU's SSE capability. This
-                        mode will simply use SSE2 as the fallback default.
-                        Using SSE4 and later improves performance significantly.
+--wavpack-dir=<path to WavPack source tree>
+                        Points to the directory containing the WavPack sources. This option
+                        must be specified if --disable-wavpack is not provided.
+
+--disable-wavpack       Disables the WavPack filter.
+
+--no-sse-detect         Do NOT attempt to probe the system's SSE capability for build flags.
+                        Implies '--no-avx-detect' below.
+
+--no-avx-detect         Do NOT attempt to probe the system's AVX capability for build flags.
 
 --no-1.3-archive-compat Disable compatibility with compressed archives created with Pcompress
                         version 1.3 (default: retain compatibility). Hash formats changed from
                         version 1.3 to 1.4 so this option is required if files created using
                         1.3 need to be decompressed by version 1.4 onwards.
 
---use-key256            Use 256-bit encryption keys. Default key length is
-                        128-bit.
+--limit-key128          Limit key length to 128-bit encryption keys. Otherwise the default is to
+                        use 256-bit keys changeable at runtime via the '-k <keylen>' option.
 
---help			Display the help message.
-
+--help                  Display this help message.
 
 Additional compilation flags can be passed to make like this:
    make EXTRA_CPPFLAGS=<...> EXTRA_LDFLAGS=<...>
