@@ -1729,6 +1729,9 @@ redo:
 			if (p == np) continue;
 			tdat = dary[p];
 			Sem_Wait(&tdat->write_done_sem);
+// VS begin
+			if (pctx->main_cancel) break;
+// VS end
 		}
 	}
 uncomp_done:
