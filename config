@@ -293,7 +293,7 @@ IFS=.
 set -- ${vers}
 IFS="$OIFS"
 
-if [ $1 -lt 4 -o $2 -lt 4 ]
+if [ $1 -lt 4 ] || [ $1 -eq 4 -a $2 -lt 4 ]
 then
 	echo "ERROR:"
 	echo "GCC version 4.4 or above is required."
@@ -804,3 +804,7 @@ s#@WAVPACK_LIBSPEC@#${wavpack_libspec}#g
 s#@WAVPACK_DIR@#${wavpack_dir}#g
 " > Makefile
 
+if [ "x${enable_wavpack}" == "x" ]
+then
+    sed -i -e '/^WAVPKSRCS/ D' -e '/^WAVPKOBJS/ D' Makefile
+fi
