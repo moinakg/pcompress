@@ -513,7 +513,8 @@ fi
 ./tst
 if [ $? -ne 0 ]
 then
-	echo "OpenSSL version too old. At least version 0.9.8e is required.\n"
+	echo "OpenSSL version too old. At least version 0.9.8e is required."
+	echo
 	exit 1
 fi
 
@@ -804,7 +805,7 @@ s#@WAVPACK_LIBSPEC@#${wavpack_libspec}#g
 s#@WAVPACK_DIR@#${wavpack_dir}#g
 " > Makefile
 
-if [ "x${enable_wavpack}" == "x" ]
+if [ "x${enable_wavpack}" = "x" ]
 then
     sed -i -e '/^WAVPKSRCS/ D' -e '/^WAVPKOBJS/ D' Makefile
 fi
