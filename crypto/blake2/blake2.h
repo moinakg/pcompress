@@ -77,7 +77,7 @@ extern "C" {
     uint8_t  personal[BLAKE2B_PERSONALBYTES];  // 64
   } blake2b_param;
 
-  BLAKE_ALIGN( 64 ) typedef struct __blake2b_state
+  typedef struct BLAKE_ALIGN( 64 ) __blake2b_state
   {
     uint64_t h[8];
     uint64_t t[2];
@@ -87,7 +87,7 @@ extern "C" {
     uint8_t  last_node;
   } blake2b_state;
 
-  BLAKE_ALIGN( 64 ) typedef struct __blake2bp_state
+  typedef struct BLAKE_ALIGN( 64 ) __blake2bp_state
   {
     blake2b_state S[4][1];
     blake2b_state R[1];
