@@ -3668,9 +3668,6 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 					pctx->exe_preprocess = 1;
 					ff.exe_preprocess = 1;
 				}
-				init_filters(&ff);
-				pctx->enable_packjpg = ff.enable_packjpg;
-				pctx->enable_wavpack = ff.enable_wavpack;
 			}
 
 			/*
@@ -3693,6 +3690,11 @@ init_pc_context(pc_ctx_t *pctx, int argc, char *argv[])
 			pctx->preprocess_mode = 1;
 			pctx->enable_analyzer = 1;
 		}
+		init_filters(&ff);
+		pctx->enable_packjpg = ff.enable_packjpg;
+		pctx->enable_wavpack = ff.enable_wavpack;
+		pctx->exe_preprocess = ff.exe_preprocess;
+
 	} else if (pctx->do_uncompress) {
 		struct filter_flags ff;
 		/*
